@@ -1,8 +1,8 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { v4 as uuidv4 } from 'uuid'
-import { useLiveQuery } from 'dexie-react-hooks'
-import { db } from '../../db/database'
+import { supabase, courseToRow, playerToRow, roundToRow, roundPlayerToRow, buyInToRow, rowToCourse, rowToPlayer } from '../../lib/supabase'
 import { fmtMoney } from '../../lib/gameLogic'
+import { venturaCourses } from '../../data/venturaCourses'
 import type {
   Course,
   Player,
@@ -20,6 +20,7 @@ import type {
 } from '../../types'
 
 interface Props {
+  userId: string
   onStart: (roundId: string) => void
   onCancel: () => void
   onAddCourse: () => void
@@ -32,25 +33,82 @@ const HIGH_ROLLER_PRESETS = [10000, 25000, 50000, 100000]
 // ─── Step 1: Course Picker ────────────────────────────────────────────────────
 
 function CoursePicker({
+  userId,
   onSelect,
   onAddCourse,
   onCancel,
   stakesMode,
 }: {
+  userId: string
   onSelect: (course: Course) => void
   onAddCourse: () => void
   onCancel: () => void
   stakesMode: StakesMode
 }) {
   const [query, setQuery] = useState('')
-  const courses = useLiveQuery(() => db.courses.orderBy('name').toArray(), [])
-  const filtered = (courses ?? []).filter(c =>
-    c.name.toLowerCase().includes(query.toLowerCase()),
-  )
+  const [selecting, setSelecting] = useState<string | null>(null)
+  const [savedCourses, setSavedCourses] = useState<Course[]>([])
   const headerClass = stakesMode === 'high_roller' ? 'hr-header' : 'app-header'
 
+  useEffect(() => {
+    supabase.from('courses').select('*').order('name').then(({ data }) => {
+      if (data) setSavedCourses(data.map(rowToCourse))
+    })
+  }, [])
+
+  // Merge saved courses with catalog, deduplicating by name
+  const savedNames = new Set(savedCourses.map(c => c.name))
+  const catalogOnly = venturaCourses.filter(t => !savedNames.has(t.name))
+
+  const allCourses: { id: string; name: string; city?: string; par: number; tees: string; fromDb: boolean; dbCourse?: Course; templateName?: string }[] = [
+    ...savedCourses.map(c => ({
+      id: c.id,
+      name: c.name,
+      par: c.holes.reduce((s, h) => s + h.par, 0),
+      tees: c.tees.map(t => t.name).join(', '),
+      fromDb: true,
+      dbCourse: c,
+    })),
+    ...catalogOnly.map(t => ({
+      id: `catalog-${t.name}`,
+      name: t.name,
+      city: t.city,
+      par: t.holes.reduce((s, h) => s + h.par, 0),
+      tees: t.tees.map(t => t.name).join(', '),
+      fromDb: false,
+      templateName: t.name,
+    })),
+  ].sort((a, b) => a.name.localeCompare(b.name))
+
+  const filtered = query.trim()
+    ? allCourses.filter(c =>
+        c.name.toLowerCase().includes(query.toLowerCase()) ||
+        (c.city ?? '').toLowerCase().includes(query.toLowerCase())
+      )
+    : allCourses
+
+  const handleSelect = async (item: typeof allCourses[number]) => {
+    if (selecting) return
+    if (item.fromDb && item.dbCourse) {
+      onSelect(item.dbCourse)
+      return
+    }
+    // Catalog course — save to DB first, then select
+    setSelecting(item.id)
+    const template = venturaCourses.find(t => t.name === item.templateName)!
+    const course: Course = {
+      id: uuidv4(),
+      name: template.name,
+      tees: template.tees,
+      holes: template.holes,
+      createdAt: new Date(),
+    }
+    await supabase.from('courses').insert(courseToRow(course, userId))
+    onSelect(course)
+  }
+
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-gray-50 pb-8">
       <header className={`${headerClass} text-white px-4 py-4 sticky top-0 z-10 shadow-xl flex items-center gap-3`}>
         <button
           onClick={onCancel}
@@ -80,45 +138,41 @@ function CoursePicker({
           className="w-full h-12 px-4 rounded-xl border border-gray-300 text-base focus:outline-none focus:ring-2 focus:ring-green-600"
         />
 
-        {courses?.length === 0 && (
-          <div className="text-center py-10 space-y-3">
-            <p className="text-gray-500">No courses saved yet.</p>
+        <div className="space-y-2">
+          {filtered.map(course => (
             <button
-              onClick={onAddCourse}
-              className="bg-green-700 text-white px-6 py-3 rounded-xl font-semibold"
+              key={course.id}
+              onClick={() => handleSelect(course)}
+              disabled={!!selecting}
+              className="w-full bg-white rounded-2xl p-4 shadow-sm border border-gray-100 text-left active:bg-gray-50 disabled:opacity-60"
             >
-              Add Your First Course
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="font-semibold text-gray-800">{course.name}</p>
+                  <p className="text-sm text-gray-500 mt-0.5">
+                    Par {course.par} · {course.tees}
+                    {course.city && !course.fromDb && (
+                      <span className="ml-1 text-gray-400">· {course.city}</span>
+                    )}
+                  </p>
+                </div>
+                {selecting === course.id && (
+                  <div className="w-5 h-5 border-2 border-green-500 border-t-transparent rounded-full animate-spin flex-shrink-0" />
+                )}
+              </div>
             </button>
-          </div>
-        )}
+          ))}
 
-        {filtered.length > 0 && (
-          <div className="space-y-2">
-            {filtered.map(course => (
-              <button
-                key={course.id}
-                onClick={() => onSelect(course)}
-                className="w-full bg-white rounded-2xl p-4 shadow-sm border border-gray-100 text-left active:bg-gray-50"
-              >
-                <p className="font-semibold text-gray-800">{course.name}</p>
-                <p className="text-sm text-gray-500 mt-0.5">
-                  Par {course.holes.reduce((s, h) => s + h.par, 0)} ·{' '}
-                  {course.tees.map(t => t.name).join(', ')}
-                </p>
-              </button>
-            ))}
-          </div>
-        )}
-
-        {filtered.length === 0 && query && courses && courses.length > 0 && (
-          <p className="text-center text-gray-400 py-8">No courses match "{query}"</p>
-        )}
+          {filtered.length === 0 && (
+            <p className="text-center text-gray-400 py-8">No courses match "{query}"</p>
+          )}
+        </div>
 
         <button
           onClick={onAddCourse}
           className="w-full h-12 border-2 border-dashed border-green-300 text-green-700 font-semibold rounded-2xl active:bg-green-50"
         >
-          + Add New Course
+          + Add Custom Course
         </button>
       </div>
     </div>
@@ -128,17 +182,19 @@ function CoursePicker({
 // ─── Step 2: Player Picker ────────────────────────────────────────────────────
 
 function PlayerPicker({
+  userId,
   course,
   onNext,
   onBack,
   stakesMode,
 }: {
+  userId: string
   course: Course
   onNext: (players: Player[]) => void
   onBack: () => void
   stakesMode: StakesMode
 }) {
-  const allPlayers = useLiveQuery(() => db.players.orderBy('name').toArray(), [])
+  const [allPlayers, setAllPlayers] = useState<Player[]>([])
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
   const [playerTees, setPlayerTees] = useState<Record<string, string>>({})
 
@@ -151,6 +207,12 @@ function PlayerPicker({
 
   const MAX_PLAYERS = 8
   const headerClass = stakesMode === 'high_roller' ? 'hr-header' : 'app-header'
+
+  useEffect(() => {
+    supabase.from('players').select('*').order('name').then(({ data }) => {
+      if (data) setAllPlayers(data.map(rowToPlayer))
+    })
+  }, [])
 
   const toggle = (id: string) => {
     setSelectedIds(prev => {
@@ -175,16 +237,17 @@ function PlayerPicker({
     if (isNaN(hcp) || hcp < -10 || hcp > 54) { setAddError('Must be between -10 and 54'); return }
     setSaving(true)
     try {
-      const id = uuidv4()
-      await db.players.add({ id, name: newName.trim(), handicapIndex: hcp, tee: newTee, createdAt: new Date() })
-      setSelectedIds(prev => { const n = new Set(prev); n.add(id); return n })
+      const newPlayer: Player = { id: uuidv4(), name: newName.trim(), handicapIndex: hcp, tee: newTee, createdAt: new Date() }
+      const { error: err } = await supabase.from('players').insert(playerToRow(newPlayer, userId))
+      if (err) throw err
+      setAllPlayers(prev => [...prev, newPlayer].sort((a, b) => a.name.localeCompare(b.name)))
+      setSelectedIds(prev => { const n = new Set(prev); n.add(newPlayer.id); return n })
       setNewName(''); setNewHcp(''); setAddError(''); setShowAddForm(false)
     } catch { setAddError('Failed to save. Try again.') }
     finally { setSaving(false) }
   }
 
   const handleNext = () => {
-    if (!allPlayers) return
     const selected = allPlayers
       .filter(p => selectedIds.has(p.id))
       .map(p => ({ ...p, tee: playerTees[p.id] ?? p.tee }))
@@ -215,7 +278,7 @@ function PlayerPicker({
           {selectedIds.size === MAX_PLAYERS && ' (max)'}
         </p>
 
-        {allPlayers && allPlayers.length > 0 && (
+        {allPlayers.length > 0 && (
           <div className="space-y-2">
             {allPlayers.map(player => {
               const selected = selectedIds.has(player.id)
@@ -842,12 +905,14 @@ function GameSetup({
 // ─── Step 4: Treasurer + Buy-in Collection ────────────────────────────────────
 
 function TreasurerAndBuyIns({
+  userId,
   course,
   players,
   game,
   onCreateRound,
   onBack,
 }: {
+  userId: string
   course: Course
   players: Player[]
   game: Game
@@ -902,18 +967,19 @@ function TreasurerAndBuyIns({
         ...(paid[p.id] ? { paidAt: new Date() } : {}),
       }))
 
-      await db.transaction('rw', db.rounds, db.roundPlayers, db.buyIns, async () => {
-        await db.rounds.add(round)
-        await db.roundPlayers.bulkAdd(
-          players.map(p => ({
-            id: uuidv4(),
-            roundId,
-            playerId: p.id,
-            teePlayed: p.tee,
-          })),
-        )
-        await db.buyIns.bulkAdd(buyIns)
-      })
+      const roundPlayers = players.map(p => ({
+        id: uuidv4(),
+        roundId,
+        playerId: p.id,
+        teePlayed: p.tee,
+      }))
+
+      // Insert round, round_players, and buy_ins
+      await Promise.all([
+        supabase.from('rounds').insert(roundToRow(round, userId)),
+        supabase.from('round_players').insert(roundPlayers.map(rp => roundPlayerToRow(rp, userId))),
+        supabase.from('buy_ins').insert(buyIns.map(b => buyInToRow(b, userId))),
+      ])
 
       onCreateRound(roundId)
     } finally {
@@ -1054,7 +1120,7 @@ function TreasurerAndBuyIns({
 
 // ─── NewRound orchestrator ────────────────────────────────────────────────────
 
-export function NewRound({ onStart, onCancel, onAddCourse, initialStakesMode = 'standard' }: Props) {
+export function NewRound({ userId, onStart, onCancel, onAddCourse, initialStakesMode = 'standard' }: Props) {
   const [step, setStep] = useState<'course' | 'players' | 'game' | 'money'>('course')
   const [course, setCourse] = useState<Course | null>(null)
   const [players, setPlayers] = useState<Player[] | null>(null)
@@ -1063,6 +1129,7 @@ export function NewRound({ onStart, onCancel, onAddCourse, initialStakesMode = '
   if (step === 'course') {
     return (
       <CoursePicker
+        userId={userId}
         onSelect={c => { setCourse(c); setStep('players') }}
         onAddCourse={onAddCourse}
         onCancel={onCancel}
@@ -1074,6 +1141,7 @@ export function NewRound({ onStart, onCancel, onAddCourse, initialStakesMode = '
   if (step === 'players' && course) {
     return (
       <PlayerPicker
+        userId={userId}
         course={course}
         onNext={ps => { setPlayers(ps); setStep('game') }}
         onBack={() => setStep('course')}
@@ -1096,6 +1164,7 @@ export function NewRound({ onStart, onCancel, onAddCourse, initialStakesMode = '
   if (step === 'money' && course && players && game) {
     return (
       <TreasurerAndBuyIns
+        userId={userId}
         course={course}
         players={players}
         game={game}
@@ -1107,6 +1176,7 @@ export function NewRound({ onStart, onCancel, onAddCourse, initialStakesMode = '
 
   return (
     <CoursePicker
+      userId={userId}
       onSelect={c => { setCourse(c); setStep('players') }}
       onAddCourse={onAddCourse}
       onCancel={onCancel}

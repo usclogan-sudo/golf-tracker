@@ -1,7 +1,6 @@
-import { useMemo } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { v4 as uuidv4 } from 'uuid'
-import { useLiveQuery } from 'dexie-react-hooks'
-import { db } from '../../db/database'
+import { supabase, rowToRound, rowToRoundPlayer, rowToHoleScore, rowToBBBPoint, holeScoreToRow, bbbPointToRow } from '../../lib/supabase'
 import {
   buildCourseHandicaps,
   calculateSkins,
@@ -12,15 +11,18 @@ import {
   fmtMoney,
 } from '../../lib/gameLogic'
 import type {
+  Round,
+  RoundPlayer,
+  HoleScore,
+  BBBPoint,
   SkinsConfig,
   BestBallConfig,
   NassauConfig,
   WolfConfig,
-  BBBPoint,
-  HoleScore,
 } from '../../types'
 
 interface Props {
+  userId: string
   roundId: string
   onEndRound: () => void
   onHome: () => void
@@ -82,11 +84,27 @@ function BestBallStatus({ holesWon }: { holesWon: { A: number; B: number; tied: 
   )
 }
 
-export function Scorecard({ roundId, onEndRound, onHome }: Props) {
-  const round = useLiveQuery(() => db.rounds.get(roundId), [roundId])
-  const roundPlayers = useLiveQuery(() => db.roundPlayers.where('roundId').equals(roundId).toArray(), [roundId])
-  const holeScores = useLiveQuery(() => db.holeScores.where('roundId').equals(roundId).toArray(), [roundId])
-  const bbbPoints = useLiveQuery(() => db.bbbPoints.where('roundId').equals(roundId).toArray(), [roundId])
+export function Scorecard({ userId, roundId, onEndRound, onHome }: Props) {
+  const [round, setRound] = useState<Round | null>(null)
+  const [roundPlayers, setRoundPlayers] = useState<RoundPlayer[]>([])
+  const [holeScores, setHoleScores] = useState<HoleScore[]>([])
+  const [bbbPoints, setBbbPoints] = useState<BBBPoint[]>([])
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    Promise.all([
+      supabase.from('rounds').select('*').eq('id', roundId).single(),
+      supabase.from('round_players').select('*').eq('round_id', roundId),
+      supabase.from('hole_scores').select('*').eq('round_id', roundId),
+      supabase.from('bbb_points').select('*').eq('round_id', roundId),
+    ]).then(([roundRes, rpRes, hsRes, bbbRes]) => {
+      if (roundRes.data) setRound(rowToRound(roundRes.data))
+      if (rpRes.data) setRoundPlayers(rpRes.data.map(rowToRoundPlayer))
+      if (hsRes.data) setHoleScores(hsRes.data.map(rowToHoleScore))
+      if (bbbRes.data) setBbbPoints(bbbRes.data.map(rowToBBBPoint))
+      setLoading(false)
+    })
+  }, [roundId])
 
   const players = round?.players ?? []
   const snapshot = round?.courseSnapshot
@@ -103,34 +121,38 @@ export function Scorecard({ roundId, onEndRound, onHome }: Props) {
   const strokeIndex = hole?.strokeIndex ?? currentHole
 
   const getScore = (playerId: string): number => {
-    const hs = holeScores?.find(s => s.playerId === playerId && s.holeNumber === currentHole)
+    const hs = holeScores.find(s => s.playerId === playerId && s.holeNumber === currentHole)
     return hs?.grossScore ?? par
   }
 
   const setScore = async (playerId: string, grossScore: number) => {
-    if (!holeScores) return
     const existing = holeScores.find(s => s.playerId === playerId && s.holeNumber === currentHole)
     if (existing) {
-      await db.holeScores.update(existing.id, { grossScore })
+      setHoleScores(prev => prev.map(s => s.id === existing.id ? { ...s, grossScore } : s))
+      await supabase.from('hole_scores').update({ gross_score: grossScore }).eq('id', existing.id)
     } else {
       const newScore: HoleScore = { id: uuidv4(), roundId, playerId, holeNumber: currentHole, grossScore }
-      await db.holeScores.add(newScore)
+      setHoleScores(prev => [...prev, newScore])
+      await supabase.from('hole_scores').insert(holeScoreToRow(newScore, userId))
     }
   }
 
-  const goToHole = async (holeNum: number) => { await db.rounds.update(roundId, { currentHole: holeNum }) }
+  const goToHole = async (holeNum: number) => {
+    setRound(prev => prev ? { ...prev, currentHole: holeNum } : prev)
+    await supabase.from('rounds').update({ current_hole: holeNum }).eq('id', roundId)
+  }
 
   const endRound = async () => {
-    await db.rounds.update(roundId, { status: 'complete' })
+    setRound(prev => prev ? { ...prev, status: 'complete' } : prev)
+    await supabase.from('rounds').update({ status: 'complete' }).eq('id', roundId)
     onEndRound()
   }
 
   // Wolf decision handler
   const updateWolfDecision = async (holeNumber: number, partnerId: string | null) => {
-    if (!game || game.type !== 'wolf') return
-    const wolfConfig = game.config as WolfConfig
+    if (!round?.game || round.game.type !== 'wolf') return
+    const wolfConfig = round.game.config as WolfConfig
     const current = wolfConfig.holeDecisions?.[holeNumber]
-    // Toggle off if same selection
     const newPartnerId = current?.partnerId === partnerId ? undefined : partnerId
     const updatedConfig: WolfConfig = {
       ...wolfConfig,
@@ -141,18 +163,21 @@ export function Scorecard({ roundId, onEndRound, onHome }: Props) {
           : { [holeNumber]: { partnerId: newPartnerId } }),
       },
     }
-    await db.rounds.update(roundId, { game: { ...game, config: updatedConfig } })
+    const updatedGame = { ...round.game, config: updatedConfig }
+    setRound(prev => prev ? { ...prev, game: updatedGame } : prev)
+    await supabase.from('rounds').update({ game: updatedGame }).eq('id', roundId)
   }
 
   // BBB point handler
   const setBBBPoint = async (category: 'bingo' | 'bango' | 'bongo', playerId: string) => {
-    if (!bbbPoints) return
     const existing = bbbPoints.find(p => p.holeNumber === currentHole)
     const currentVal = existing?.[category]
-    const newVal = currentVal === playerId ? null : playerId  // toggle
+    const newVal = currentVal === playerId ? null : playerId
 
     if (existing) {
-      await db.bbbPoints.update(existing.id, { [category]: newVal })
+      const updated = { ...existing, [category]: newVal }
+      setBbbPoints(prev => prev.map(p => p.id === existing.id ? updated : p))
+      await supabase.from('bbb_points').update({ [category]: newVal }).eq('id', existing.id)
     } else {
       const newPoint: BBBPoint = {
         id: uuidv4(),
@@ -162,22 +187,23 @@ export function Scorecard({ roundId, onEndRound, onHome }: Props) {
         bango: category === 'bango' ? newVal : null,
         bongo: category === 'bongo' ? newVal : null,
       }
-      await db.bbbPoints.add(newPoint)
+      setBbbPoints(prev => [...prev, newPoint])
+      await supabase.from('bbb_points').insert(bbbPointToRow(newPoint, userId))
     }
   }
 
   const skinsResult = useMemo(() => {
-    if (!game || game.type !== 'skins' || !snapshot || !holeScores) return null
+    if (!game || game.type !== 'skins' || !snapshot) return null
     return calculateSkins(players, holeScores, snapshot, game.config as SkinsConfig, courseHcps)
   }, [game, players, holeScores, snapshot, courseHcps])
 
   const bestBallResult = useMemo(() => {
-    if (!game || game.type !== 'best_ball' || !snapshot || !holeScores) return null
+    if (!game || game.type !== 'best_ball' || !snapshot) return null
     return calculateBestBall(players, holeScores, snapshot, game.config as BestBallConfig, courseHcps)
   }, [game, players, holeScores, snapshot, courseHcps])
 
   const nassauResult = useMemo(() => {
-    if (!game || game.type !== 'nassau' || !snapshot || !holeScores) return null
+    if (!game || game.type !== 'nassau' || !snapshot) return null
     return calculateNassau(players, holeScores, snapshot, game.config as NassauConfig, courseHcps)
   }, [game, players, holeScores, snapshot, courseHcps])
 
@@ -190,14 +216,14 @@ export function Scorecard({ roundId, onEndRound, onHome }: Props) {
 
   const headerClass = game?.stakesMode === 'high_roller' ? 'hr-header' : 'app-header'
 
-  if (!round || !snapshot) {
+  if (loading || !round || !snapshot) {
     return <div className="min-h-screen bg-gray-50 flex items-center justify-center"><p className="text-gray-400">Loading round…</p></div>
   }
 
   const wolfConfig = game?.type === 'wolf' ? game.config as WolfConfig : null
   const wolfId = wolfConfig ? wolfForHole(wolfConfig.wolfOrder, currentHole) : null
   const wolfDecision = wolfConfig?.holeDecisions?.[currentHole]
-  const currentBBB = bbbPoints?.find(p => p.holeNumber === currentHole)
+  const currentBBB = bbbPoints.find(p => p.holeNumber === currentHole)
 
   return (
     <div className="min-h-screen bg-gray-50 pb-32">
@@ -220,7 +246,7 @@ export function Scorecard({ roundId, onEndRound, onHome }: Props) {
         </div>
         <div className="max-w-2xl mx-auto mt-2 flex gap-1 overflow-x-auto pb-1">
           {Array.from({ length: 18 }, (_, i) => i + 1).map(n => {
-            const hasScore = players.length > 0 && players.every(p => holeScores?.some(s => s.playerId === p.id && s.holeNumber === n))
+            const hasScore = players.length > 0 && players.every(p => holeScores.some(s => s.playerId === p.id && s.holeNumber === n))
             return (
               <button key={n} onClick={() => goToHole(n)}
                 className={`w-7 h-7 rounded-full text-xs font-bold flex-shrink-0 transition-colors ${

@@ -1,10 +1,11 @@
 import { useState } from 'react'
 import { v4 as uuidv4 } from 'uuid'
-import { db } from '../../db/database'
+import { supabase, courseToRow } from '../../lib/supabase'
 import { venturaCourses } from '../../data/venturaCourses'
 import type { Course } from '../../types'
 
 interface Props {
+  userId: string
   onDone: () => void
   onAddCustom: () => void
 }
@@ -13,7 +14,7 @@ function totalPar(holes: { par: number }[]) {
   return holes.reduce((s, h) => s + h.par, 0)
 }
 
-export function CourseCatalog({ onDone, onAddCustom }: Props) {
+export function CourseCatalog({ userId, onDone, onAddCustom }: Props) {
   const [query, setQuery] = useState('')
   const [adding, setAdding] = useState<string | null>(null)
   const [added, setAdded] = useState<Set<string>>(new Set())
@@ -35,8 +36,11 @@ export function CourseCatalog({ onDone, onAddCustom }: Props) {
     if (!template) return
 
     // Check for duplicate
-    const existing = await db.courses.where('name').equals(template.name).count()
-    if (existing > 0) {
+    const { count } = await supabase
+      .from('courses')
+      .select('id', { count: 'exact', head: true })
+      .eq('name', template.name)
+    if (count && count > 0) {
       setAdded(prev => new Set(prev).add(templateName))
       return
     }
@@ -51,9 +55,9 @@ export function CourseCatalog({ onDone, onAddCustom }: Props) {
         holes: template.holes,
         createdAt: new Date(),
       }
-      await db.courses.add(course)
+      const { error: err } = await supabase.from('courses').insert(courseToRow(course, userId))
+      if (err) throw err
       setAdded(prev => new Set(prev).add(templateName))
-      // Brief delay so user sees the success state before auto-closing
       setTimeout(onDone, 600)
     } catch {
       setError(`Failed to add ${template.name}. Please try again.`)

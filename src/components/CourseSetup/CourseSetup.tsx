@@ -1,6 +1,6 @@
 import { Fragment, useState } from 'react'
 import { v4 as uuidv4 } from 'uuid'
-import { db } from '../../db/database'
+import { supabase, courseToRow } from '../../lib/supabase'
 import type { Course, Hole, Tee } from '../../types'
 
 function defaultHoles(): Hole[] {
@@ -12,9 +12,9 @@ function sumYards(holes: Hole[], teeName: string, from = 0, to = 18) {
   return holes.slice(from, to).reduce((s, h) => s + (h.yardages[teeName] ?? 0), 0)
 }
 
-interface Props { onSave: () => void; onCancel: () => void }
+interface Props { userId: string; onSave: () => void; onCancel: () => void }
 
-export function CourseSetup({ onSave, onCancel }: Props) {
+export function CourseSetup({ userId, onSave, onCancel }: Props) {
   const [name, setName] = useState('')
   const [tees, setTees] = useState<Tee[]>([{ name: 'Blue', rating: 72.1, slope: 128 }])
   const [holes, setHoles] = useState<Hole[]>(defaultHoles)
@@ -75,7 +75,8 @@ export function CourseSetup({ onSave, onCancel }: Props) {
     setSaving(true)
     try {
       const course: Course = { id: uuidv4(), name: name.trim(), tees, holes, createdAt: new Date() }
-      await db.courses.add(course)
+      const { error: err } = await supabase.from('courses').insert(courseToRow(course, userId))
+      if (err) throw err
       onSave()
     } catch (err) {
       console.error('Failed to save course:', err)

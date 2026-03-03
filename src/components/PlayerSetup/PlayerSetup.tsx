@@ -1,15 +1,16 @@
 import { useState } from 'react'
 import { v4 as uuidv4 } from 'uuid'
-import { db } from '../../db/database'
+import { supabase, playerToRow } from '../../lib/supabase'
 import type { Player } from '../../types'
 
 interface Props {
+  userId: string
   player?: Player
   onSave: () => void
   onCancel: () => void
 }
 
-export function PlayerSetup({ player, onSave, onCancel }: Props) {
+export function PlayerSetup({ userId, player, onSave, onCancel }: Props) {
   const [name, setName] = useState(player?.name ?? '')
   const [handicapIndex, setHandicapIndex] = useState(
     player !== undefined ? String(player.handicapIndex) : '',
@@ -44,8 +45,10 @@ export function PlayerSetup({ player, onSave, onCancel }: Props) {
         ...(venmo.trim() ? { venmoUsername: venmo.trim() } : {}),
         createdAt: player?.createdAt ?? new Date(),
       }
-      if (player) await db.players.put(p)
-      else await db.players.add(p)
+      const { error: err } = await supabase
+        .from('players')
+        .upsert(playerToRow(p, userId), { onConflict: 'id' })
+      if (err) throw err
       onSave()
     } catch (err) {
       console.error(err)

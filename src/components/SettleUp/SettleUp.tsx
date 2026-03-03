@@ -1,6 +1,5 @@
-import { useMemo, useState } from 'react'
-import { useLiveQuery } from 'dexie-react-hooks'
-import { db } from '../../db/database'
+import { useEffect, useMemo, useState } from 'react'
+import { supabase, rowToRound, rowToRoundPlayer, rowToHoleScore, rowToBuyIn, rowToBBBPoint } from '../../lib/supabase'
 import {
   buildCourseHandicaps,
   calculateSkins,
@@ -20,6 +19,11 @@ import {
 } from '../../lib/gameLogic'
 import type { PlayerPayout, Settlement } from '../../lib/gameLogic'
 import type {
+  Round,
+  RoundPlayer,
+  HoleScore,
+  BuyIn,
+  BBBPoint,
   Player,
   SkinsConfig,
   BestBallConfig,
@@ -72,11 +76,29 @@ function VenmoButton({ toPlayer, amountCents, note }: { toPlayer: Player; amount
 }
 
 export function SettleUp({ roundId, onDone, onContinue }: Props) {
-  const round = useLiveQuery(() => db.rounds.get(roundId), [roundId])
-  const roundPlayers = useLiveQuery(() => db.roundPlayers.where('roundId').equals(roundId).toArray(), [roundId])
-  const holeScores = useLiveQuery(() => db.holeScores.where('roundId').equals(roundId).toArray(), [roundId])
-  const buyIns = useLiveQuery(() => db.buyIns.where('roundId').equals(roundId).toArray(), [roundId])
-  const bbbPoints = useLiveQuery(() => db.bbbPoints.where('roundId').equals(roundId).toArray(), [roundId])
+  const [round, setRound] = useState<Round | null>(null)
+  const [roundPlayers, setRoundPlayers] = useState<RoundPlayer[]>([])
+  const [holeScores, setHoleScores] = useState<HoleScore[]>([])
+  const [buyIns, setBuyIns] = useState<BuyIn[]>([])
+  const [bbbPoints, setBbbPoints] = useState<BBBPoint[]>([])
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    Promise.all([
+      supabase.from('rounds').select('*').eq('id', roundId).single(),
+      supabase.from('round_players').select('*').eq('round_id', roundId),
+      supabase.from('hole_scores').select('*').eq('round_id', roundId),
+      supabase.from('buy_ins').select('*').eq('round_id', roundId),
+      supabase.from('bbb_points').select('*').eq('round_id', roundId),
+    ]).then(([roundRes, rpRes, hsRes, biRes, bbbRes]) => {
+      if (roundRes.data) setRound(rowToRound(roundRes.data))
+      if (rpRes.data) setRoundPlayers(rpRes.data.map(rowToRoundPlayer))
+      if (hsRes.data) setHoleScores(hsRes.data.map(rowToHoleScore))
+      if (biRes.data) setBuyIns(biRes.data.map(rowToBuyIn))
+      if (bbbRes.data) setBbbPoints(bbbRes.data.map(rowToBBBPoint))
+      setLoading(false)
+    })
+  }, [roundId])
 
   const players = round?.players ?? []
   const snapshot = round?.courseSnapshot
@@ -90,32 +112,32 @@ export function SettleUp({ roundId, onDone, onContinue }: Props) {
   }, [players, roundPlayers, snapshot])
 
   const skinsResult = useMemo(() => {
-    if (!game || game.type !== 'skins' || !snapshot || !holeScores) return null
+    if (!game || game.type !== 'skins' || !snapshot) return null
     return calculateSkins(players, holeScores, snapshot, game.config as SkinsConfig, courseHcps)
   }, [game, players, holeScores, snapshot, courseHcps])
 
   const bestBallResult = useMemo(() => {
-    if (!game || game.type !== 'best_ball' || !snapshot || !holeScores) return null
+    if (!game || game.type !== 'best_ball' || !snapshot) return null
     return calculateBestBall(players, holeScores, snapshot, game.config as BestBallConfig, courseHcps)
   }, [game, players, holeScores, snapshot, courseHcps])
 
   const nassauResult = useMemo(() => {
-    if (!game || game.type !== 'nassau' || !snapshot || !holeScores) return null
+    if (!game || game.type !== 'nassau' || !snapshot) return null
     return calculateNassau(players, holeScores, snapshot, game.config as NassauConfig, courseHcps)
   }, [game, players, holeScores, snapshot, courseHcps])
 
   const wolfResult = useMemo(() => {
-    if (!game || game.type !== 'wolf' || !snapshot || !holeScores) return null
+    if (!game || game.type !== 'wolf' || !snapshot) return null
     return calculateWolf(players, holeScores, snapshot, game.config as WolfConfig, courseHcps)
   }, [game, players, holeScores, snapshot, courseHcps])
 
   const bbbResult = useMemo(() => {
-    if (!game || game.type !== 'bingo_bango_bongo' || !bbbPoints) return null
+    if (!game || game.type !== 'bingo_bango_bongo') return null
     return calculateBBB(players, bbbPoints)
   }, [game, players, bbbPoints])
 
   const payouts = useMemo((): PlayerPayout[] => {
-    if (!game || !snapshot || !holeScores) return []
+    if (!game || !snapshot) return []
     if (game.type === 'skins' && skinsResult) {
       return calculateSkinsPayouts(skinsResult, game, players.length)
     }
@@ -132,7 +154,7 @@ export function SettleUp({ roundId, onDone, onContinue }: Props) {
       return calculateBBBPayouts(bbbResult, game, players)
     }
     return []
-  }, [game, players, holeScores, snapshot, skinsResult, bestBallResult, nassauResult, wolfResult, bbbResult])
+  }, [game, players, snapshot, skinsResult, bestBallResult, nassauResult, wolfResult, bbbResult])
 
   const settlements = useMemo((): Settlement[] => {
     if (!treasurerId || payouts.length === 0) return []
@@ -140,10 +162,10 @@ export function SettleUp({ roundId, onDone, onContinue }: Props) {
   }, [payouts, treasurerId])
 
   const potCents = game ? game.buyInCents * players.length : 0
-  const unpaidBuyIns = buyIns?.filter(b => b.status === 'unpaid') ?? []
+  const unpaidBuyIns = buyIns.filter(b => b.status === 'unpaid')
   const playerById = (id: string) => players.find(p => p.id === id)
 
-  if (!round || !game || !snapshot) {
+  if (loading || !round || !game || !snapshot) {
     return <div className="min-h-screen bg-gray-50 flex items-center justify-center"><p className="text-gray-400">Loading…</p></div>
   }
 
