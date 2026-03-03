@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { useLiveQuery } from 'dexie-react-hooks'
+import { CourseCatalog } from './components/CourseCatalog/CourseCatalog'
 import { CourseSetup } from './components/CourseSetup/CourseSetup'
 import { PlayerSetup } from './components/PlayerSetup/PlayerSetup'
 import { NewRound } from './components/NewRound/NewRound'
@@ -9,7 +10,7 @@ import { NearMeCourses } from './components/NearMeCourses/NearMeCourses'
 import { db } from './db/database'
 import type { Course, Player, GameType, StakesMode } from './types'
 
-type Screen = 'home' | 'course-setup' | 'player-setup' | 'new-round' | 'scorecard' | 'settle-up'
+type Screen = 'home' | 'course-catalog' | 'course-setup' | 'player-setup' | 'new-round' | 'scorecard' | 'settle-up'
 
 const GAME_EMOJI: Record<GameType, string> = {
   skins: '🎰 Skins',
@@ -246,8 +247,16 @@ export default function App() {
   const [activeRoundId, setActiveRoundId] = useState<string | null>(null)
   const [newRoundStakesMode, setNewRoundStakesMode] = useState<StakesMode>('standard')
 
+  if (screen === 'course-catalog') {
+    return (
+      <CourseCatalog
+        onDone={() => setScreen(afterCourseSetup)}
+        onAddCustom={() => setScreen('course-setup')}
+      />
+    )
+  }
   if (screen === 'course-setup') {
-    return <CourseSetup onSave={() => setScreen(afterCourseSetup)} onCancel={() => setScreen(afterCourseSetup)} />
+    return <CourseSetup onSave={() => setScreen(afterCourseSetup)} onCancel={() => setScreen('course-catalog')} />
   }
   if (screen === 'player-setup') {
     return <PlayerSetup onSave={() => setScreen('home')} onCancel={() => setScreen('home')} />
@@ -257,7 +266,7 @@ export default function App() {
       <NewRound
         onStart={roundId => { setActiveRoundId(roundId); setScreen('scorecard') }}
         onCancel={() => setScreen('home')}
-        onAddCourse={() => { setAfterCourseSetup('new-round'); setScreen('course-setup') }}
+        onAddCourse={() => { setAfterCourseSetup('new-round'); setScreen('course-catalog') }}
         initialStakesMode={newRoundStakesMode}
       />
     )
@@ -279,7 +288,7 @@ export default function App() {
     <Home
       onNewRound={() => { setNewRoundStakesMode('standard'); setScreen('new-round') }}
       onNewHighRollerRound={() => { setNewRoundStakesMode('high_roller'); setScreen('new-round') }}
-      onAddCourse={() => { setAfterCourseSetup('home'); setScreen('course-setup') }}
+      onAddCourse={() => { setAfterCourseSetup('home'); setScreen('course-catalog') }}
       onAddPlayer={() => setScreen('player-setup')}
       onEditPlayer={() => setScreen('player-setup')}
       onResumeRound={roundId => { setActiveRoundId(roundId); setScreen('scorecard') }}
