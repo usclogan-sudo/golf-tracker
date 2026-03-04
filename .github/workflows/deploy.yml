@@ -33,10 +33,13 @@ jobs:
         run: npm ci
 
       - name: Build
-        run: npm run build
+        run: |
+          export VITE_SUPABASE_URL=$(echo "$RAW_URL" | tr -d '\r\n ')
+          export VITE_SUPABASE_ANON_KEY=$(echo "$RAW_KEY" | tr -d '\r\n ')
+          npm run build
         env:
-          VITE_SUPABASE_URL: ${{ vars.VITE_SUPABASE_URL }}
-          VITE_SUPABASE_ANON_KEY: ${{ vars.VITE_SUPABASE_ANON_KEY }}
+          RAW_URL: ${{ vars.VITE_SUPABASE_URL }}
+          RAW_KEY: ${{ vars.VITE_SUPABASE_ANON_KEY }}
 
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
