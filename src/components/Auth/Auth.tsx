@@ -13,7 +13,10 @@ export function Auth() {
     setError(null)
     const { error: err } = await supabase.auth.signInWithOtp({
       email: email.trim(),
-      options: { shouldCreateUser: true },
+      options: {
+        shouldCreateUser: true,
+        emailRedirectTo: window.location.origin + '/golf-tracker/',
+      },
     })
     if (err) {
       setError(err.message)
