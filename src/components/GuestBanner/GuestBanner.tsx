@@ -14,9 +14,9 @@ export function GuestBanner({ onUpgrade }: Props) {
       <div className="flex items-start gap-3">
         <span className="text-xl flex-shrink-0">&#9888;&#65039;</span>
         <div>
-          <p className="font-semibold text-amber-900 text-sm">Your rounds aren&apos;t saved to an account</p>
+          <p className="font-semibold text-amber-900 text-sm">You&apos;re playing as a guest</p>
           <p className="text-amber-800 text-sm mt-1">
-            One cleared cache and your game history, players, and winnings are gone forever.
+            Your data is saved, but tied to this browser session. Clear your cache or switch devices and it&apos;s gone forever.
           </p>
         </div>
       </div>

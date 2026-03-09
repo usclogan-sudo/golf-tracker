@@ -77,10 +77,33 @@ export function Onboarding({ userId, onComplete }: Props) {
         )}
 
         {step === 2 && (
-          <div className="text-center space-y-6 w-full animate-fade-in">
+          <div className="text-center space-y-5 w-full animate-fade-in">
             <div className="text-7xl">&#127942;</div>
             <h2 className="font-display text-2xl font-bold text-gray-900">You're All Set!</h2>
-            <p className="text-gray-500 text-lg">Start by adding a course and some players, then fire up your first round.</p>
+            <p className="text-gray-500 text-lg">Here's what to do first:</p>
+            <div className="space-y-3 text-left">
+              <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-4 flex items-center gap-3">
+                <span className="text-2xl">1️⃣</span>
+                <div>
+                  <p className="font-semibold text-gray-900">Add a course</p>
+                  <p className="text-sm text-gray-500">Set up holes, pars, and tees</p>
+                </div>
+              </div>
+              <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-4 flex items-center gap-3">
+                <span className="text-2xl">2️⃣</span>
+                <div>
+                  <p className="font-semibold text-gray-900">Add your players</p>
+                  <p className="text-sm text-gray-500">Handicaps, tees, and payment info</p>
+                </div>
+              </div>
+              <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-4 flex items-center gap-3">
+                <span className="text-2xl">3️⃣</span>
+                <div>
+                  <p className="font-semibold text-gray-900">Start a round</p>
+                  <p className="text-sm text-gray-500">Pick a game, set buy-ins, and play</p>
+                </div>
+              </div>
+            </div>
             <button
               onClick={handleFinish}
               disabled={saving}

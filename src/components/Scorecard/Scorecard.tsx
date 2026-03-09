@@ -166,6 +166,15 @@ export function Scorecard({ userId, roundId, onEndRound, onHome }: Props) {
   }
 
   const endRound = async () => {
+    const totalHoles = snapshot?.holes.length ?? 18
+    const holesWithAllScores = Array.from({ length: totalHoles }, (_, i) => i + 1)
+      .filter(n => players.every(p => holeScores.some(s => s.playerId === p.id && s.holeNumber === n)))
+      .length
+    const missing = totalHoles - holesWithAllScores
+    const msg = missing > 0
+      ? `End round? ${holesWithAllScores} of ${totalHoles} holes scored (${missing} incomplete). You can still view results in Settle Up.`
+      : `End round? All ${totalHoles} holes scored. View results in Settle Up.`
+    if (!window.confirm(msg)) return
     setRound(prev => prev ? { ...prev, status: 'complete' } : prev)
     await supabase.from('rounds').update({ status: 'complete' }).eq('id', roundId)
     onEndRound()
@@ -273,7 +282,7 @@ export function Scorecard({ userId, roundId, onEndRound, onHome }: Props) {
             return (
               <button key={n} onClick={() => goToHole(n)}
                 className={`w-7 h-7 rounded-full text-xs font-bold flex-shrink-0 transition-colors ${
-                  n === currentHole ? 'bg-white text-green-800' : hasScore ? 'bg-green-600 text-white' : 'bg-green-700 text-green-300'
+                  n === currentHole ? 'bg-white text-green-800' : hasScore ? 'bg-green-500 text-white' : 'bg-green-900/40 text-green-400 border border-green-600/30'
                 }`}>{n}</button>
             )
           })}
@@ -419,6 +428,16 @@ export function Scorecard({ userId, roundId, onEndRound, onHome }: Props) {
           else if (grossScore === par + 2) scoreBadge = 'Double'
           else if (grossScore > par + 2) scoreBadge = `+${grossScore - par}`
 
+          // Running total through current hole
+          const scoredHoles = holeScores.filter(s => s.playerId === player.id)
+          const runningGross = scoredHoles.reduce((sum, s) => sum + s.grossScore, 0)
+          const runningPar = scoredHoles.reduce((sum, s) => {
+            const h = snapshot?.holes.find(h => h.number === s.holeNumber)
+            return sum + (h?.par ?? 0)
+          }, 0)
+          const runningVsPar = runningGross - runningPar
+          const holesPlayed = scoredHoles.length
+
           // Score validation warnings
           const warnings: string[] = []
           if (grossScore === 1 && par >= 4) warnings.push('Hole in one! Verify score')
@@ -436,6 +455,11 @@ export function Scorecard({ userId, roundId, onEndRound, onHome }: Props) {
                 <div className="text-right">
                   <p className="text-xs text-gray-400">{scoreBadge}</p>
                   {strokesGiven > 0 && <p className="text-sm font-semibold text-green-700">Net {netScore}</p>}
+                  {holesPlayed > 0 && (
+                    <p className={`text-xs font-semibold mt-0.5 ${runningVsPar > 0 ? 'text-red-500' : runningVsPar < 0 ? 'text-green-600' : 'text-gray-400'}`}>
+                      Thru {holesPlayed}: {runningGross} ({runningVsPar > 0 ? '+' : ''}{runningVsPar})
+                    </p>
+                  )}
                 </div>
               </div>
               <div className="flex items-center justify-between">

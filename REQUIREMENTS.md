@@ -271,7 +271,7 @@ A mobile-first app for groups of friends who play golf together to track side ga
 ### 8.1 Score Entry
 - [x] Hole-by-hole scoring for each player
 - [x] +/- stepper buttons (range 1–15)
-- [x] Hole navigator (1–18) showing which are complete
+- [x] Hole navigator (1–18) with clear visual distinction between scored and unscored holes
 - [x] Current hole info (par, stroke index, course name)
 - [x] Navigate forward/back between holes
 
@@ -279,6 +279,7 @@ A mobile-first app for groups of friends who play golf together to track side ga
 - [x] Score badges per player (Eagle, Birdie, Par, Bogey, Double+)
 - [x] Handicap strokes received shown per player per hole
 - [x] Net score calculation
+- [x] Running total per player (gross + vs-par through N holes played)
 
 ### 8.3 Game Panels (shown during play)
 - [x] Skins: carryover count, pot value
@@ -473,3 +474,4 @@ A mobile-first app for groups of friends who play golf together to track side ga
 | 2026-03-06 | 1.2 | Added: Course Data API integration, GHIN/WHS handicap API, GPS game discovery ("Find Games Near Me"), invite link/event code joining, public vs private events |
 | 2026-03-09 | 1.3 | Jeff's feedback: GHIN required (not optional), payment info expanded (Venmo/Zelle/CashApp/PayPal), player discovery & connect, players can't be deleted by others (only removed from games), pressing for Nassau/Skins, Junk/Dot games (sandy par, CTP, poley, greenie, barkie, ferret, snake), treasurer audit responsibility, settle up overview, platform fees placeholder, course selection from full catalog not just saved, notes on auth UX and GPS verification |
 | 2026-03-09 | 1.4 | Splash page with inline sign-in, anonymous guest auth + upgrade flow, usability audit: browser back button support, scorecard leave confirmation, network error handling, delete player, course user_id security fix, GHIN made optional, par templates for course setup, Near Me pre-fills course name, score undo button, end round from Home |
+| 2026-03-09 | 1.5 | Medium usability fixes: accurate guest banner copy, actionable onboarding steps, removed duplicate copy buttons in SettleUp, running total on scorecard (gross + vs-par through N holes), contextual End Round confirmation (shows holes scored/missing), improved hole navigator contrast (scored vs unscored), fixed course setup navigation when adding from new-round flow |

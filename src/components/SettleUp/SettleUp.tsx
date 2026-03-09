@@ -67,42 +67,44 @@ function PaymentButtons({ toPlayer, amountCents, note }: { toPlayer: Player; amo
   return (
     <div className="space-y-2">
       {hasAny ? (
-        <div className="flex flex-wrap gap-2">
-          {hasVenmo && (
-            <a href={venmoLink(toPlayer.venmoUsername!, amountCents, fullNote)}
-              onClick={() => { setTimeout(() => { window.open(venmoWebLink(toPlayer.venmoUsername!, amountCents, fullNote), '_blank') }, 1500) }}
-              className="flex-1 min-w-[120px] h-11 bg-blue-600 text-white font-semibold rounded-xl flex items-center justify-center gap-1.5 active:bg-blue-700 text-sm">
-              Venmo
-            </a>
-          )}
-          {hasZelle && (
-            <a href={zelleLink(toPlayer.zelleIdentifier!)} target="_blank" rel="noopener noreferrer"
-              className="flex-1 min-w-[120px] h-11 bg-purple-600 text-white font-semibold rounded-xl flex items-center justify-center gap-1.5 active:bg-purple-700 text-sm">
-              Zelle
-            </a>
-          )}
-          {hasCashApp && (
-            <a href={cashAppLink(toPlayer.cashAppUsername!, amountCents, fullNote)} target="_blank" rel="noopener noreferrer"
-              className="flex-1 min-w-[120px] h-11 bg-green-600 text-white font-semibold rounded-xl flex items-center justify-center gap-1.5 active:bg-green-700 text-sm">
-              Cash App
-            </a>
-          )}
-          {hasPaypal && (
-            <a href={paypalLink(toPlayer.paypalEmail!, amountCents)} target="_blank" rel="noopener noreferrer"
-              className="flex-1 min-w-[120px] h-11 bg-yellow-500 text-black font-semibold rounded-xl flex items-center justify-center gap-1.5 active:bg-yellow-600 text-sm">
-              PayPal
-            </a>
-          )}
-        </div>
+        <>
+          <div className="flex flex-wrap gap-2">
+            {hasVenmo && (
+              <a href={venmoLink(toPlayer.venmoUsername!, amountCents, fullNote)}
+                onClick={() => { setTimeout(() => { window.open(venmoWebLink(toPlayer.venmoUsername!, amountCents, fullNote), '_blank') }, 1500) }}
+                className="flex-1 min-w-[120px] h-11 bg-blue-600 text-white font-semibold rounded-xl flex items-center justify-center gap-1.5 active:bg-blue-700 text-sm">
+                Venmo
+              </a>
+            )}
+            {hasZelle && (
+              <a href={zelleLink(toPlayer.zelleIdentifier!)} target="_blank" rel="noopener noreferrer"
+                className="flex-1 min-w-[120px] h-11 bg-purple-600 text-white font-semibold rounded-xl flex items-center justify-center gap-1.5 active:bg-purple-700 text-sm">
+                Zelle
+              </a>
+            )}
+            {hasCashApp && (
+              <a href={cashAppLink(toPlayer.cashAppUsername!, amountCents, fullNote)} target="_blank" rel="noopener noreferrer"
+                className="flex-1 min-w-[120px] h-11 bg-green-600 text-white font-semibold rounded-xl flex items-center justify-center gap-1.5 active:bg-green-700 text-sm">
+                Cash App
+              </a>
+            )}
+            {hasPaypal && (
+              <a href={paypalLink(toPlayer.paypalEmail!, amountCents)} target="_blank" rel="noopener noreferrer"
+                className="flex-1 min-w-[120px] h-11 bg-yellow-500 text-black font-semibold rounded-xl flex items-center justify-center gap-1.5 active:bg-yellow-600 text-sm">
+                PayPal
+              </a>
+            )}
+          </div>
+          <button onClick={handleCopy} className={`w-full text-center text-xs transition-colors ${copied ? 'text-green-600 font-semibold' : 'text-gray-400 underline'}`}>
+            {copied ? 'Copied!' : 'Or copy payment details'}
+          </button>
+        </>
       ) : (
         <button onClick={handleCopy}
           className={`w-full h-11 font-semibold rounded-xl transition-colors ${copied ? 'bg-green-600 text-white' : 'bg-gray-100 text-gray-700 active:bg-gray-200'}`}>
           {copied ? 'Copied!' : 'Copy Payment Text'}
         </button>
       )}
-      <button onClick={handleCopy} className={`w-full h-9 text-sm rounded-xl transition-colors ${copied ? 'bg-green-100 text-green-700' : 'bg-gray-50 text-gray-500 active:bg-gray-100'}`}>
-        {copied ? 'Copied!' : 'Copy payment text'}
-      </button>
     </div>
   )
 }

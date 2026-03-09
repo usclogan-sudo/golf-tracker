@@ -515,8 +515,8 @@ export default function App() {
         userId={userId}
         course={editingCourse}
         initialName={newCourseName}
-        onSave={() => { setEditingCourse(undefined); setNewCourseName(''); goHome() }}
-        onCancel={() => { setEditingCourse(undefined); setNewCourseName(''); setScreen('course-catalog') }}
+        onSave={() => { setEditingCourse(undefined); setNewCourseName(''); if (afterCourseSetup === 'new-round') { setScreen('new-round') } else { goHome() } }}
+        onCancel={() => { setEditingCourse(undefined); setNewCourseName(''); setScreen(afterCourseSetup === 'new-round' ? 'new-round' : 'course-catalog') }}
       />
     )
   }
@@ -600,7 +600,24 @@ export default function App() {
   }
 
   const handleEndRound = async (roundId: string) => {
-    if (!window.confirm('End this round? You can still view results in Settle Up.')) return
+    // Fetch hole scores to show context in confirmation
+    const [hsRes, roundRes] = await Promise.all([
+      supabase.from('hole_scores').select('player_id, hole_number').eq('round_id', roundId),
+      supabase.from('rounds').select('players, course_snapshot').eq('id', roundId).single(),
+    ])
+    const playerCount = (roundRes.data?.players as any[])?.length ?? 0
+    const totalHoles = (roundRes.data?.course_snapshot as any)?.holes?.length ?? 18
+    const scores = hsRes.data ?? []
+    const holesComplete = Array.from({ length: totalHoles }, (_, i) => i + 1)
+      .filter(n => {
+        const scoredPlayers = new Set(scores.filter((s: any) => s.hole_number === n).map((s: any) => s.player_id))
+        return scoredPlayers.size >= playerCount
+      }).length
+    const missing = totalHoles - holesComplete
+    const msg = missing > 0
+      ? `End round? ${holesComplete} of ${totalHoles} holes scored (${missing} incomplete). You can view results in Settle Up.`
+      : `End round? All ${totalHoles} holes scored. View results in Settle Up.`
+    if (!window.confirm(msg)) return
     await supabase.from('rounds').update({ status: 'complete' }).eq('id', roundId)
     setActiveRoundId(roundId)
     setScreen('settle-up')
