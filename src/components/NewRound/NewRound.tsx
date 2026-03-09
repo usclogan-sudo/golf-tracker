@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { v4 as uuidv4 } from 'uuid'
-import { supabase, courseToRow, playerToRow, roundToRow, roundPlayerToRow, buyInToRow, rowToCourse, rowToPlayer, rowToSharedCourse, rowToGamePreset } from '../../lib/supabase'
+import { supabase, courseToRow, playerToRow, roundToRow, roundPlayerToRow, buyInToRow, rowToCourse, rowToPlayer, rowToSharedCourse, rowToGamePreset, rowToUserProfile } from '../../lib/supabase'
 import { fmtMoney } from '../../lib/gameLogic'
 import { venturaCourses } from '../../data/venturaCourses'
 import type {
@@ -235,33 +235,53 @@ function PlayerPicker({
   preSelectedIds?: string[]
 }) {
   const [allPlayers, setAllPlayers] = useState<Player[]>([])
-  const [publicPlayers, setPublicPlayers] = useState<Player[]>([])
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set(preSelectedIds ?? []))
   const [playerTees, setPlayerTees] = useState<Record<string, string>>({})
-  const [showPublic, setShowPublic] = useState(false)
+  const [query, setQuery] = useState('')
 
   const [showAddForm, setShowAddForm] = useState(false)
   const [newName, setNewName] = useState('')
   const [newHcp, setNewHcp] = useState('')
-  const [newGhin, setNewGhin] = useState('')
   const [newTee, setNewTee] = useState(course.tees[0]?.name ?? 'White')
   const [addError, setAddError] = useState('')
   const [saving, setSaving] = useState(false)
-  const [importing, setImporting] = useState<string | null>(null)
 
   const MAX_PLAYERS = 8
   const headerClass = stakesMode === 'high_roller' ? 'hr-header' : 'app-header'
 
   useEffect(() => {
-    // Fetch own players
-    supabase.from('players').select('*').eq('user_id', userId).order('name').then(({ data }) => {
-      if (data) setAllPlayers(data.map(rowToPlayer))
-    })
-    // Fetch public players from others
-    supabase.from('players').select('*').eq('is_public', true).neq('user_id', userId).order('name').then(({ data }) => {
-      if (data) setPublicPlayers(data.map(rowToPlayer))
-    })
-  }, [])
+    // Fetch registered users from user_profiles (display_name IS NOT NULL = completed onboarding)
+    const loadPlayers = async () => {
+      const [profilesRes, guestsRes] = await Promise.all([
+        supabase.from('user_profiles').select('*').not('display_name', 'is', null),
+        supabase.from('players').select('*').eq('user_id', userId).order('name'),
+      ])
+
+      const registeredPlayers: Player[] = (profilesRes.data ?? []).map((row: any) => {
+        const profile = rowToUserProfile(row)
+        return {
+          id: profile.userId,
+          name: profile.displayName!,
+          handicapIndex: profile.handicapIndex ?? 0,
+          tee: profile.tee ?? 'White',
+          ghinNumber: '',
+        } as Player
+      })
+
+      const guestPlayers: Player[] = (guestsRes.data ?? []).map(rowToPlayer)
+
+      // Deduplicate: registered users take priority, guests that share an ID are skipped
+      const registeredIds = new Set(registeredPlayers.map(p => p.id))
+      const uniqueGuests = guestPlayers.filter(g => !registeredIds.has(g.id))
+
+      setAllPlayers([...registeredPlayers, ...uniqueGuests].sort((a, b) => a.name.localeCompare(b.name)))
+    }
+    loadPlayers()
+  }, [userId])
+
+  const filtered = query.trim()
+    ? allPlayers.filter(p => p.name.toLowerCase().includes(query.toLowerCase()))
+    : allPlayers
 
   const toggle = (id: string) => {
     setSelectedIds(prev => {
@@ -284,15 +304,14 @@ function PlayerPicker({
     if (!newName.trim()) { setAddError('Name is required'); return }
     const hcp = parseFloat(newHcp)
     if (isNaN(hcp) || hcp < -10 || hcp > 54) { setAddError('Handicap must be between -10 and 54'); return }
-    if (newGhin.trim() && !/^\d+$/.test(newGhin.trim())) { setAddError('GHIN must be numeric'); return }
     setSaving(true)
     try {
-      const newPlayer: Player = { id: uuidv4(), name: newName.trim(), handicapIndex: hcp, tee: newTee, ghinNumber: newGhin.trim(), createdAt: new Date() }
+      const newPlayer: Player = { id: uuidv4(), name: newName.trim(), handicapIndex: hcp, tee: newTee, ghinNumber: '', createdAt: new Date() }
       const { error: err } = await supabase.from('players').insert(playerToRow(newPlayer, userId))
       if (err) throw err
       setAllPlayers(prev => [...prev, newPlayer].sort((a, b) => a.name.localeCompare(b.name)))
       setSelectedIds(prev => { const n = new Set(prev); n.add(newPlayer.id); return n })
-      setNewName(''); setNewHcp(''); setNewGhin(''); setAddError(''); setShowAddForm(false)
+      setNewName(''); setNewHcp(''); setAddError(''); setShowAddForm(false)
     } catch { setAddError('Failed to save. Try again.') }
     finally { setSaving(false) }
   }
@@ -321,6 +340,14 @@ function PlayerPicker({
       </header>
 
       <div className="px-4 py-4 max-w-2xl mx-auto space-y-3">
+        <input
+          type="text"
+          placeholder="Search players…"
+          value={query}
+          onChange={e => setQuery(e.target.value)}
+          className="w-full h-12 px-4 rounded-xl border border-gray-300 text-base focus:outline-none focus:ring-2 focus:ring-green-600"
+        />
+
         <p className="text-xs text-gray-500 px-1">
           {selectedIds.size === 0
             ? `Select up to ${MAX_PLAYERS} players`
@@ -328,9 +355,9 @@ function PlayerPicker({
           {selectedIds.size === MAX_PLAYERS && ' (max)'}
         </p>
 
-        {allPlayers.length > 0 && (
+        {filtered.length > 0 && (
           <div className="space-y-2">
-            {allPlayers.map(player => {
+            {filtered.map(player => {
               const selected = selectedIds.has(player.id)
               const activeTee = playerTees[player.id] ?? player.tee
               return (
@@ -384,54 +411,13 @@ function PlayerPicker({
           </div>
         )}
 
-        {/* Browse Public Players */}
-        {publicPlayers.length > 0 && (
-          <div>
-            <button
-              onClick={() => setShowPublic(v => !v)}
-              className="w-full text-left text-sm font-semibold text-blue-700 flex items-center gap-1.5 py-2"
-            >
-              <span className="text-base">{showPublic ? '▾' : '▸'}</span>
-              Browse Public Players ({publicPlayers.length})
-            </button>
-            {showPublic && (
-              <div className="space-y-2 mt-1">
-                {publicPlayers.map(pp => (
-                  <div key={pp.id} className="bg-blue-50 rounded-xl p-3 flex items-center justify-between border border-blue-100">
-                    <div>
-                      <p className="font-semibold text-gray-800 text-sm">{pp.name}</p>
-                      <p className="text-xs text-gray-500">HCP {pp.handicapIndex} · {pp.tee} tees</p>
-                    </div>
-                    <button
-                      onClick={async () => {
-                        setImporting(pp.id)
-                        const imported: Player = {
-                          ...pp,
-                          id: uuidv4(),
-                          isPublic: false,
-                          createdAt: new Date(),
-                        }
-                        await supabase.from('players').insert(playerToRow(imported, userId))
-                        setAllPlayers(prev => [...prev, imported].sort((a, b) => a.name.localeCompare(b.name)))
-                        setSelectedIds(prev => { const n = new Set(prev); n.add(imported.id); return n })
-                        setPublicPlayers(prev => prev.filter(p => p.id !== pp.id))
-                        setImporting(null)
-                      }}
-                      disabled={importing === pp.id || selectedIds.size >= MAX_PLAYERS}
-                      className="px-3 py-1.5 bg-blue-600 text-white text-xs font-bold rounded-lg disabled:opacity-40"
-                    >
-                      {importing === pp.id ? '...' : 'Import'}
-                    </button>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
+        {filtered.length === 0 && query.trim() && (
+          <p className="text-center text-gray-400 py-8">No players match "{query}"</p>
         )}
 
         {showAddForm ? (
           <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-4 space-y-3">
-            <p className="font-semibold text-gray-700 text-sm">Quick Add Player</p>
+            <p className="font-semibold text-gray-700 text-sm">Quick Add Guest Player</p>
             <input
               type="text"
               placeholder="Name"
@@ -439,24 +425,14 @@ function PlayerPicker({
               onChange={e => setNewName(e.target.value)}
               className="w-full h-11 px-3 rounded-xl border border-gray-300 text-base focus:outline-none focus:ring-2 focus:ring-green-600"
             />
-            <div className="grid grid-cols-2 gap-2">
-              <input
-                type="number"
-                inputMode="decimal"
-                placeholder="Handicap Index"
-                value={newHcp}
-                onChange={e => setNewHcp(e.target.value)}
-                className="w-full h-11 px-3 rounded-xl border border-gray-300 text-base focus:outline-none focus:ring-2 focus:ring-green-600"
-              />
-              <input
-                type="text"
-                inputMode="numeric"
-                placeholder="GHIN Number"
-                value={newGhin}
-                onChange={e => setNewGhin(e.target.value)}
-                className="w-full h-11 px-3 rounded-xl border border-gray-300 text-base focus:outline-none focus:ring-2 focus:ring-green-600"
-              />
-            </div>
+            <input
+              type="number"
+              inputMode="decimal"
+              placeholder="Handicap Index"
+              value={newHcp}
+              onChange={e => setNewHcp(e.target.value)}
+              className="w-full h-11 px-3 rounded-xl border border-gray-300 text-base focus:outline-none focus:ring-2 focus:ring-green-600"
+            />
             <select
               value={newTee}
               onChange={e => setNewTee(e.target.value)}
@@ -469,7 +445,7 @@ function PlayerPicker({
             {addError && <p className="text-red-500 text-sm">{addError}</p>}
             <div className="flex gap-2">
               <button
-                onClick={() => { setShowAddForm(false); setNewName(''); setNewHcp(''); setNewGhin(''); setAddError('') }}
+                onClick={() => { setShowAddForm(false); setNewName(''); setNewHcp(''); setAddError('') }}
                 className="flex-1 h-11 border border-gray-300 rounded-xl text-gray-600 font-semibold"
               >
                 Cancel
@@ -489,7 +465,7 @@ function PlayerPicker({
             disabled={selectedIds.size >= MAX_PLAYERS}
             className="w-full h-12 border-2 border-dashed border-green-300 text-green-700 font-semibold rounded-2xl active:bg-green-50 disabled:opacity-40"
           >
-            + Add New Player
+            + Add Guest Player
           </button>
         )}
       </div>

@@ -43,6 +43,9 @@ export interface UserProfile {
   userId: string
   isAdmin: boolean
   onboardingComplete: boolean
+  displayName?: string
+  handicapIndex?: number
+  tee: string
   createdAt?: Date
 }
 

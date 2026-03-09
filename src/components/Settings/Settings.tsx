@@ -1,7 +1,9 @@
-import { useState } from 'react'
-import { supabase } from '../../lib/supabase'
+import { useEffect, useState } from 'react'
+import { supabase, rowToUserProfile } from '../../lib/supabase'
+import type { UserProfile } from '../../types'
 
 interface Props {
+  userId: string
   email: string
   onBack: () => void
   onSignOut: () => void
@@ -11,7 +13,14 @@ interface Props {
   onUpgrade?: () => void
 }
 
-export function Settings({ email, onBack, onSignOut, isAdmin, onAdmin, isAnonymous, onUpgrade }: Props) {
+export function Settings({ userId, email, onBack, onSignOut, isAdmin, onAdmin, isAnonymous, onUpgrade }: Props) {
+  const [profile, setProfile] = useState<UserProfile | null>(null)
+  const [displayName, setDisplayName] = useState('')
+  const [handicapIndex, setHandicapIndex] = useState('')
+  const [tee, setTee] = useState('White')
+  const [profileSaving, setProfileSaving] = useState(false)
+  const [profileMessage, setProfileMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null)
+
   const [newPassword, setNewPassword] = useState('')
   const [confirmPassword, setConfirmPassword] = useState('')
   const [pwSaving, setPwSaving] = useState(false)
@@ -20,6 +29,37 @@ export function Settings({ email, onBack, onSignOut, isAdmin, onAdmin, isAnonymo
   const [deleteConfirm, setDeleteConfirm] = useState('')
   const [deleting, setDeleting] = useState(false)
   const [deleteError, setDeleteError] = useState('')
+
+  useEffect(() => {
+    supabase.from('user_profiles').select('*').eq('user_id', userId).maybeSingle().then(({ data }) => {
+      if (data) {
+        const p = rowToUserProfile(data)
+        setProfile(p)
+        setDisplayName(p.displayName ?? '')
+        setHandicapIndex(p.handicapIndex != null ? String(p.handicapIndex) : '')
+        setTee(p.tee ?? 'White')
+      }
+    })
+  }, [userId])
+
+  const handleSaveProfile = async () => {
+    setProfileMessage(null)
+    if (!displayName.trim()) { setProfileMessage({ type: 'error', text: 'Name is required' }); return }
+    const hcp = parseFloat(handicapIndex)
+    if (isNaN(hcp) || hcp < -10 || hcp > 54) { setProfileMessage({ type: 'error', text: 'Handicap must be between -10 and 54' }); return }
+    setProfileSaving(true)
+    const { error } = await supabase.from('user_profiles').update({
+      display_name: displayName.trim(),
+      handicap_index: hcp,
+      tee,
+    }).eq('user_id', userId)
+    setProfileSaving(false)
+    if (error) {
+      setProfileMessage({ type: 'error', text: error.message })
+    } else {
+      setProfileMessage({ type: 'success', text: 'Profile updated' })
+    }
+  }
 
   const handleChangePassword = async () => {
     setPwMessage(null)
@@ -62,6 +102,8 @@ export function Settings({ email, onBack, onSignOut, isAdmin, onAdmin, isAnonymo
     }
   }
 
+  const TEE_OPTIONS = ['White', 'Blue', 'Gold', 'Red', 'Black', 'Green']
+
   return (
     <div className="min-h-screen bg-gray-50 pb-8">
       <header className="app-header text-white px-4 py-4 sticky top-0 z-10 shadow-xl flex items-center gap-3">
@@ -75,6 +117,63 @@ export function Settings({ email, onBack, onSignOut, isAdmin, onAdmin, isAnonymo
           <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Account</p>
           <p className="text-gray-800 font-medium">{isAnonymous ? 'Guest (no account)' : email}</p>
         </section>
+
+        {/* Profile editing */}
+        {!isAnonymous && profile && (
+          <section className="bg-white rounded-2xl shadow-sm p-4 space-y-3">
+            <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Your Profile</p>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Display Name</label>
+              <input
+                type="text"
+                value={displayName}
+                onChange={e => setDisplayName(e.target.value)}
+                className="w-full h-12 px-4 rounded-xl border border-gray-300 text-base focus:outline-none focus:ring-2 focus:ring-green-600"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Handicap Index</label>
+              <input
+                type="number"
+                inputMode="decimal"
+                step="0.1"
+                value={handicapIndex}
+                onChange={e => setHandicapIndex(e.target.value)}
+                className="w-full h-12 px-4 rounded-xl border border-gray-300 text-base focus:outline-none focus:ring-2 focus:ring-green-600"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Default Tee</label>
+              <div className="flex gap-2 flex-wrap">
+                {TEE_OPTIONS.map(t => (
+                  <button
+                    key={t}
+                    onClick={() => setTee(t)}
+                    className={`px-4 py-2 rounded-xl text-sm font-medium transition-colors ${
+                      tee === t
+                        ? 'bg-green-700 text-white'
+                        : 'bg-gray-100 text-gray-600 active:bg-gray-200'
+                    }`}
+                  >
+                    {t}
+                  </button>
+                ))}
+              </div>
+            </div>
+            {profileMessage && (
+              <p className={`text-sm ${profileMessage.type === 'error' ? 'text-red-500' : 'text-green-600'}`}>
+                {profileMessage.text}
+              </p>
+            )}
+            <button
+              onClick={handleSaveProfile}
+              disabled={profileSaving}
+              className="w-full h-12 bg-green-700 text-white font-semibold rounded-xl disabled:opacity-50 active:bg-green-800 transition-colors"
+            >
+              {profileSaving ? 'Saving...' : 'Save Profile'}
+            </button>
+          </section>
+        )}
 
         {/* Admin Dashboard */}
         {isAdmin && onAdmin && (

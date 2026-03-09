@@ -192,6 +192,9 @@ export function rowToUserProfile(row: any): UserProfile {
     userId: row.user_id,
     isAdmin: row.is_admin,
     onboardingComplete: row.onboarding_complete,
+    displayName: row.display_name ?? undefined,
+    handicapIndex: row.handicap_index ?? undefined,
+    tee: row.tee ?? 'White',
     createdAt: row.created_at ? new Date(row.created_at) : undefined,
   }
 }
@@ -201,6 +204,9 @@ export function userProfileToRow(p: UserProfile) {
     user_id: p.userId,
     is_admin: p.isAdmin,
     onboarding_complete: p.onboardingComplete,
+    display_name: p.displayName ?? null,
+    handicap_index: p.handicapIndex ?? null,
+    tee: p.tee ?? 'White',
   }
 }
 

@@ -7,13 +7,24 @@ interface Props {
 }
 
 export function Onboarding({ userId, onComplete }: Props) {
+  const [displayName, setDisplayName] = useState('')
+  const [handicapIndex, setHandicapIndex] = useState('')
   const [saving, setSaving] = useState(false)
+  const [error, setError] = useState('')
 
   const handleFinish = async () => {
+    setError('')
+    if (!displayName.trim()) { setError('Name is required'); return }
+    const hcp = parseFloat(handicapIndex)
+    if (isNaN(hcp) || hcp < -10 || hcp > 54) { setError('Handicap must be between -10 and 54'); return }
     setSaving(true)
     await supabase
       .from('user_profiles')
-      .update({ onboarding_complete: true })
+      .update({
+        onboarding_complete: true,
+        display_name: displayName.trim(),
+        handicap_index: hcp,
+      })
       .eq('user_id', userId)
     onComplete()
   }
@@ -32,6 +43,34 @@ export function Onboarding({ userId, onComplete }: Props) {
           <div className="text-7xl">&#9971;</div>
           <h2 className="font-display text-3xl font-bold text-gray-900">Welcome to Fore Skins</h2>
           <p className="text-gray-500 text-lg">Track golf side games, collect buy-ins, and settle up — all in one place.</p>
+
+          <div className="space-y-3 text-left">
+            <div>
+              <label className="block text-sm font-semibold text-gray-700 mb-1">Your Name</label>
+              <input
+                type="text"
+                placeholder="e.g. John Smith"
+                value={displayName}
+                onChange={e => setDisplayName(e.target.value)}
+                className="w-full h-12 px-4 rounded-xl border border-gray-300 text-base focus:outline-none focus:ring-2 focus:ring-green-600"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-semibold text-gray-700 mb-1">Handicap Index</label>
+              <input
+                type="number"
+                inputMode="decimal"
+                step="0.1"
+                placeholder="e.g. 12.4"
+                value={handicapIndex}
+                onChange={e => setHandicapIndex(e.target.value)}
+                className="w-full h-12 px-4 rounded-xl border border-gray-300 text-base focus:outline-none focus:ring-2 focus:ring-green-600"
+              />
+            </div>
+          </div>
+
+          {error && <p className="text-red-500 text-sm">{error}</p>}
+
           <button
             onClick={handleFinish}
             disabled={saving}
