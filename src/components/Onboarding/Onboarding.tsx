@@ -32,22 +32,6 @@ export function Onboarding({ userId, onComplete }: Props) {
           <div className="text-7xl">&#9971;</div>
           <h2 className="font-display text-3xl font-bold text-gray-900">Welcome to Fore Skins</h2>
           <p className="text-gray-500 text-lg">Track golf side games, collect buy-ins, and settle up — all in one place.</p>
-
-          <div className="space-y-3 text-left">
-            <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-4 flex items-center gap-3">
-              <span className="text-2xl flex-shrink-0">&#9971;</span>
-              <p className="text-sm text-gray-700"><strong>Add a course</strong> — holes, pars, tees</p>
-            </div>
-            <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-4 flex items-center gap-3">
-              <span className="text-2xl flex-shrink-0">&#128101;</span>
-              <p className="text-sm text-gray-700"><strong>Add your players</strong> — handicaps &amp; payment info</p>
-            </div>
-            <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-4 flex items-center gap-3">
-              <span className="text-2xl flex-shrink-0">&#127920;</span>
-              <p className="text-sm text-gray-700"><strong>Start a round</strong> — Skins, Best Ball, Nassau, Wolf, BBB</p>
-            </div>
-          </div>
-
           <button
             onClick={handleFinish}
             disabled={saving}

@@ -105,7 +105,7 @@ function CourseCard({ course, onEdit, onDelete }: { course: Course; onEdit: () =
           onClick={(e) => { e.stopPropagation(); onDelete() }}
           className="text-xs text-red-400 hover:text-red-600 font-medium"
         >
-          Delete course
+          Remove course
         </button>
       </div>
     </div>
@@ -158,7 +158,7 @@ function Home({
   const [recentRounds, setRecentRounds] = useState<Round[]>([])
 
   useEffect(() => {
-    supabase.from('courses').select('*').eq('user_id', userId).order('name').then(({ data }) => {
+    supabase.from('courses').select('*').eq('user_id', userId).neq('hidden', true).order('name').then(({ data }) => {
       if (data) setCourses(data.map(rowToCourse))
     })
     supabase.from('players').select('*').eq('user_id', userId).order('name').then(({ data }) => {
@@ -588,8 +588,8 @@ export default function App() {
   }
 
   const handleDeleteCourse = async (courseId: string) => {
-    if (!window.confirm('Delete this course? This cannot be undone.')) return
-    await supabase.from('courses').delete().eq('id', courseId)
+    if (!window.confirm('Remove this course from your list?')) return
+    await supabase.from('courses').update({ hidden: true }).eq('id', courseId)
     setHomeKey(k => k + 1)
   }
 

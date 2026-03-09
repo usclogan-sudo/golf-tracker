@@ -274,7 +274,10 @@ export function Scorecard({ userId, roundId, onEndRound, onHome }: Props) {
               )}
             </h1>
           </div>
-          <button onClick={() => { if (window.confirm('Leave scoring? Your round is saved and you can resume from the Home screen.')) onHome() }} className="text-green-300 text-sm font-medium px-3 py-1.5 rounded-lg hover:bg-green-700">Home</button>
+          <div className="flex items-center gap-2">
+            <button onClick={endRound} className="text-yellow-300 text-sm font-medium px-3 py-1.5 rounded-lg hover:bg-green-700">End Round</button>
+            <button onClick={() => { if (window.confirm('Leave scoring? Your round is saved and you can resume from the Home screen.')) onHome() }} className="text-green-300 text-sm font-medium px-3 py-1.5 rounded-lg hover:bg-green-700">Home</button>
+          </div>
         </div>
         <div className="max-w-2xl mx-auto mt-2 flex gap-1 overflow-x-auto pb-1">
           {Array.from({ length: 18 }, (_, i) => i + 1).map(n => {

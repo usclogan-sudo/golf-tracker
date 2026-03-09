@@ -8,6 +8,7 @@ create table courses (
   name text not null,
   tees jsonb not null,
   holes jsonb not null,
+  hidden boolean not null default false,
   created_at timestamptz default now()
 );
 alter table courses enable row level security;
