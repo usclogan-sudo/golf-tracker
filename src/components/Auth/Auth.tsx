@@ -116,33 +116,62 @@ export function Auth() {
 
   const showPassword = mode === 'sign-in' || mode === 'sign-up'
 
-  // Splash screen
+  // Splash screen with inline sign-in
   if (mode === 'splash') {
     return (
       <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center px-4">
-        <div className="w-full max-w-sm space-y-8">
+        <div className="w-full max-w-sm space-y-6">
           <div className="text-center">
             <div className="text-7xl mb-4">&#9971;</div>
             <h1 className="font-display text-4xl font-800 tracking-tight text-gray-900">Fore Skins</h1>
             <p className="text-green-700 text-sm font-medium mt-2 tracking-widest uppercase">Golf &middot; Side Games &middot; Money</p>
           </div>
 
+          {/* Inline sign-in form */}
+          <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-5 space-y-3">
+            <input
+              type="email"
+              placeholder="Email address"
+              value={email}
+              onChange={e => setEmail(e.target.value)}
+              onKeyDown={e => e.key === 'Enter' && (password ? handleSignIn() : undefined)}
+              className="w-full h-12 px-4 rounded-xl border border-gray-300 text-base focus:outline-none focus:ring-2 focus:ring-green-600"
+              autoFocus
+            />
+            <input
+              type="password"
+              placeholder="Password"
+              value={password}
+              onChange={e => setPassword(e.target.value)}
+              onKeyDown={e => e.key === 'Enter' && handleSignIn()}
+              className="w-full h-12 px-4 rounded-xl border border-gray-300 text-base focus:outline-none focus:ring-2 focus:ring-green-600"
+            />
+            {error && <p className="text-red-500 text-sm">{error}</p>}
+            <button
+              onClick={handleSignIn}
+              disabled={loading}
+              className="w-full h-14 bg-green-700 text-white text-lg font-bold rounded-2xl shadow-lg disabled:opacity-60 active:bg-green-800 transition-colors"
+            >
+              {loading ? 'Loading...' : 'Sign In'}
+            </button>
+            <div className="flex items-center justify-between text-sm">
+              <button onClick={() => resetState('forgot-password')} className="text-green-600 underline">
+                Forgot password?
+              </button>
+              <button onClick={() => resetState('magic-link')} className="text-gray-500 underline">
+                Magic link
+              </button>
+            </div>
+          </div>
+
           <div className="space-y-3">
             <button
               onClick={() => resetState('sign-up')}
-              className="w-full h-14 bg-green-700 text-white text-lg font-bold rounded-2xl shadow-lg active:bg-green-800 transition-colors"
+              className="w-full h-14 bg-white text-green-700 text-lg font-bold rounded-2xl shadow-sm border-2 border-green-700 active:bg-green-50 transition-colors"
             >
               Create Account
             </button>
-            <button
-              onClick={() => resetState('sign-in')}
-              className="w-full h-14 bg-white text-green-700 text-lg font-bold rounded-2xl shadow-sm border-2 border-green-700 active:bg-green-50 transition-colors"
-            >
-              Sign In
-            </button>
           </div>
-
-          {error && <p className="text-red-500 text-sm text-center">{error}</p>}
 
           <div className="text-center">
             <button

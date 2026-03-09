@@ -130,6 +130,7 @@ function Home({
   onPlayAgain,
   isAnonymous,
   onUpgrade,
+  onEndRound,
 }: {
   userId: string
   onNewRound: () => void
@@ -148,6 +149,7 @@ function Home({
   onPlayAgain: (round: Round) => void
   isAnonymous?: boolean
   onUpgrade?: () => void
+  onEndRound?: (roundId: string) => void
 }) {
   const [courses, setCourses] = useState<Course[]>([])
   const [players, setPlayers] = useState<Player[]>([])
@@ -230,30 +232,42 @@ function Home({
         )}
 
         {activeRounds.length > 0 && (
-          <section>
+          <section className="space-y-3">
             {activeRounds.map(round => (
-              <button key={round.id} onClick={() => onResumeRound(round.id)}
-                className="w-full rounded-2xl overflow-hidden shadow-lg active:scale-[0.98] transition-transform">
-                <div className="bg-gradient-to-r from-amber-500 to-yellow-400 px-5 py-4">
-                  <div className="flex items-center justify-between">
-                    <div className="text-left">
-                      <p className="font-display font-bold text-amber-950 text-lg leading-tight">Round in Progress</p>
-                      <p className="text-amber-800 text-sm mt-0.5">{round.courseSnapshot?.courseName ?? 'Unknown course'}</p>
+              <div key={round.id} className="rounded-2xl overflow-hidden shadow-lg">
+                <button onClick={() => onResumeRound(round.id)}
+                  className="w-full active:scale-[0.98] transition-transform">
+                  <div className="bg-gradient-to-r from-amber-500 to-yellow-400 px-5 py-4">
+                    <div className="flex items-center justify-between">
+                      <div className="text-left">
+                        <p className="font-display font-bold text-amber-950 text-lg leading-tight">Round in Progress</p>
+                        <p className="text-amber-800 text-sm mt-0.5">{round.courseSnapshot?.courseName ?? 'Unknown course'}</p>
+                      </div>
+                      <div className="text-right">
+                        <p className="font-display font-bold text-amber-950 text-2xl">&#9971; {round.currentHole}</p>
+                        <p className="text-amber-800 text-xs">Hole</p>
+                      </div>
                     </div>
-                    <div className="text-right">
-                      <p className="font-display font-bold text-amber-950 text-2xl">⛳ {round.currentHole}</p>
-                      <p className="text-amber-800 text-xs">Hole</p>
+                    <div className="mt-3 bg-amber-950/20 rounded-xl px-4 py-2 flex items-center justify-between">
+                      <span className="text-amber-900 text-sm font-semibold">
+                        {round.players?.length ?? 0} players · {round.game?.type ? (GAME_EMOJI[round.game.type] ?? round.game.type) : 'Unknown'}
+                        {round.game?.stakesMode === 'high_roller' && ' 💎'}
+                      </span>
+                      <span className="text-amber-900 text-sm font-bold">Tap to Resume &rarr;</span>
                     </div>
                   </div>
-                  <div className="mt-3 bg-amber-950/20 rounded-xl px-4 py-2 flex items-center justify-between">
-                    <span className="text-amber-900 text-sm font-semibold">
-                      {round.players?.length ?? 0} players · {round.game?.type ? (GAME_EMOJI[round.game.type] ?? round.game.type) : 'Unknown'}
-                      {round.game?.stakesMode === 'high_roller' && ' 💎'}
-                    </span>
-                    <span className="text-amber-900 text-sm font-bold">Tap to Resume →</span>
+                </button>
+                {onEndRound && (
+                  <div className="bg-amber-100 px-5 py-2 flex justify-end">
+                    <button
+                      onClick={(e) => { e.stopPropagation(); onEndRound(round.id) }}
+                      className="text-red-600 text-sm font-semibold hover:text-red-800 transition-colors"
+                    >
+                      End Round
+                    </button>
                   </div>
-                </div>
-              </button>
+                )}
+              </div>
             ))}
           </section>
         )}
@@ -551,6 +565,13 @@ export default function App() {
     setScreen('new-round')
   }
 
+  const handleEndRound = async (roundId: string) => {
+    if (!window.confirm('End this round? You can still view results in Settle Up.')) return
+    await supabase.from('rounds').update({ status: 'complete' }).eq('id', roundId)
+    setActiveRoundId(roundId)
+    setScreen('settle-up')
+  }
+
   return (
     <Home
       key={homeKey}
@@ -571,6 +592,7 @@ export default function App() {
       onPlayAgain={handlePlayAgain}
       isAnonymous={isAnonymous}
       onUpgrade={() => setScreen('upgrade-account')}
+      onEndRound={handleEndRound}
     />
   )
 }
