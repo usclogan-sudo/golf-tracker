@@ -201,6 +201,7 @@ function PlayerPicker({
   const [showAddForm, setShowAddForm] = useState(false)
   const [newName, setNewName] = useState('')
   const [newHcp, setNewHcp] = useState('')
+  const [newGhin, setNewGhin] = useState('')
   const [newTee, setNewTee] = useState(course.tees[0]?.name ?? 'White')
   const [addError, setAddError] = useState('')
   const [saving, setSaving] = useState(false)
@@ -234,15 +235,17 @@ function PlayerPicker({
   const handleAddPlayer = async () => {
     if (!newName.trim()) { setAddError('Name is required'); return }
     const hcp = parseFloat(newHcp)
-    if (isNaN(hcp) || hcp < -10 || hcp > 54) { setAddError('Must be between -10 and 54'); return }
+    if (isNaN(hcp) || hcp < -10 || hcp > 54) { setAddError('Handicap must be between -10 and 54'); return }
+    if (!newGhin.trim()) { setAddError('GHIN number is required'); return }
+    if (!/^\d+$/.test(newGhin.trim())) { setAddError('GHIN must be numeric'); return }
     setSaving(true)
     try {
-      const newPlayer: Player = { id: uuidv4(), name: newName.trim(), handicapIndex: hcp, tee: newTee, createdAt: new Date() }
+      const newPlayer: Player = { id: uuidv4(), name: newName.trim(), handicapIndex: hcp, tee: newTee, ghinNumber: newGhin.trim(), createdAt: new Date() }
       const { error: err } = await supabase.from('players').insert(playerToRow(newPlayer, userId))
       if (err) throw err
       setAllPlayers(prev => [...prev, newPlayer].sort((a, b) => a.name.localeCompare(b.name)))
       setSelectedIds(prev => { const n = new Set(prev); n.add(newPlayer.id); return n })
-      setNewName(''); setNewHcp(''); setAddError(''); setShowAddForm(false)
+      setNewName(''); setNewHcp(''); setNewGhin(''); setAddError(''); setShowAddForm(false)
     } catch { setAddError('Failed to save. Try again.') }
     finally { setSaving(false) }
   }
@@ -353,20 +356,28 @@ function PlayerPicker({
                 onChange={e => setNewHcp(e.target.value)}
                 className="w-full h-11 px-3 rounded-xl border border-gray-300 text-base focus:outline-none focus:ring-2 focus:ring-green-600"
               />
-              <select
-                value={newTee}
-                onChange={e => setNewTee(e.target.value)}
+              <input
+                type="text"
+                inputMode="numeric"
+                placeholder="GHIN Number"
+                value={newGhin}
+                onChange={e => setNewGhin(e.target.value)}
                 className="w-full h-11 px-3 rounded-xl border border-gray-300 text-base focus:outline-none focus:ring-2 focus:ring-green-600"
-              >
-                {course.tees.map(t => (
-                  <option key={t.name} value={t.name}>{t.name}</option>
-                ))}
-              </select>
+              />
             </div>
+            <select
+              value={newTee}
+              onChange={e => setNewTee(e.target.value)}
+              className="w-full h-11 px-3 rounded-xl border border-gray-300 text-base focus:outline-none focus:ring-2 focus:ring-green-600"
+            >
+              {course.tees.map(t => (
+                <option key={t.name} value={t.name}>{t.name}</option>
+              ))}
+            </select>
             {addError && <p className="text-red-500 text-sm">{addError}</p>}
             <div className="flex gap-2">
               <button
-                onClick={() => { setShowAddForm(false); setNewName(''); setNewHcp(''); setAddError('') }}
+                onClick={() => { setShowAddForm(false); setNewName(''); setNewHcp(''); setNewGhin(''); setAddError('') }}
                 className="flex-1 h-11 border border-gray-300 rounded-xl text-gray-600 font-semibold"
               >
                 Cancel

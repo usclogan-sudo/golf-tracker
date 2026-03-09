@@ -26,10 +26,13 @@ export interface Hole {
 export interface Player {
   id: string
   name: string
-  ghinNumber?: string
+  ghinNumber: string
   handicapIndex: number   // e.g. 12.4
   tee: string             // default tee color
   venmoUsername?: string
+  zelleIdentifier?: string
+  cashAppUsername?: string
+  paypalEmail?: string
   createdAt?: Date
 }
 

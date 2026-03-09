@@ -24,8 +24,11 @@ export function rowToPlayer(row: any): Player {
     name: row.name,
     handicapIndex: row.handicap_index,
     tee: row.tee,
-    ...(row.ghin_number ? { ghinNumber: row.ghin_number } : {}),
+    ghinNumber: row.ghin_number ?? '',
     ...(row.venmo_username ? { venmoUsername: row.venmo_username } : {}),
+    ...(row.zelle_identifier ? { zelleIdentifier: row.zelle_identifier } : {}),
+    ...(row.cashapp_username ? { cashAppUsername: row.cashapp_username } : {}),
+    ...(row.paypal_email ? { paypalEmail: row.paypal_email } : {}),
     createdAt: row.created_at ? new Date(row.created_at) : undefined,
   }
 }
@@ -108,8 +111,11 @@ export function playerToRow(p: Player, userId: string) {
     name: p.name,
     handicap_index: p.handicapIndex,
     tee: p.tee,
-    ghin_number: p.ghinNumber ?? null,
+    ghin_number: p.ghinNumber || '',
     venmo_username: p.venmoUsername ?? null,
+    zelle_identifier: p.zelleIdentifier ?? null,
+    cashapp_username: p.cashAppUsername ?? null,
+    paypal_email: p.paypalEmail ?? null,
     created_at: p.createdAt instanceof Date ? p.createdAt.toISOString() : (p.createdAt ?? null),
   }
 }

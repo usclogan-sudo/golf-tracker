@@ -107,7 +107,7 @@ function Home({
   onAddCourse: () => void
   onAddPlayer: () => void
   onResumeRound: (roundId: string) => void
-  onEditPlayer: () => void
+  onEditPlayer: (player: Player) => void
   onSignOut: () => void
 }) {
   const [courses, setCourses] = useState<Course[]>([])
@@ -235,7 +235,7 @@ function Home({
           )}
           {players.length > 0 && (
             <div className="space-y-2">
-              {players.map(player => <PlayerCard key={player.id} player={player} onEdit={onEditPlayer} />)}
+              {players.map(player => <PlayerCard key={player.id} player={player} onEdit={() => onEditPlayer(player)} />)}
             </div>
           )}
         </section>
@@ -276,6 +276,7 @@ export default function App() {
   const [afterCourseSetup, setAfterCourseSetup] = useState<Screen>('home')
   const [activeRoundId, setActiveRoundId] = useState<string | null>(null)
   const [newRoundStakesMode, setNewRoundStakesMode] = useState<StakesMode>('standard')
+  const [editingPlayer, setEditingPlayer] = useState<Player | undefined>(undefined)
   const [homeKey, setHomeKey] = useState(0)
 
   useEffect(() => {
@@ -320,7 +321,14 @@ export default function App() {
     return <CourseSetup userId={userId} onSave={goHome} onCancel={() => setScreen('course-catalog')} />
   }
   if (screen === 'player-setup') {
-    return <PlayerSetup userId={userId} onSave={goHome} onCancel={goHome} />
+    return (
+      <PlayerSetup
+        userId={userId}
+        player={editingPlayer}
+        onSave={() => { setEditingPlayer(undefined); goHome() }}
+        onCancel={() => { setEditingPlayer(undefined); goHome() }}
+      />
+    )
   }
   if (screen === 'new-round') {
     return (
@@ -353,8 +361,8 @@ export default function App() {
       onNewRound={() => { setNewRoundStakesMode('standard'); setScreen('new-round') }}
       onNewHighRollerRound={() => { setNewRoundStakesMode('high_roller'); setScreen('new-round') }}
       onAddCourse={() => { setAfterCourseSetup('home'); setScreen('course-catalog') }}
-      onAddPlayer={() => setScreen('player-setup')}
-      onEditPlayer={() => setScreen('player-setup')}
+      onAddPlayer={() => { setEditingPlayer(undefined); setScreen('player-setup') }}
+      onEditPlayer={(player: Player) => { setEditingPlayer(player); setScreen('player-setup') }}
       onResumeRound={roundId => { setActiveRoundId(roundId); setScreen('scorecard') }}
       onSignOut={() => supabase.auth.signOut()}
     />

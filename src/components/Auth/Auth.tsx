@@ -1,13 +1,70 @@
 import { useState } from 'react'
 import { supabase } from '../../lib/supabase'
 
+type AuthMode = 'sign-in' | 'sign-up' | 'forgot-password' | 'magic-link'
+
 export function Auth() {
+  const [mode, setMode] = useState<AuthMode>('sign-in')
   const [email, setEmail] = useState('')
-  const [sent, setSent] = useState(false)
+  const [password, setPassword] = useState('')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [message, setMessage] = useState<string | null>(null)
 
-  const handleSend = async () => {
+  const resetState = (nextMode: AuthMode) => {
+    setError(null)
+    setMessage(null)
+    setPassword('')
+    setMode(nextMode)
+  }
+
+  const handleSignIn = async () => {
+    if (!email.trim()) { setError('Enter your email address'); return }
+    if (!password) { setError('Enter your password'); return }
+    setLoading(true)
+    setError(null)
+    const { error: err } = await supabase.auth.signInWithPassword({
+      email: email.trim(),
+      password,
+    })
+    if (err) setError(err.message)
+    setLoading(false)
+  }
+
+  const handleSignUp = async () => {
+    if (!email.trim()) { setError('Enter your email address'); return }
+    if (password.length < 6) { setError('Password must be at least 6 characters'); return }
+    setLoading(true)
+    setError(null)
+    const { error: err } = await supabase.auth.signUp({
+      email: email.trim(),
+      password,
+      options: { emailRedirectTo: window.location.origin + '/golf-tracker/' },
+    })
+    if (err) {
+      setError(err.message)
+    } else {
+      setMessage('Check your email to confirm your account, then sign in.')
+    }
+    setLoading(false)
+  }
+
+  const handleForgotPassword = async () => {
+    if (!email.trim()) { setError('Enter your email address'); return }
+    setLoading(true)
+    setError(null)
+    const { error: err } = await supabase.auth.resetPasswordForEmail(email.trim(), {
+      redirectTo: window.location.origin + '/golf-tracker/',
+    })
+    if (err) {
+      setError(err.message)
+    } else {
+      setMessage('Check your email for a password reset link.')
+    }
+    setLoading(false)
+  }
+
+  const handleMagicLink = async () => {
     if (!email.trim()) { setError('Enter your email address'); return }
     setLoading(true)
     setError(null)
@@ -21,36 +78,58 @@ export function Auth() {
     if (err) {
       setError(err.message)
     } else {
-      setSent(true)
+      setMessage('Check your email for a sign-in link.')
     }
     setLoading(false)
   }
+
+  const handleSubmit = () => {
+    if (mode === 'sign-in') handleSignIn()
+    else if (mode === 'sign-up') handleSignUp()
+    else if (mode === 'forgot-password') handleForgotPassword()
+    else handleMagicLink()
+  }
+
+  const title = {
+    'sign-in': 'Sign In',
+    'sign-up': 'Create Account',
+    'forgot-password': 'Reset Password',
+    'magic-link': 'Magic Link',
+  }[mode]
+
+  const buttonLabel = {
+    'sign-in': 'Sign In',
+    'sign-up': 'Create Account',
+    'forgot-password': 'Send Reset Link',
+    'magic-link': 'Send Magic Link',
+  }[mode]
+
+  const showPassword = mode === 'sign-in' || mode === 'sign-up'
 
   return (
     <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center px-4">
       <div className="w-full max-w-sm space-y-6">
         <div className="text-center">
-          <div className="text-6xl mb-4">⛳</div>
+          <div className="text-6xl mb-4">&#9971;</div>
           <h1 className="font-display text-3xl font-800 tracking-tight text-gray-900">Fore Skins</h1>
-          <p className="text-green-700 text-sm font-medium mt-1 tracking-wide">GOLF · SIDE GAMES · MONEY</p>
+          <p className="text-green-700 text-sm font-medium mt-1 tracking-wide">GOLF &middot; SIDE GAMES &middot; MONEY</p>
         </div>
 
-        {sent ? (
+        {message ? (
           <div className="bg-green-50 border border-green-200 rounded-2xl p-6 text-center space-y-2">
-            <p className="text-3xl">📬</p>
-            <p className="font-semibold text-green-900">Check your email</p>
-            <p className="text-green-700 text-sm">
-              We sent a magic link to <strong>{email}</strong>. Click it to sign in.
-            </p>
+            <p className="text-3xl">&#128236;</p>
+            <p className="font-semibold text-green-900">{message}</p>
             <button
-              onClick={() => setSent(false)}
+              onClick={() => resetState('sign-in')}
               className="text-green-600 text-sm underline mt-2"
             >
-              Use a different email
+              Back to Sign In
             </button>
           </div>
         ) : (
           <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6 space-y-4">
+            <p className="text-center font-semibold text-gray-700">{title}</p>
+
             <div>
               <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">
                 Email Address
@@ -60,22 +139,69 @@ export function Auth() {
                 placeholder="you@example.com"
                 value={email}
                 onChange={e => setEmail(e.target.value)}
-                onKeyDown={e => e.key === 'Enter' && handleSend()}
+                onKeyDown={e => e.key === 'Enter' && handleSubmit()}
                 className="w-full h-12 px-4 rounded-xl border border-gray-300 text-base focus:outline-none focus:ring-2 focus:ring-green-600"
                 autoFocus
               />
             </div>
+
+            {showPassword && (
+              <div>
+                <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">
+                  Password
+                </label>
+                <input
+                  type="password"
+                  placeholder={mode === 'sign-up' ? 'At least 6 characters' : 'Your password'}
+                  value={password}
+                  onChange={e => setPassword(e.target.value)}
+                  onKeyDown={e => e.key === 'Enter' && handleSubmit()}
+                  className="w-full h-12 px-4 rounded-xl border border-gray-300 text-base focus:outline-none focus:ring-2 focus:ring-green-600"
+                />
+              </div>
+            )}
+
             {error && <p className="text-red-500 text-sm">{error}</p>}
+
             <button
-              onClick={handleSend}
+              onClick={handleSubmit}
               disabled={loading}
               className="w-full h-14 bg-green-700 text-white text-lg font-bold rounded-2xl shadow-lg disabled:opacity-60 active:bg-green-800 transition-colors"
             >
-              {loading ? 'Sending…' : 'Send Magic Link'}
+              {loading ? 'Loading...' : buttonLabel}
             </button>
-            <p className="text-center text-xs text-gray-400">
-              No password needed. We'll email you a sign-in link.
-            </p>
+
+            <div className="space-y-2 text-center text-sm">
+              {mode === 'sign-in' && (
+                <>
+                  <button onClick={() => resetState('forgot-password')} className="text-green-600 underline block w-full">
+                    Forgot password?
+                  </button>
+                  <button onClick={() => resetState('magic-link')} className="text-gray-500 underline block w-full">
+                    Sign in with magic link instead
+                  </button>
+                  <p className="text-gray-400 pt-1">
+                    No account?{' '}
+                    <button onClick={() => resetState('sign-up')} className="text-green-600 underline">
+                      Create one
+                    </button>
+                  </p>
+                </>
+              )}
+              {mode === 'sign-up' && (
+                <p className="text-gray-400">
+                  Already have an account?{' '}
+                  <button onClick={() => resetState('sign-in')} className="text-green-600 underline">
+                    Sign in
+                  </button>
+                </p>
+              )}
+              {(mode === 'forgot-password' || mode === 'magic-link') && (
+                <button onClick={() => resetState('sign-in')} className="text-green-600 underline">
+                  Back to Sign In
+                </button>
+              )}
+            </div>
           </div>
         )}
       </div>

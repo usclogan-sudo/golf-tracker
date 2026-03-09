@@ -15,6 +15,9 @@ import {
   buildSettlements,
   venmoLink,
   venmoWebLink,
+  zelleLink,
+  cashAppLink,
+  paypalLink,
   fmtMoney,
 } from '../../lib/gameLogic'
 import type { PlayerPayout, Settlement } from '../../lib/gameLogic'
@@ -46,30 +49,58 @@ const GAME_LABELS: Record<GameType, string> = {
   bingo_bango_bongo: 'Bingo Bango Bongo',
 }
 
-function VenmoButton({ toPlayer, amountCents, note }: { toPlayer: Player; amountCents: number; note: string }) {
+function PaymentButtons({ toPlayer, amountCents, note }: { toPlayer: Player; amountCents: number; note: string }) {
   const [copied, setCopied] = useState(false)
-  const username = toPlayer.venmoUsername
-  const copyText = `Pay ${toPlayer.name} ${fmtMoney(amountCents)} for Fore Skins Golf — ${note}`
+  const fullNote = `Fore Skins Golf — ${note}`
+  const copyText = `Pay ${toPlayer.name} ${fmtMoney(amountCents)} for ${fullNote}`
   const handleCopy = () => {
     navigator.clipboard.writeText(copyText).then(() => { setCopied(true); setTimeout(() => setCopied(false), 2000) })
   }
+
+  const hasVenmo = !!toPlayer.venmoUsername
+  const hasZelle = !!toPlayer.zelleIdentifier
+  const hasCashApp = !!toPlayer.cashAppUsername
+  const hasPaypal = !!toPlayer.paypalEmail
+  const hasAny = hasVenmo || hasZelle || hasCashApp || hasPaypal
+
   return (
-    <div className="flex gap-2">
-      {username ? (
-        <a href={venmoLink(username, amountCents, `Fore Skins Golf — ${note}`)}
-          onClick={() => { setTimeout(() => { window.open(venmoWebLink(username, amountCents, `Fore Skins Golf — ${note}`), '_blank') }, 1500) }}
-          className="flex-1 h-11 bg-blue-600 text-white font-semibold rounded-xl flex items-center justify-center gap-2 active:bg-blue-700">
-          <span>💸</span> Pay via Venmo
-        </a>
+    <div className="space-y-2">
+      {hasAny ? (
+        <div className="flex flex-wrap gap-2">
+          {hasVenmo && (
+            <a href={venmoLink(toPlayer.venmoUsername!, amountCents, fullNote)}
+              onClick={() => { setTimeout(() => { window.open(venmoWebLink(toPlayer.venmoUsername!, amountCents, fullNote), '_blank') }, 1500) }}
+              className="flex-1 min-w-[120px] h-11 bg-blue-600 text-white font-semibold rounded-xl flex items-center justify-center gap-1.5 active:bg-blue-700 text-sm">
+              Venmo
+            </a>
+          )}
+          {hasZelle && (
+            <a href={zelleLink(toPlayer.zelleIdentifier!)} target="_blank" rel="noopener noreferrer"
+              className="flex-1 min-w-[120px] h-11 bg-purple-600 text-white font-semibold rounded-xl flex items-center justify-center gap-1.5 active:bg-purple-700 text-sm">
+              Zelle
+            </a>
+          )}
+          {hasCashApp && (
+            <a href={cashAppLink(toPlayer.cashAppUsername!, amountCents, fullNote)} target="_blank" rel="noopener noreferrer"
+              className="flex-1 min-w-[120px] h-11 bg-green-600 text-white font-semibold rounded-xl flex items-center justify-center gap-1.5 active:bg-green-700 text-sm">
+              Cash App
+            </a>
+          )}
+          {hasPaypal && (
+            <a href={paypalLink(toPlayer.paypalEmail!, amountCents)} target="_blank" rel="noopener noreferrer"
+              className="flex-1 min-w-[120px] h-11 bg-yellow-500 text-black font-semibold rounded-xl flex items-center justify-center gap-1.5 active:bg-yellow-600 text-sm">
+              PayPal
+            </a>
+          )}
+        </div>
       ) : (
         <button onClick={handleCopy}
-          className={`flex-1 h-11 font-semibold rounded-xl transition-colors ${copied ? 'bg-green-600 text-white' : 'bg-gray-100 text-gray-700 active:bg-gray-200'}`}>
-          {copied ? '✓ Copied!' : '📋 Copy Payment Text'}
+          className={`w-full h-11 font-semibold rounded-xl transition-colors ${copied ? 'bg-green-600 text-white' : 'bg-gray-100 text-gray-700 active:bg-gray-200'}`}>
+          {copied ? 'Copied!' : 'Copy Payment Text'}
         </button>
       )}
-      <button onClick={handleCopy} title="Copy payment text"
-        className="w-11 h-11 bg-gray-100 rounded-xl flex items-center justify-center text-lg active:bg-gray-200">
-        {copied ? '✓' : '📋'}
+      <button onClick={handleCopy} className={`w-full h-9 text-sm rounded-xl transition-colors ${copied ? 'bg-green-100 text-green-700' : 'bg-gray-50 text-gray-500 active:bg-gray-100'}`}>
+        {copied ? 'Copied!' : 'Copy payment text'}
       </button>
     </div>
   )
@@ -165,6 +196,17 @@ export function SettleUp({ roundId, onDone, onContinue }: Props) {
   const unpaidBuyIns = buyIns.filter(b => b.status === 'unpaid')
   const playerById = (id: string) => players.find(p => p.id === id)
 
+  const togglePaid = async (buyIn: BuyIn) => {
+    const newStatus = buyIn.status === 'unpaid' ? 'marked_paid' : 'unpaid'
+    const newPaidAt = newStatus === 'marked_paid' ? new Date().toISOString() : null
+    setBuyIns(prev => prev.map(b =>
+      b.id === buyIn.id
+        ? { ...b, status: newStatus as BuyIn['status'], paidAt: newPaidAt ? new Date(newPaidAt) : undefined }
+        : b
+    ))
+    await supabase.from('buy_ins').update({ status: newStatus, paid_at: newPaidAt }).eq('id', buyIn.id)
+  }
+
   if (loading || !round || !game || !snapshot) {
     return <div className="min-h-screen bg-gray-50 flex items-center justify-center"><p className="text-gray-400">Loading…</p></div>
   }
@@ -191,15 +233,41 @@ export function SettleUp({ roundId, onDone, onContinue }: Props) {
       </header>
 
       <div className="px-4 py-5 max-w-2xl mx-auto space-y-4">
-        {unpaidBuyIns.length > 0 && (
-          <div className="bg-red-50 border border-red-200 rounded-2xl p-4">
-            <p className="font-bold text-red-700">⚠️ Unpaid buy-ins</p>
-            <p className="text-red-600 text-sm mt-1">
-              {unpaidBuyIns.map(b => playerById(b.playerId)?.name ?? 'Unknown').join(', ')}{' '}
-              {unpaidBuyIns.length === 1 ? 'has' : 'have'} not paid.
-              Collect {fmtMoney(unpaidBuyIns.length * game.buyInCents)} before distributing.
-            </p>
-          </div>
+        {buyIns.length > 0 && (
+          <section className="bg-white rounded-2xl shadow-sm p-4 space-y-3">
+            <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Buy-In Status</p>
+            {unpaidBuyIns.length > 0 && (
+              <div className="bg-red-50 border border-red-200 rounded-xl p-3">
+                <p className="text-red-700 text-sm font-semibold">
+                  {unpaidBuyIns.length} unpaid — collect {fmtMoney(unpaidBuyIns.length * game.buyInCents)} before distributing
+                </p>
+              </div>
+            )}
+            <div className="space-y-2">
+              {buyIns.map(b => {
+                const p = playerById(b.playerId)
+                const isPaid = b.status === 'marked_paid'
+                return (
+                  <div key={b.id} className={`flex items-center justify-between p-3 rounded-xl ${isPaid ? 'bg-green-50' : 'bg-red-50'}`}>
+                    <div>
+                      <p className="font-semibold text-gray-800 text-sm">{p?.name ?? 'Unknown'}</p>
+                      <p className="text-xs text-gray-500">{fmtMoney(b.amountCents)}</p>
+                    </div>
+                    <button
+                      onClick={() => togglePaid(b)}
+                      className={`px-4 py-2 rounded-xl text-sm font-semibold transition-colors ${
+                        isPaid
+                          ? 'bg-green-600 text-white active:bg-green-700'
+                          : 'bg-red-100 text-red-700 active:bg-red-200'
+                      }`}
+                    >
+                      {isPaid ? 'Paid' : 'Mark Paid'}
+                    </button>
+                  </div>
+                )
+              })}
+            </div>
+          </section>
         )}
 
         {/* Summary */}
@@ -393,7 +461,7 @@ export function SettleUp({ roundId, onDone, onContinue }: Props) {
                     <div><p className="font-bold text-gray-800">{treasurer?.name} → {toPlayer.name}</p><p className="text-xs text-gray-500">{s.note}</p></div>
                     <p className="text-xl font-bold text-green-700">{fmtMoney(s.amountCents)}</p>
                   </div>
-                  <VenmoButton toPlayer={toPlayer} amountCents={s.amountCents} note={s.note} />
+                  <PaymentButtons toPlayer={toPlayer} amountCents={s.amountCents} note={s.note} />
                 </div>
               )
             })}

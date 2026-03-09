@@ -652,6 +652,22 @@ export function venmoWebLink(username: string, amountCents: number, note: string
   return `https://venmo.com/${username.replace('@', '')}?txn=pay&amount=${amount}&note=${encoded}`
 }
 
+export function zelleLink(identifier: string): string {
+  // Zelle has no universal deep link — just open the search page
+  return `https://enroll.zellepay.com/qr-codes?data=${encodeURIComponent(identifier)}`
+}
+
+export function cashAppLink(username: string, amountCents: number, note: string): string {
+  const amount = (amountCents / 100).toFixed(2)
+  const tag = username.replace('$', '')
+  return `https://cash.app/$${tag}/${amount}?note=${encodeURIComponent(note)}`
+}
+
+export function paypalLink(email: string, amountCents: number): string {
+  const amount = (amountCents / 100).toFixed(2)
+  return `https://www.paypal.com/paypalme/${encodeURIComponent(email)}/${amount}`
+}
+
 // ─── Formatting ───────────────────────────────────────────────────────────────
 
 export function fmtMoney(cents: number): string {

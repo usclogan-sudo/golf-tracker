@@ -18,6 +18,9 @@ export function PlayerSetup({ userId, player, onSave, onCancel }: Props) {
   const [tee, setTee] = useState(player?.tee ?? 'White')
   const [ghin, setGhin] = useState(player?.ghinNumber ?? '')
   const [venmo, setVenmo] = useState(player?.venmoUsername ?? '')
+  const [zelle, setZelle] = useState(player?.zelleIdentifier ?? '')
+  const [cashApp, setCashApp] = useState(player?.cashAppUsername ?? '')
+  const [paypal, setPaypal] = useState(player?.paypalEmail ?? '')
   const [saving, setSaving] = useState(false)
   const [errors, setErrors] = useState<Record<string, string>>({})
 
@@ -27,6 +30,11 @@ export function PlayerSetup({ userId, player, onSave, onCancel }: Props) {
     const hcp = parseFloat(handicapIndex)
     if (handicapIndex === '' || isNaN(hcp) || hcp < -10 || hcp > 54) {
       errs.handicap = 'Must be between -10 and 54'
+    }
+    if (!ghin.trim()) {
+      errs.ghin = 'GHIN number is required'
+    } else if (!/^\d+$/.test(ghin.trim())) {
+      errs.ghin = 'Must be numeric'
     }
     setErrors(errs)
     return Object.keys(errs).length === 0
@@ -41,8 +49,11 @@ export function PlayerSetup({ userId, player, onSave, onCancel }: Props) {
         name: name.trim(),
         handicapIndex: parseFloat(handicapIndex),
         tee: tee.trim() || 'White',
-        ...(ghin.trim() ? { ghinNumber: ghin.trim() } : {}),
+        ghinNumber: ghin.trim(),
         ...(venmo.trim() ? { venmoUsername: venmo.trim() } : {}),
+        ...(zelle.trim() ? { zelleIdentifier: zelle.trim() } : {}),
+        ...(cashApp.trim() ? { cashAppUsername: cashApp.trim() } : {}),
+        ...(paypal.trim() ? { paypalEmail: paypal.trim() } : {}),
         createdAt: player?.createdAt ?? new Date(),
       }
       const { error: err } = await supabase
@@ -66,7 +77,7 @@ export function PlayerSetup({ userId, player, onSave, onCancel }: Props) {
           className="w-10 h-10 flex items-center justify-center rounded-full hover:bg-green-700 text-xl"
           aria-label="Back"
         >
-          ←
+          &#8592;
         </button>
         <h1 className="text-xl font-bold">{player ? 'Edit Player' : 'New Player'}</h1>
       </header>
@@ -123,22 +134,27 @@ export function PlayerSetup({ userId, player, onSave, onCancel }: Props) {
               />
             </div>
           </div>
-        </section>
-
-        <section className="bg-white rounded-2xl shadow-sm p-4 space-y-4">
-          <h2 className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Optional</h2>
 
           <div>
-            <label className="block text-xs text-gray-500 mb-1">GHIN Number</label>
+            <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">
+              GHIN Number
+            </label>
             <input
               type="text"
               inputMode="numeric"
               placeholder="e.g. 1234567"
               value={ghin}
               onChange={e => setGhin(e.target.value)}
-              className="w-full h-12 px-4 rounded-xl border border-gray-300 text-base focus:outline-none focus:ring-2 focus:ring-green-600"
+              className={`w-full h-12 px-4 rounded-xl border text-base focus:outline-none focus:ring-2 focus:ring-green-600 ${
+                errors.ghin ? 'border-red-400 bg-red-50' : 'border-gray-300'
+              }`}
             />
+            {errors.ghin && <p className="text-red-500 text-xs mt-1">{errors.ghin}</p>}
           </div>
+        </section>
+
+        <section className="bg-white rounded-2xl shadow-sm p-4 space-y-4">
+          <h2 className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Payment Methods</h2>
 
           <div>
             <label className="block text-xs text-gray-500 mb-1">Venmo Username</label>
@@ -147,6 +163,39 @@ export function PlayerSetup({ userId, player, onSave, onCancel }: Props) {
               placeholder="e.g. @username"
               value={venmo}
               onChange={e => setVenmo(e.target.value)}
+              className="w-full h-12 px-4 rounded-xl border border-gray-300 text-base focus:outline-none focus:ring-2 focus:ring-green-600"
+            />
+          </div>
+
+          <div>
+            <label className="block text-xs text-gray-500 mb-1">Zelle (email or phone)</label>
+            <input
+              type="text"
+              placeholder="e.g. john@email.com or 555-1234"
+              value={zelle}
+              onChange={e => setZelle(e.target.value)}
+              className="w-full h-12 px-4 rounded-xl border border-gray-300 text-base focus:outline-none focus:ring-2 focus:ring-green-600"
+            />
+          </div>
+
+          <div>
+            <label className="block text-xs text-gray-500 mb-1">Cash App Username</label>
+            <input
+              type="text"
+              placeholder="e.g. $username"
+              value={cashApp}
+              onChange={e => setCashApp(e.target.value)}
+              className="w-full h-12 px-4 rounded-xl border border-gray-300 text-base focus:outline-none focus:ring-2 focus:ring-green-600"
+            />
+          </div>
+
+          <div>
+            <label className="block text-xs text-gray-500 mb-1">PayPal Email or Username</label>
+            <input
+              type="text"
+              placeholder="e.g. john@email.com"
+              value={paypal}
+              onChange={e => setPaypal(e.target.value)}
               className="w-full h-12 px-4 rounded-xl border border-gray-300 text-base focus:outline-none focus:ring-2 focus:ring-green-600"
             />
           </div>
@@ -162,7 +211,7 @@ export function PlayerSetup({ userId, player, onSave, onCancel }: Props) {
             disabled={saving}
             className="w-full h-14 bg-green-700 text-white text-lg font-bold rounded-2xl shadow-lg disabled:opacity-60 active:bg-green-800 transition-colors"
           >
-            {saving ? 'Saving…' : 'Save Player'}
+            {saving ? 'Saving...' : 'Save Player'}
           </button>
         </div>
       </div>

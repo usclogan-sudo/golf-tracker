@@ -101,3 +101,25 @@ create table bbb_points (
 alter table bbb_points enable row level security;
 create policy "own data" on bbb_points using (auth.uid() = user_id);
 create index on bbb_points (round_id);
+
+-- ══════════════════════════════════════════════════════════════════════════════
+-- Phase 1 Migration (run in Supabase SQL Editor if tables already exist)
+-- ══════════════════════════════════════════════════════════════════════════════
+
+-- GHIN number required
+-- ALTER TABLE players ALTER COLUMN ghin_number SET NOT NULL;
+-- ALTER TABLE players ALTER COLUMN ghin_number SET DEFAULT '';
+
+-- Payment method columns
+-- ALTER TABLE players ADD COLUMN zelle_identifier text;
+-- ALTER TABLE players ADD COLUMN cashapp_username text;
+-- ALTER TABLE players ADD COLUMN paypal_email text;
+
+-- Re-enable RLS (if disabled during development)
+-- ALTER TABLE courses ENABLE ROW LEVEL SECURITY;
+-- ALTER TABLE players ENABLE ROW LEVEL SECURITY;
+-- ALTER TABLE rounds ENABLE ROW LEVEL SECURITY;
+-- ALTER TABLE round_players ENABLE ROW LEVEL SECURITY;
+-- ALTER TABLE hole_scores ENABLE ROW LEVEL SECURITY;
+-- ALTER TABLE buy_ins ENABLE ROW LEVEL SECURITY;
+-- ALTER TABLE bbb_points ENABLE ROW LEVEL SECURITY;
