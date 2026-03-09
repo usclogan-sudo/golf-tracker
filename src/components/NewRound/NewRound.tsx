@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { v4 as uuidv4 } from 'uuid'
-import { supabase, courseToRow, playerToRow, roundToRow, roundPlayerToRow, buyInToRow, rowToCourse, rowToPlayer } from '../../lib/supabase'
+import { supabase, courseToRow, playerToRow, roundToRow, roundPlayerToRow, buyInToRow, rowToCourse, rowToPlayer, rowToSharedCourse, rowToGamePreset } from '../../lib/supabase'
 import { fmtMoney } from '../../lib/gameLogic'
 import { venturaCourses } from '../../data/venturaCourses'
 import type {
@@ -8,6 +8,7 @@ import type {
   Player,
   Round,
   Game,
+  GamePreset,
   SkinsConfig,
   BestBallConfig,
   NassauConfig,
@@ -25,6 +26,7 @@ interface Props {
   onCancel: () => void
   onAddCourse: () => void
   initialStakesMode?: StakesMode
+  templateRound?: Round | null
 }
 
 const STANDARD_PRESETS = [500, 1000, 2000, 5000]
@@ -48,25 +50,41 @@ function CoursePicker({
   const [query, setQuery] = useState('')
   const [selecting, setSelecting] = useState<string | null>(null)
   const [savedCourses, setSavedCourses] = useState<Course[]>([])
+  const [sharedCourses, setSharedCourses] = useState<Course[]>([])
   const headerClass = stakesMode === 'high_roller' ? 'hr-header' : 'app-header'
 
   useEffect(() => {
     supabase.from('courses').select('*').order('name').then(({ data }) => {
       if (data) setSavedCourses(data.map(rowToCourse))
     })
+    supabase.from('shared_courses').select('*').order('name').then(({ data }) => {
+      if (data) setSharedCourses(data.map(rowToSharedCourse))
+    })
   }, [])
 
-  // Merge saved courses with catalog, deduplicating by name
+  // Merge saved courses with shared + catalog, deduplicating by name
   const savedNames = new Set(savedCourses.map(c => c.name))
-  const catalogOnly = venturaCourses.filter(t => !savedNames.has(t.name))
+  const sharedOnly = sharedCourses.filter(c => !savedNames.has(c.name))
+  const allNames = new Set([...savedNames, ...sharedOnly.map(c => c.name)])
+  const catalogOnly = venturaCourses.filter(t => !allNames.has(t.name))
 
-  const allCourses: { id: string; name: string; city?: string; par: number; tees: string; fromDb: boolean; dbCourse?: Course; templateName?: string }[] = [
+  type CourseItem = { id: string; name: string; city?: string; par: number; tees: string; source: 'saved' | 'shared' | 'catalog'; dbCourse?: Course; templateName?: string }
+
+  const allCourses: CourseItem[] = [
     ...savedCourses.map(c => ({
       id: c.id,
       name: c.name,
       par: c.holes.reduce((s, h) => s + h.par, 0),
       tees: c.tees.map(t => t.name).join(', '),
-      fromDb: true,
+      source: 'saved' as const,
+      dbCourse: c,
+    })),
+    ...sharedOnly.map(c => ({
+      id: `shared-${c.id}`,
+      name: c.name,
+      par: c.holes.reduce((s, h) => s + h.par, 0),
+      tees: c.tees.map(t => t.name).join(', '),
+      source: 'shared' as const,
       dbCourse: c,
     })),
     ...catalogOnly.map(t => ({
@@ -75,7 +93,7 @@ function CoursePicker({
       city: t.city,
       par: t.holes.reduce((s, h) => s + h.par, 0),
       tees: t.tees.map(t => t.name).join(', '),
-      fromDb: false,
+      source: 'catalog' as const,
       templateName: t.name,
     })),
   ].sort((a, b) => a.name.localeCompare(b.name))
@@ -87,14 +105,26 @@ function CoursePicker({
       )
     : allCourses
 
-  const handleSelect = async (item: typeof allCourses[number]) => {
+  const handleSelect = async (item: CourseItem) => {
     if (selecting) return
-    if (item.fromDb && item.dbCourse) {
+    if (item.source === 'saved' && item.dbCourse) {
       onSelect(item.dbCourse)
       return
     }
-    // Catalog course — save to DB first, then select
+    // Shared or catalog course — save to user's courses DB first, then select
     setSelecting(item.id)
+    if (item.source === 'shared' && item.dbCourse) {
+      const course: Course = {
+        id: uuidv4(),
+        name: item.dbCourse.name,
+        tees: item.dbCourse.tees,
+        holes: item.dbCourse.holes,
+        createdAt: new Date(),
+      }
+      await supabase.from('courses').insert(courseToRow(course, userId))
+      onSelect(course)
+      return
+    }
     const template = venturaCourses.find(t => t.name === item.templateName)!
     const course: Course = {
       id: uuidv4(),
@@ -148,10 +178,18 @@ function CoursePicker({
             >
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="font-semibold text-gray-800">{course.name}</p>
+                  <div className="flex items-center gap-2">
+                    <p className="font-semibold text-gray-800">{course.name}</p>
+                    {course.source === 'shared' && (
+                      <span className="text-[10px] font-bold uppercase px-1.5 py-0.5 rounded bg-blue-100 text-blue-700">Shared</span>
+                    )}
+                    {course.source === 'catalog' && (
+                      <span className="text-[10px] font-bold uppercase px-1.5 py-0.5 rounded bg-gray-100 text-gray-500">Catalog</span>
+                    )}
+                  </div>
                   <p className="text-sm text-gray-500 mt-0.5">
                     Par {course.par} · {course.tees}
-                    {course.city && !course.fromDb && (
+                    {course.city && course.source === 'catalog' && (
                       <span className="ml-1 text-gray-400">· {course.city}</span>
                     )}
                   </p>
@@ -187,16 +225,20 @@ function PlayerPicker({
   onNext,
   onBack,
   stakesMode,
+  preSelectedIds,
 }: {
   userId: string
   course: Course
   onNext: (players: Player[]) => void
   onBack: () => void
   stakesMode: StakesMode
+  preSelectedIds?: string[]
 }) {
   const [allPlayers, setAllPlayers] = useState<Player[]>([])
-  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
+  const [publicPlayers, setPublicPlayers] = useState<Player[]>([])
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set(preSelectedIds ?? []))
   const [playerTees, setPlayerTees] = useState<Record<string, string>>({})
+  const [showPublic, setShowPublic] = useState(false)
 
   const [showAddForm, setShowAddForm] = useState(false)
   const [newName, setNewName] = useState('')
@@ -205,13 +247,19 @@ function PlayerPicker({
   const [newTee, setNewTee] = useState(course.tees[0]?.name ?? 'White')
   const [addError, setAddError] = useState('')
   const [saving, setSaving] = useState(false)
+  const [importing, setImporting] = useState<string | null>(null)
 
   const MAX_PLAYERS = 8
   const headerClass = stakesMode === 'high_roller' ? 'hr-header' : 'app-header'
 
   useEffect(() => {
-    supabase.from('players').select('*').order('name').then(({ data }) => {
+    // Fetch own players
+    supabase.from('players').select('*').eq('user_id', userId).order('name').then(({ data }) => {
       if (data) setAllPlayers(data.map(rowToPlayer))
+    })
+    // Fetch public players from others
+    supabase.from('players').select('*').eq('is_public', true).neq('user_id', userId).order('name').then(({ data }) => {
+      if (data) setPublicPlayers(data.map(rowToPlayer))
     })
   }, [])
 
@@ -337,6 +385,51 @@ function PlayerPicker({
           </div>
         )}
 
+        {/* Browse Public Players */}
+        {publicPlayers.length > 0 && (
+          <div>
+            <button
+              onClick={() => setShowPublic(v => !v)}
+              className="w-full text-left text-sm font-semibold text-blue-700 flex items-center gap-1.5 py-2"
+            >
+              <span className="text-base">{showPublic ? '▾' : '▸'}</span>
+              Browse Public Players ({publicPlayers.length})
+            </button>
+            {showPublic && (
+              <div className="space-y-2 mt-1">
+                {publicPlayers.map(pp => (
+                  <div key={pp.id} className="bg-blue-50 rounded-xl p-3 flex items-center justify-between border border-blue-100">
+                    <div>
+                      <p className="font-semibold text-gray-800 text-sm">{pp.name}</p>
+                      <p className="text-xs text-gray-500">HCP {pp.handicapIndex} · {pp.tee} tees</p>
+                    </div>
+                    <button
+                      onClick={async () => {
+                        setImporting(pp.id)
+                        const imported: Player = {
+                          ...pp,
+                          id: uuidv4(),
+                          isPublic: false,
+                          createdAt: new Date(),
+                        }
+                        await supabase.from('players').insert(playerToRow(imported, userId))
+                        setAllPlayers(prev => [...prev, imported].sort((a, b) => a.name.localeCompare(b.name)))
+                        setSelectedIds(prev => { const n = new Set(prev); n.add(imported.id); return n })
+                        setPublicPlayers(prev => prev.filter(p => p.id !== pp.id))
+                        setImporting(null)
+                      }}
+                      disabled={importing === pp.id || selectedIds.size >= MAX_PLAYERS}
+                      className="px-3 py-1.5 bg-blue-600 text-white text-xs font-bold rounded-lg disabled:opacity-40"
+                    >
+                      {importing === pp.id ? '...' : 'Import'}
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+
         {showAddForm ? (
           <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-4 space-y-3">
             <p className="font-semibold text-gray-700 text-sm">Quick Add Player</p>
@@ -426,39 +519,88 @@ function GameSetup({
   initialStakesMode,
   onNext,
   onBack,
+  initialGame,
 }: {
   players: Player[]
   initialStakesMode: StakesMode
   onNext: (game: Game) => void
   onBack: () => void
+  initialGame?: Game
 }) {
-  const [stakesMode, setStakesMode] = useState<StakesMode>(initialStakesMode)
-  const [type, setType] = useState<GameType>('skins')
-  const [buyInDollars, setBuyInDollars] = useState(initialStakesMode === 'high_roller' ? '100' : '10')
+  const [gamePresets, setGamePresets] = useState<GamePreset[]>([])
+  const [stakesMode, setStakesMode] = useState<StakesMode>(initialGame?.stakesMode ?? initialStakesMode)
+  const [type, setType] = useState<GameType>(initialGame?.type ?? 'skins')
+  const [buyInDollars, setBuyInDollars] = useState(
+    initialGame ? String(initialGame.buyInCents / 100) : (initialStakesMode === 'high_roller' ? '100' : '10')
+  )
   const [showCustomBuyIn, setShowCustomBuyIn] = useState(false)
 
   // Skins
-  const [skinsMode, setSkinsMode] = useState<'gross' | 'net'>('net')
-  const [carryovers, setCarryovers] = useState(true)
+  const [skinsMode, setSkinsMode] = useState<'gross' | 'net'>(
+    initialGame?.type === 'skins' ? (initialGame.config as any).mode : 'net'
+  )
+  const [carryovers, setCarryovers] = useState(
+    initialGame?.type === 'skins' ? (initialGame.config as any).carryovers : true
+  )
 
   // Best Ball
-  const [bbScoring, setBbScoring] = useState<'match' | 'total'>('match')
-  const [bbMode, setBbMode] = useState<'gross' | 'net'>('net')
+  const [bbScoring, setBbScoring] = useState<'match' | 'total'>(
+    initialGame?.type === 'best_ball' ? (initialGame.config as any).scoring : 'match'
+  )
+  const [bbMode, setBbMode] = useState<'gross' | 'net'>(
+    initialGame?.type === 'best_ball' ? (initialGame.config as any).mode : 'net'
+  )
   const [teams, setTeams] = useState<Record<string, 'A' | 'B'>>(() => {
+    if (initialGame?.type === 'best_ball') return (initialGame.config as any).teams ?? {}
     const t: Record<string, 'A' | 'B'> = {}
     players.forEach((p, i) => (t[p.id] = i % 2 === 0 ? 'A' : 'B'))
     return t
   })
 
   // Nassau
-  const [nassauMode, setNassauMode] = useState<'gross' | 'net'>('net')
+  const [nassauMode, setNassauMode] = useState<'gross' | 'net'>(
+    initialGame?.type === 'nassau' ? (initialGame.config as any).mode : 'net'
+  )
 
   // Wolf
-  const [wolfMode, setWolfMode] = useState<'gross' | 'net'>('net')
-  const [wolfOrder, setWolfOrder] = useState<string[]>(() => players.map(p => p.id))
+  const [wolfMode, setWolfMode] = useState<'gross' | 'net'>(
+    initialGame?.type === 'wolf' ? (initialGame.config as any).mode : 'net'
+  )
+  const [wolfOrder, setWolfOrder] = useState<string[]>(() =>
+    initialGame?.type === 'wolf' ? (initialGame.config as any).wolfOrder : players.map(p => p.id)
+  )
 
   // BBB
-  const [bbbMode, setBbbMode] = useState<'gross' | 'net'>('net')
+  const [bbbMode, setBbbMode] = useState<'gross' | 'net'>(
+    initialGame?.type === 'bingo_bango_bongo' ? (initialGame.config as any).mode : 'net'
+  )
+
+  useEffect(() => {
+    supabase.from('game_presets').select('*').order('sort_order').then(({ data }) => {
+      if (data) setGamePresets(data.map(rowToGamePreset))
+    })
+  }, [])
+
+  const applyPreset = (preset: GamePreset) => {
+    setType(preset.gameType)
+    setStakesMode(preset.stakesMode)
+    setBuyInDollars(String(preset.buyInCents / 100))
+    setShowCustomBuyIn(false)
+    const cfg = preset.config as any
+    if (preset.gameType === 'skins') {
+      setSkinsMode(cfg.mode ?? 'net')
+      setCarryovers(cfg.carryovers ?? true)
+    } else if (preset.gameType === 'best_ball') {
+      setBbMode(cfg.mode ?? 'net')
+      setBbScoring(cfg.scoring ?? 'match')
+    } else if (preset.gameType === 'nassau') {
+      setNassauMode(cfg.mode ?? 'net')
+    } else if (preset.gameType === 'wolf') {
+      setWolfMode(cfg.mode ?? 'net')
+    } else if (preset.gameType === 'bingo_bango_bongo') {
+      setBbbMode(cfg.mode ?? 'net')
+    }
+  }
 
   const presets = stakesMode === 'high_roller' ? HIGH_ROLLER_PRESETS : STANDARD_PRESETS
 
@@ -582,6 +724,24 @@ function GameSetup({
       </header>
 
       <div className="px-4 py-5 max-w-2xl mx-auto space-y-4">
+
+        {/* Quick Pick Presets */}
+        {gamePresets.length > 0 && (
+          <section className="bg-white rounded-2xl shadow-sm p-4 space-y-2">
+            <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Quick Pick</p>
+            <div className="flex gap-2 overflow-x-auto pb-1 -mx-1 px-1">
+              {gamePresets.map(preset => (
+                <button
+                  key={preset.id}
+                  onClick={() => applyPreset(preset)}
+                  className="flex-shrink-0 px-4 py-2 rounded-xl bg-green-50 border border-green-200 text-green-800 text-sm font-semibold active:bg-green-100 transition-colors"
+                >
+                  {preset.name}
+                </button>
+              ))}
+            </div>
+          </section>
+        )}
 
         {/* Stakes Mode */}
         <section className="bg-white rounded-2xl shadow-sm p-4 space-y-3">
@@ -1131,11 +1291,24 @@ function TreasurerAndBuyIns({
 
 // ─── NewRound orchestrator ────────────────────────────────────────────────────
 
-export function NewRound({ userId, onStart, onCancel, onAddCourse, initialStakesMode = 'standard' }: Props) {
-  const [step, setStep] = useState<'course' | 'players' | 'game' | 'money'>('course')
-  const [course, setCourse] = useState<Course | null>(null)
+export function NewRound({ userId, onStart, onCancel, onAddCourse, initialStakesMode = 'standard', templateRound }: Props) {
+  // If templateRound provided, pre-fill course from snapshot and start at players step
+  const templateCourse = templateRound?.courseSnapshot
+    ? {
+        id: templateRound.courseSnapshot.courseId,
+        name: templateRound.courseSnapshot.courseName,
+        tees: templateRound.courseSnapshot.tees,
+        holes: templateRound.courseSnapshot.holes,
+        createdAt: new Date(),
+      }
+    : null
+
+  const [step, setStep] = useState<'course' | 'players' | 'game' | 'money'>(templateCourse ? 'players' : 'course')
+  const [course, setCourse] = useState<Course | null>(templateCourse)
   const [players, setPlayers] = useState<Player[] | null>(null)
   const [game, setGame] = useState<Game | null>(null)
+
+  const preSelectedPlayerIds = templateRound?.players?.map(p => p.id)
 
   if (step === 'course') {
     return (
@@ -1157,6 +1330,7 @@ export function NewRound({ userId, onStart, onCancel, onAddCourse, initialStakes
         onNext={ps => { setPlayers(ps); setStep('game') }}
         onBack={() => setStep('course')}
         stakesMode={initialStakesMode}
+        preSelectedIds={preSelectedPlayerIds}
       />
     )
   }
@@ -1168,6 +1342,7 @@ export function NewRound({ userId, onStart, onCancel, onAddCourse, initialStakes
         initialStakesMode={initialStakesMode}
         onNext={g => { setGame(g); setStep('money') }}
         onBack={() => setStep('players')}
+        initialGame={templateRound?.game}
       />
     )
   }

@@ -1,10 +1,10 @@
 import { useState } from 'react'
 import { supabase } from '../../lib/supabase'
 
-type AuthMode = 'sign-in' | 'sign-up' | 'forgot-password' | 'magic-link'
+type AuthMode = 'splash' | 'sign-in' | 'sign-up' | 'forgot-password' | 'magic-link'
 
 export function Auth() {
-  const [mode, setMode] = useState<AuthMode>('sign-in')
+  const [mode, setMode] = useState<AuthMode>('splash')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [loading, setLoading] = useState(false)
@@ -83,14 +83,23 @@ export function Auth() {
     setLoading(false)
   }
 
+  const handleGuestLogin = async () => {
+    setLoading(true)
+    setError(null)
+    const { error: err } = await supabase.auth.signInAnonymously()
+    if (err) setError(err.message)
+    setLoading(false)
+  }
+
   const handleSubmit = () => {
     if (mode === 'sign-in') handleSignIn()
     else if (mode === 'sign-up') handleSignUp()
     else if (mode === 'forgot-password') handleForgotPassword()
-    else handleMagicLink()
+    else if (mode === 'magic-link') handleMagicLink()
   }
 
   const title = {
+    'splash': '',
     'sign-in': 'Sign In',
     'sign-up': 'Create Account',
     'forgot-password': 'Reset Password',
@@ -98,6 +107,7 @@ export function Auth() {
   }[mode]
 
   const buttonLabel = {
+    'splash': '',
     'sign-in': 'Sign In',
     'sign-up': 'Create Account',
     'forgot-password': 'Send Reset Link',
@@ -106,6 +116,49 @@ export function Auth() {
 
   const showPassword = mode === 'sign-in' || mode === 'sign-up'
 
+  // Splash screen
+  if (mode === 'splash') {
+    return (
+      <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center px-4">
+        <div className="w-full max-w-sm space-y-8">
+          <div className="text-center">
+            <div className="text-7xl mb-4">&#9971;</div>
+            <h1 className="font-display text-4xl font-800 tracking-tight text-gray-900">Fore Skins</h1>
+            <p className="text-green-700 text-sm font-medium mt-2 tracking-widest uppercase">Golf &middot; Side Games &middot; Money</p>
+          </div>
+
+          <div className="space-y-3">
+            <button
+              onClick={() => resetState('sign-up')}
+              className="w-full h-14 bg-green-700 text-white text-lg font-bold rounded-2xl shadow-lg active:bg-green-800 transition-colors"
+            >
+              Create Account
+            </button>
+            <button
+              onClick={() => resetState('sign-in')}
+              className="w-full h-14 bg-white text-green-700 text-lg font-bold rounded-2xl shadow-sm border-2 border-green-700 active:bg-green-50 transition-colors"
+            >
+              Sign In
+            </button>
+          </div>
+
+          {error && <p className="text-red-500 text-sm text-center">{error}</p>}
+
+          <div className="text-center">
+            <button
+              onClick={handleGuestLogin}
+              disabled={loading}
+              className="text-gray-500 text-sm underline disabled:opacity-50"
+            >
+              {loading ? 'Loading...' : 'Try it first \u2014 no account needed'}
+            </button>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  // Form screens (sign-in, sign-up, forgot-password, magic-link)
   return (
     <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center px-4">
       <div className="w-full max-w-sm space-y-6">
@@ -128,7 +181,16 @@ export function Auth() {
           </div>
         ) : (
           <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6 space-y-4">
-            <p className="text-center font-semibold text-gray-700">{title}</p>
+            <div className="flex items-center gap-3">
+              <button
+                onClick={() => resetState('splash')}
+                className="w-8 h-8 flex items-center justify-center rounded-full hover:bg-gray-100 text-gray-500 text-lg"
+                aria-label="Back"
+              >
+                &larr;
+              </button>
+              <p className="font-semibold text-gray-700">{title}</p>
+            </div>
 
             <div>
               <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">

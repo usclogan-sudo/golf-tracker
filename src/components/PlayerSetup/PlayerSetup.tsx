@@ -21,6 +21,7 @@ export function PlayerSetup({ userId, player, onSave, onCancel }: Props) {
   const [zelle, setZelle] = useState(player?.zelleIdentifier ?? '')
   const [cashApp, setCashApp] = useState(player?.cashAppUsername ?? '')
   const [paypal, setPaypal] = useState(player?.paypalEmail ?? '')
+  const [isPublic, setIsPublic] = useState(player?.isPublic ?? false)
   const [saving, setSaving] = useState(false)
   const [errors, setErrors] = useState<Record<string, string>>({})
 
@@ -50,6 +51,7 @@ export function PlayerSetup({ userId, player, onSave, onCancel }: Props) {
         handicapIndex: parseFloat(handicapIndex),
         tee: tee.trim() || 'White',
         ghinNumber: ghin.trim(),
+        isPublic,
         ...(venmo.trim() ? { venmoUsername: venmo.trim() } : {}),
         ...(zelle.trim() ? { zelleIdentifier: zelle.trim() } : {}),
         ...(cashApp.trim() ? { cashAppUsername: cashApp.trim() } : {}),
@@ -199,6 +201,22 @@ export function PlayerSetup({ userId, player, onSave, onCancel }: Props) {
               className="w-full h-12 px-4 rounded-xl border border-gray-300 text-base focus:outline-none focus:ring-2 focus:ring-green-600"
             />
           </div>
+        </section>
+
+        <section className="bg-white rounded-2xl shadow-sm p-4 space-y-3">
+          <h2 className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Visibility</h2>
+          <button
+            onClick={() => setIsPublic(v => !v)}
+            className={`w-full h-12 rounded-xl font-semibold border-2 flex items-center justify-between px-4 ${
+              isPublic ? 'bg-green-50 border-green-300 text-green-800' : 'bg-gray-50 border-gray-200 text-gray-600'
+            }`}
+          >
+            <span>Make Public</span>
+            <span className="text-sm">{isPublic ? 'ON' : 'OFF'}</span>
+          </button>
+          <p className="text-xs text-gray-400">
+            Public players can be browsed and imported by other users when starting a round.
+          </p>
         </section>
 
         {errors.save && <p className="text-red-500 text-sm text-center">{errors.save}</p>}

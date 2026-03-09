@@ -12,12 +12,12 @@ function sumYards(holes: Hole[], teeName: string, from = 0, to = 18) {
   return holes.slice(from, to).reduce((s, h) => s + (h.yardages[teeName] ?? 0), 0)
 }
 
-interface Props { userId: string; onSave: () => void; onCancel: () => void }
+interface Props { userId: string; course?: Course; onSave: () => void; onCancel: () => void }
 
-export function CourseSetup({ userId, onSave, onCancel }: Props) {
-  const [name, setName] = useState('')
-  const [tees, setTees] = useState<Tee[]>([{ name: 'Blue', rating: 72.1, slope: 128 }])
-  const [holes, setHoles] = useState<Hole[]>(defaultHoles)
+export function CourseSetup({ userId, course: editCourse, onSave, onCancel }: Props) {
+  const [name, setName] = useState(editCourse?.name ?? '')
+  const [tees, setTees] = useState<Tee[]>(editCourse?.tees ?? [{ name: 'Blue', rating: 72.1, slope: 128 }])
+  const [holes, setHoles] = useState<Hole[]>(editCourse?.holes ?? defaultHoles())
   const [saving, setSaving] = useState(false)
   const [errors, setErrors] = useState<Record<string, string>>({})
 
@@ -74,8 +74,16 @@ export function CourseSetup({ userId, onSave, onCancel }: Props) {
     if (!validate()) return
     setSaving(true)
     try {
-      const course: Course = { id: uuidv4(), name: name.trim(), tees, holes, createdAt: new Date() }
-      const { error: err } = await supabase.from('courses').insert(courseToRow(course, userId))
+      const course: Course = {
+        id: editCourse?.id ?? uuidv4(),
+        name: name.trim(),
+        tees,
+        holes,
+        createdAt: editCourse?.createdAt ?? new Date(),
+      }
+      const { error: err } = await supabase
+        .from('courses')
+        .upsert(courseToRow(course, userId), { onConflict: 'id' })
       if (err) throw err
       onSave()
     } catch (err) {
@@ -92,7 +100,7 @@ export function CourseSetup({ userId, onSave, onCancel }: Props) {
     <div className="min-h-screen bg-gray-50 pb-28">
       <header className="app-header text-white px-4 py-4 sticky top-0 z-10 shadow-xl flex items-center gap-3">
         <button onClick={onCancel} className="w-10 h-10 flex items-center justify-center rounded-full hover:bg-green-700 text-xl" aria-label="Back">←</button>
-        <h1 className="text-xl font-bold">New Course</h1>
+        <h1 className="text-xl font-bold">{editCourse ? 'Edit Course' : 'New Course'}</h1>
       </header>
       <div className="px-4 py-5 max-w-2xl mx-auto space-y-5">
         <section className="bg-white rounded-2xl shadow-sm p-4">

@@ -1,5 +1,5 @@
 import { createClient } from '@supabase/supabase-js'
-import type { Course, Player, Round, RoundPlayer, HoleScore, BuyIn, BBBPoint } from '../types'
+import type { Course, Player, Round, RoundPlayer, HoleScore, BuyIn, BBBPoint, UserProfile, GamePreset, GameType, StakesMode } from '../types'
 
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL as string
 const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY as string
@@ -25,6 +25,7 @@ export function rowToPlayer(row: any): Player {
     handicapIndex: row.handicap_index,
     tee: row.tee,
     ghinNumber: row.ghin_number ?? '',
+    isPublic: row.is_public ?? false,
     ...(row.venmo_username ? { venmoUsername: row.venmo_username } : {}),
     ...(row.zelle_identifier ? { zelleIdentifier: row.zelle_identifier } : {}),
     ...(row.cashapp_username ? { cashAppUsername: row.cashapp_username } : {}),
@@ -112,6 +113,7 @@ export function playerToRow(p: Player, userId: string) {
     handicap_index: p.handicapIndex,
     tee: p.tee,
     ghin_number: p.ghinNumber || '',
+    is_public: p.isPublic ?? false,
     venmo_username: p.venmoUsername ?? null,
     zelle_identifier: p.zelleIdentifier ?? null,
     cashapp_username: p.cashAppUsername ?? null,
@@ -180,5 +182,89 @@ export function bbbPointToRow(bp: BBBPoint, userId: string) {
     bingo: bp.bingo,
     bango: bp.bango,
     bongo: bp.bongo,
+  }
+}
+
+// ─── User Profile mappers ───────────────────────────────────────────────────
+
+export function rowToUserProfile(row: any): UserProfile {
+  return {
+    userId: row.user_id,
+    isAdmin: row.is_admin,
+    onboardingComplete: row.onboarding_complete,
+    createdAt: row.created_at ? new Date(row.created_at) : undefined,
+  }
+}
+
+export function userProfileToRow(p: UserProfile) {
+  return {
+    user_id: p.userId,
+    is_admin: p.isAdmin,
+    onboarding_complete: p.onboardingComplete,
+  }
+}
+
+export async function fetchOrCreateProfile(userId: string): Promise<UserProfile> {
+  const { data } = await supabase
+    .from('user_profiles')
+    .select('*')
+    .eq('user_id', userId)
+    .maybeSingle()
+  if (data) return rowToUserProfile(data)
+  const newProfile: UserProfile = { userId, isAdmin: false, onboardingComplete: false }
+  await supabase.from('user_profiles').insert(userProfileToRow(newProfile))
+  return newProfile
+}
+
+// ─── Game Preset mappers ────────────────────────────────────────────────────
+
+export function rowToGamePreset(row: any): GamePreset {
+  return {
+    id: row.id,
+    createdBy: row.created_by,
+    name: row.name,
+    gameType: row.game_type as GameType,
+    buyInCents: row.buy_in_cents,
+    stakesMode: (row.stakes_mode ?? 'standard') as StakesMode,
+    config: row.config,
+    description: row.description ?? undefined,
+    sortOrder: row.sort_order ?? 0,
+    createdAt: row.created_at ? new Date(row.created_at) : undefined,
+  }
+}
+
+export function gamePresetToRow(gp: GamePreset, userId: string) {
+  return {
+    id: gp.id,
+    created_by: userId,
+    name: gp.name,
+    game_type: gp.gameType,
+    buy_in_cents: gp.buyInCents,
+    stakes_mode: gp.stakesMode,
+    config: gp.config,
+    description: gp.description ?? null,
+    sort_order: gp.sortOrder,
+  }
+}
+
+// ─── Shared Course mappers ──────────────────────────────────────────────────
+
+export function rowToSharedCourse(row: any): Course {
+  return {
+    id: row.id,
+    name: row.name,
+    tees: row.tees,
+    holes: row.holes,
+    createdAt: row.created_at ? new Date(row.created_at) : new Date(),
+  }
+}
+
+export function sharedCourseToRow(c: Course, userId: string) {
+  return {
+    id: c.id,
+    created_by: userId,
+    name: c.name,
+    tees: c.tees,
+    holes: c.holes,
   }
 }

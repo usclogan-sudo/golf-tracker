@@ -29,10 +29,35 @@ export interface Player {
   ghinNumber: string
   handicapIndex: number   // e.g. 12.4
   tee: string             // default tee color
+  isPublic?: boolean
   venmoUsername?: string
   zelleIdentifier?: string
   cashAppUsername?: string
   paypalEmail?: string
+  createdAt?: Date
+}
+
+// ─── User Profile ─────────────────────────────────────────────────────────────
+
+export interface UserProfile {
+  userId: string
+  isAdmin: boolean
+  onboardingComplete: boolean
+  createdAt?: Date
+}
+
+// ─── Game Preset ──────────────────────────────────────────────────────────────
+
+export interface GamePreset {
+  id: string
+  createdBy: string
+  name: string
+  gameType: GameType
+  buyInCents: number
+  stakesMode: StakesMode
+  config: SkinsConfig | BestBallConfig | NassauConfig | WolfConfig | BBBConfig
+  description?: string
+  sortOrder: number
   createdAt?: Date
 }
 

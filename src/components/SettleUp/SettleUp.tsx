@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { supabase, rowToRound, rowToRoundPlayer, rowToHoleScore, rowToBuyIn, rowToBBBPoint } from '../../lib/supabase'
 import {
   buildCourseHandicaps,
+  strokesOnHole,
   calculateSkins,
   calculateBestBall,
   calculateNassau,
@@ -292,6 +293,60 @@ export function SettleUp({ roundId, onDone, onContinue }: Props) {
             Treasurer: <strong>{treasurer?.name ?? 'Not assigned'}</strong>
           </p>
         </section>
+
+        {/* ── Scoreboard ── */}
+        {snapshot && players.length > 0 && holeScores.length > 0 && (() => {
+          const totalPar = snapshot.holes.reduce((s, h) => s + h.par, 0)
+          const board = players.map(p => {
+            const pScores = holeScores.filter(s => s.playerId === p.id)
+            const gross = pScores.reduce((s, hs) => s + hs.grossScore, 0)
+            const courseHcp = courseHcps[p.id] ?? 0
+            const netStrokes = pScores.reduce((s, hs) => {
+              const hole = snapshot.holes.find(h => h.number === hs.holeNumber)
+              return s + (hole ? strokesOnHole(courseHcp, hole.strokeIndex) : 0)
+            }, 0)
+            const net = gross - netStrokes
+            const vsPar = gross - totalPar
+            return { player: p, gross, net, vsPar }
+          })
+          const bestGross = Math.min(...board.map(b => b.gross))
+          const bestNet = Math.min(...board.map(b => b.net))
+
+          return (
+            <section className="bg-white rounded-2xl shadow-sm p-4 space-y-3">
+              <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Scoreboard</p>
+              <div className="overflow-x-auto -mx-2">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="text-xs text-gray-400 uppercase border-b border-gray-200">
+                      <th className="text-left py-2 px-2 font-medium">Player</th>
+                      <th className="text-center py-2 px-2 font-medium">Gross</th>
+                      <th className="text-center py-2 px-2 font-medium">Net</th>
+                      <th className="text-center py-2 px-2 font-medium">vs Par</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {board.sort((a, b) => a.net - b.net).map(({ player, gross, net, vsPar }) => (
+                      <tr key={player.id} className="border-b border-gray-50">
+                        <td className="py-2 px-2 font-semibold text-gray-800">{player.name}</td>
+                        <td className={`py-2 px-2 text-center font-semibold ${gross === bestGross ? 'text-green-700' : 'text-gray-700'}`}>
+                          {gross}{gross === bestGross ? ' *' : ''}
+                        </td>
+                        <td className={`py-2 px-2 text-center font-semibold ${net === bestNet ? 'text-green-700' : 'text-gray-700'}`}>
+                          {net}{net === bestNet ? ' *' : ''}
+                        </td>
+                        <td className={`py-2 px-2 text-center font-semibold ${vsPar > 0 ? 'text-red-600' : vsPar < 0 ? 'text-green-600' : 'text-gray-500'}`}>
+                          {vsPar > 0 ? '+' : ''}{vsPar}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+              <p className="text-xs text-gray-400">* Best score</p>
+            </section>
+          )
+        })()}
 
         {/* ── Skins Results ── */}
         {skinsResult && (

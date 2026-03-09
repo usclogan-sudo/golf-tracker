@@ -1,0 +1,195 @@
+import { useEffect, useState } from 'react'
+import { supabase, rowToRound, rowToHoleScore } from '../../lib/supabase'
+import { buildCourseHandicaps, fmtMoney, strokesOnHole } from '../../lib/gameLogic'
+import type { Round, HoleScore, RoundPlayer, GameType } from '../../types'
+
+interface Props {
+  userId: string
+  onBack: () => void
+}
+
+const GAME_EMOJI: Record<GameType, string> = {
+  skins: '🎰 Skins',
+  best_ball: '🤝 Best Ball',
+  nassau: '🏳️ Nassau',
+  wolf: '🐺 Wolf',
+  bingo_bango_bongo: '⭐ BBB',
+}
+
+export function RoundHistory({ userId, onBack }: Props) {
+  const [rounds, setRounds] = useState<Round[]>([])
+  const [loading, setLoading] = useState(true)
+  const [expandedId, setExpandedId] = useState<string | null>(null)
+  const [expandedScores, setExpandedScores] = useState<HoleScore[]>([])
+  const [expandedRoundPlayers, setExpandedRoundPlayers] = useState<RoundPlayer[]>([])
+  const [deleting, setDeleting] = useState<string | null>(null)
+
+  useEffect(() => {
+    supabase
+      .from('rounds')
+      .select('*')
+      .eq('status', 'complete')
+      .order('date', { ascending: false })
+      .then(({ data }) => {
+        if (data) setRounds(data.map(rowToRound))
+        setLoading(false)
+      })
+  }, [userId])
+
+  const toggleExpand = async (roundId: string) => {
+    if (expandedId === roundId) {
+      setExpandedId(null)
+      return
+    }
+    setExpandedId(roundId)
+    const [hsRes, rpRes] = await Promise.all([
+      supabase.from('hole_scores').select('*').eq('round_id', roundId),
+      supabase.from('round_players').select('*').eq('round_id', roundId),
+    ])
+    if (hsRes.data) setExpandedScores(hsRes.data.map(rowToHoleScore))
+    if (rpRes.data) {
+      setExpandedRoundPlayers(rpRes.data.map((r: any) => ({
+        id: r.id,
+        roundId: r.round_id,
+        playerId: r.player_id,
+        teePlayed: r.tee_played,
+        courseHandicap: r.course_handicap ?? undefined,
+        playingHandicap: r.playing_handicap ?? undefined,
+      })))
+    }
+  }
+
+  const deleteRound = async (roundId: string) => {
+    setDeleting(roundId)
+    await Promise.all([
+      supabase.from('hole_scores').delete().eq('round_id', roundId),
+      supabase.from('round_players').delete().eq('round_id', roundId),
+      supabase.from('buy_ins').delete().eq('round_id', roundId),
+      supabase.from('bbb_points').delete().eq('round_id', roundId),
+    ])
+    await supabase.from('rounds').delete().eq('id', roundId)
+    setRounds(prev => prev.filter(r => r.id !== roundId))
+    if (expandedId === roundId) setExpandedId(null)
+    setDeleting(null)
+  }
+
+  const confirmDelete = (roundId: string) => {
+    if (window.confirm('Delete this round? This cannot be undone.')) {
+      deleteRound(roundId)
+    }
+  }
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="w-8 h-8 border-2 border-green-500 border-t-transparent rounded-full animate-spin" />
+      </div>
+    )
+  }
+
+  return (
+    <div className="min-h-screen bg-gray-50 pb-8">
+      <header className="app-header text-white px-4 py-4 sticky top-0 z-10 shadow-xl flex items-center gap-3">
+        <button onClick={onBack} className="w-10 h-10 flex items-center justify-center rounded-full hover:bg-green-700 text-xl" aria-label="Back">←</button>
+        <h1 className="text-xl font-bold">Round History</h1>
+      </header>
+
+      <div className="px-4 py-5 max-w-2xl mx-auto space-y-3">
+        {rounds.length === 0 && (
+          <div className="text-center py-12">
+            <p className="text-3xl mb-3">📋</p>
+            <p className="text-gray-500 font-medium">No completed rounds yet</p>
+            <p className="text-gray-400 text-sm mt-1">Finished rounds will appear here</p>
+          </div>
+        )}
+
+        {rounds.map(round => {
+          const snapshot = round.courseSnapshot
+          const game = round.game
+          const players = round.players ?? []
+          const isExpanded = expandedId === round.id
+          const potCents = game ? game.buyInCents * players.length : 0
+
+          return (
+            <div key={round.id} className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+              <button
+                onClick={() => toggleExpand(round.id)}
+                className="w-full text-left px-4 py-3 active:bg-gray-50 transition-colors"
+              >
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="font-semibold text-gray-900">{snapshot?.courseName ?? 'Unknown Course'}</p>
+                    <p className="text-sm text-gray-500 mt-0.5">
+                      {new Date(round.date).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}
+                      {game && <> · {GAME_EMOJI[game.type] ?? game.type}</>}
+                      {game?.stakesMode === 'high_roller' && ' 💎'}
+                    </p>
+                  </div>
+                  <div className="text-right flex items-center gap-2">
+                    <div>
+                      <p className="text-sm font-semibold text-gray-700">{players.length} players</p>
+                      {potCents > 0 && <p className="text-xs text-green-600 font-medium">{fmtMoney(potCents)} pot</p>}
+                    </div>
+                    <svg className={`w-4 h-4 text-gray-400 transition-transform ${isExpanded ? 'rotate-90' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                    </svg>
+                  </div>
+                </div>
+              </button>
+
+              {isExpanded && (
+                <div className="border-t border-gray-100 px-4 py-3 space-y-3">
+                  {players.length > 0 && snapshot && (() => {
+                    const courseHcps = buildCourseHandicaps(players, expandedRoundPlayers, snapshot)
+                    const totalPar = snapshot.holes.reduce((s, h) => s + h.par, 0)
+
+                    return (
+                      <div className="space-y-2">
+                        {players.map(player => {
+                          const playerScores = expandedScores.filter(s => s.playerId === player.id)
+                          const gross = playerScores.reduce((s, hs) => s + hs.grossScore, 0)
+                          const courseHcp = courseHcps[player.id] ?? 0
+                          const netStrokes = playerScores.reduce((s, hs) => {
+                            const hole = snapshot.holes.find(h => h.number === hs.holeNumber)
+                            return s + (hole ? strokesOnHole(courseHcp, hole.strokeIndex) : 0)
+                          }, 0)
+                          const net = gross - netStrokes
+                          const vsPar = gross - totalPar
+                          const hasScores = playerScores.length > 0
+
+                          return (
+                            <div key={player.id} className="flex items-center justify-between py-1.5">
+                              <span className="font-medium text-gray-800 text-sm">{player.name}</span>
+                              {hasScores ? (
+                                <span className="text-sm text-gray-600">
+                                  {gross} gross · {net} net ·{' '}
+                                  <span className={vsPar > 0 ? 'text-red-600' : vsPar < 0 ? 'text-green-600' : 'text-gray-500'}>
+                                    {vsPar > 0 ? '+' : ''}{vsPar}
+                                  </span>
+                                </span>
+                              ) : (
+                                <span className="text-sm text-gray-400">No scores</span>
+                              )}
+                            </div>
+                          )
+                        })}
+                      </div>
+                    )
+                  })()}
+
+                  <button
+                    onClick={() => confirmDelete(round.id)}
+                    disabled={deleting === round.id}
+                    className="w-full h-10 border border-red-200 text-red-600 text-sm font-semibold rounded-xl active:bg-red-50 disabled:opacity-50"
+                  >
+                    {deleting === round.id ? 'Deleting...' : 'Delete Round'}
+                  </button>
+                </div>
+              )}
+            </div>
+          )
+        })}
+      </div>
+    </div>
+  )
+}

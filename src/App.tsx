@@ -1,7 +1,9 @@
 import { useEffect, useState } from 'react'
 import type { Session } from '@supabase/supabase-js'
-import { supabase, rowToCourse, rowToPlayer, rowToRound } from './lib/supabase'
+import { supabase, rowToCourse, rowToPlayer, rowToRound, fetchOrCreateProfile } from './lib/supabase'
 import { Auth } from './components/Auth/Auth'
+import { UpgradeAccount } from './components/Auth/UpgradeAccount'
+import { GuestBanner } from './components/GuestBanner/GuestBanner'
 import { CourseCatalog } from './components/CourseCatalog/CourseCatalog'
 import { CourseSetup } from './components/CourseSetup/CourseSetup'
 import { PlayerSetup } from './components/PlayerSetup/PlayerSetup'
@@ -9,9 +11,13 @@ import { NewRound } from './components/NewRound/NewRound'
 import { Scorecard } from './components/Scorecard/Scorecard'
 import { SettleUp } from './components/SettleUp/SettleUp'
 import { NearMeCourses } from './components/NearMeCourses/NearMeCourses'
-import type { Course, Player, GameType, StakesMode } from './types'
+import { RoundHistory } from './components/RoundHistory/RoundHistory'
+import { Settings } from './components/Settings/Settings'
+import { Onboarding } from './components/Onboarding/Onboarding'
+import { AdminDashboard } from './components/Admin/AdminDashboard'
+import type { Course, Player, Round, UserProfile, GameType, StakesMode } from './types'
 
-type Screen = 'home' | 'course-catalog' | 'course-setup' | 'player-setup' | 'new-round' | 'scorecard' | 'settle-up'
+type Screen = 'home' | 'course-catalog' | 'course-setup' | 'player-setup' | 'new-round' | 'scorecard' | 'settle-up' | 'round-history' | 'settings' | 'onboarding' | 'admin' | 'upgrade-account'
 
 const GAME_EMOJI: Record<GameType, string> = {
   skins: '🎰 Skins',
@@ -74,18 +80,33 @@ function PlayerCard({ player, onEdit }: { player: Player; onEdit: () => void }) 
   )
 }
 
-function CourseCard({ course }: { course: Course }) {
+function CourseCard({ course, onEdit, onDelete }: { course: Course; onEdit: () => void; onDelete: () => void }) {
   const par = totalPar(course)
   return (
     <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
-      <div className={`h-10 ${coursePhotoClass(course.name)} flex items-end px-4 pb-2`}>
-        <span className="text-white/60 text-xs font-medium tracking-wider uppercase">Golf Course</span>
-      </div>
-      <div className="px-4 py-3">
-        <p className="font-semibold text-gray-900 font-display">{course.name}</p>
-        <p className="text-sm text-gray-500 mt-0.5">
-          Par {par} · {course.tees.length} tee{course.tees.length !== 1 ? 's' : ''} · {course.tees.map(t => t.name).join(', ')}
-        </p>
+      <button onClick={onEdit} className="w-full text-left active:bg-gray-50 transition-colors">
+        <div className={`h-10 ${coursePhotoClass(course.name)} flex items-end px-4 pb-2`}>
+          <span className="text-white/60 text-xs font-medium tracking-wider uppercase">Golf Course</span>
+        </div>
+        <div className="px-4 py-3 flex items-center justify-between">
+          <div>
+            <p className="font-semibold text-gray-900 font-display">{course.name}</p>
+            <p className="text-sm text-gray-500 mt-0.5">
+              Par {par} · {course.tees.length} tee{course.tees.length !== 1 ? 's' : ''} · {course.tees.map(t => t.name).join(', ')}
+            </p>
+          </div>
+          <svg className="w-4 h-4 text-gray-300 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+          </svg>
+        </div>
+      </button>
+      <div className="px-4 pb-3">
+        <button
+          onClick={(e) => { e.stopPropagation(); onDelete() }}
+          className="text-xs text-red-400 hover:text-red-600 font-medium"
+        >
+          Delete course
+        </button>
       </div>
     </div>
   )
@@ -99,7 +120,16 @@ function Home({
   onAddPlayer,
   onResumeRound,
   onEditPlayer,
+  onEditCourse,
+  onDeleteCourse,
+  onRoundHistory,
+  onSettings,
   onSignOut,
+  isAdmin,
+  onAdmin,
+  onPlayAgain,
+  isAnonymous,
+  onUpgrade,
 }: {
   userId: string
   onNewRound: () => void
@@ -108,18 +138,28 @@ function Home({
   onAddPlayer: () => void
   onResumeRound: (roundId: string) => void
   onEditPlayer: (player: Player) => void
+  onEditCourse: (course: Course) => void
+  onDeleteCourse: (courseId: string) => void
+  onRoundHistory: () => void
+  onSettings: () => void
   onSignOut: () => void
+  isAdmin: boolean
+  onAdmin: () => void
+  onPlayAgain: (round: Round) => void
+  isAnonymous?: boolean
+  onUpgrade?: () => void
 }) {
   const [courses, setCourses] = useState<Course[]>([])
   const [players, setPlayers] = useState<Player[]>([])
   const [activeRounds, setActiveRounds] = useState<any[]>([])
   const [roundCount, setRoundCount] = useState(0)
+  const [recentRounds, setRecentRounds] = useState<Round[]>([])
 
   useEffect(() => {
     supabase.from('courses').select('*').order('name').then(({ data }) => {
       if (data) setCourses(data.map(rowToCourse))
     })
-    supabase.from('players').select('*').order('name').then(({ data }) => {
+    supabase.from('players').select('*').eq('user_id', userId).order('name').then(({ data }) => {
       if (data) setPlayers(data.map(rowToPlayer))
     })
     supabase.from('rounds').select('*').eq('status', 'active').then(({ data }) => {
@@ -127,6 +167,10 @@ function Home({
     })
     supabase.from('rounds').select('id', { count: 'exact', head: true }).then(({ count }) => {
       setRoundCount(count ?? 0)
+    })
+    // Fetch 3 most recent completed rounds for Play Again
+    supabase.from('rounds').select('*').eq('status', 'complete').order('date', { ascending: false }).limit(3).then(({ data }) => {
+      if (data) setRecentRounds(data.map(rowToRound))
     })
   }, [userId])
 
@@ -140,13 +184,31 @@ function Home({
               <p className="text-green-400 text-sm font-medium mt-0.5 tracking-wide">GOLF · SIDE GAMES · MONEY</p>
             </div>
             <div className="flex items-center gap-2">
+              {isAdmin && (
+                <button
+                  onClick={onAdmin}
+                  className="w-10 h-10 flex items-center justify-center rounded-full hover:bg-green-700 border border-green-600 text-green-300"
+                  aria-label="Admin"
+                >
+                  <span className="text-lg">🛡️</span>
+                </button>
+              )}
+              <button
+                onClick={onSettings}
+                className="w-10 h-10 flex items-center justify-center rounded-full hover:bg-green-700 border border-green-600 text-green-300"
+                aria-label="Settings"
+              >
+                <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.066 2.573c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.573 1.066c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.066-2.573c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.573-1.066z" />
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                </svg>
+              </button>
               <button
                 onClick={onSignOut}
                 className="text-green-300 text-xs font-medium px-3 py-1.5 rounded-lg hover:bg-green-700 border border-green-600"
               >
                 Sign Out
               </button>
-              <div className="w-12 h-12 bg-white/10 rounded-2xl flex items-center justify-center text-3xl border border-white/10">⛳</div>
             </div>
           </div>
           <div className="flex gap-2">
@@ -154,10 +216,19 @@ function Home({
             <StatChip label="Players" value={players.length} />
             <StatChip label="Courses" value={courses.length} />
           </div>
+          {roundCount > 0 && (
+            <button onClick={onRoundHistory} className="mt-3 text-green-300 text-sm font-medium flex items-center gap-1.5 hover:text-white transition-colors">
+              <span>📋</span> View Round History
+            </button>
+          )}
         </div>
       </header>
 
       <main className="px-4 pt-5 max-w-2xl mx-auto space-y-6">
+        {isAnonymous && onUpgrade && (
+          <GuestBanner onUpgrade={onUpgrade} />
+        )}
+
         {activeRounds.length > 0 && (
           <section>
             {activeRounds.map(round => (
@@ -214,6 +285,35 @@ function Home({
           </div>
         </button>
 
+        {/* Play Again */}
+        {recentRounds.length > 0 && (
+          <section>
+            <h2 className="font-display font-semibold text-gray-800 text-base mb-3">Play Again</h2>
+            <div className="space-y-2">
+              {recentRounds.map(round => (
+                <button
+                  key={round.id}
+                  onClick={() => onPlayAgain(round)}
+                  className="w-full bg-white rounded-2xl shadow-sm border border-gray-100 p-4 text-left active:bg-gray-50 transition-colors"
+                >
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="font-semibold text-gray-900">{round.courseSnapshot?.courseName ?? 'Unknown course'}</p>
+                      <p className="text-sm text-gray-500 mt-0.5">
+                        {round.players?.length ?? 0} players
+                        {round.game?.type && ` · ${GAME_EMOJI[round.game.type] ?? round.game.type}`}
+                        {round.game?.stakesMode === 'high_roller' && ' 💎'}
+                        {round.game?.buyInCents ? ` · $${round.game.buyInCents / 100}` : ''}
+                      </p>
+                    </div>
+                    <span className="text-green-700 text-sm font-semibold">Play Again →</span>
+                  </div>
+                </button>
+              ))}
+            </div>
+          </section>
+        )}
+
         <NearMeCourses onAddCourse={onAddCourse} />
 
         <section>
@@ -259,7 +359,14 @@ function Home({
           )}
           {courses.length > 0 && (
             <div className="space-y-3">
-              {courses.map(course => <CourseCard key={course.id} course={course} />)}
+              {courses.map(course => (
+                <CourseCard
+                  key={course.id}
+                  course={course}
+                  onEdit={() => onEditCourse(course)}
+                  onDelete={() => onDeleteCourse(course.id)}
+                />
+              ))}
             </div>
           )}
         </section>
@@ -277,7 +384,11 @@ export default function App() {
   const [activeRoundId, setActiveRoundId] = useState<string | null>(null)
   const [newRoundStakesMode, setNewRoundStakesMode] = useState<StakesMode>('standard')
   const [editingPlayer, setEditingPlayer] = useState<Player | undefined>(undefined)
+  const [editingCourse, setEditingCourse] = useState<Course | undefined>(undefined)
   const [homeKey, setHomeKey] = useState(0)
+  const [userProfile, setUserProfile] = useState<UserProfile | null>(null)
+  const [profileLoading, setProfileLoading] = useState(true)
+  const [playAgainRound, setPlayAgainRound] = useState<Round | null>(null)
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => setSession(session))
@@ -286,6 +397,25 @@ export default function App() {
     })
     return () => subscription.unsubscribe()
   }, [])
+
+  // Load user profile after session is established
+  useEffect(() => {
+    if (!session) {
+      setUserProfile(null)
+      setProfileLoading(false)
+      return
+    }
+    setProfileLoading(true)
+    fetchOrCreateProfile(session.user.id).then(async profile => {
+      // Auto-complete onboarding for anonymous guests — skip straight to app
+      if (session.user.is_anonymous && profile && !profile.onboardingComplete) {
+        await supabase.from('user_profiles').update({ onboarding_complete: true }).eq('user_id', session.user.id)
+        profile = { ...profile, onboardingComplete: true }
+      }
+      setUserProfile(profile)
+      setProfileLoading(false)
+    })
+  }, [session])
 
   // Still checking auth state
   if (session === undefined) {
@@ -301,7 +431,27 @@ export default function App() {
     return <Auth />
   }
 
+  // Loading profile
+  if (profileLoading) {
+    return (
+      <div className="min-h-screen bg-slate-50 flex items-center justify-center">
+        <div className="w-8 h-8 border-2 border-green-500 border-t-transparent rounded-full animate-spin" />
+      </div>
+    )
+  }
+
   const userId = session.user.id
+  const isAnonymous = session.user.is_anonymous ?? false
+
+  // Onboarding gate
+  if (userProfile && !userProfile.onboardingComplete) {
+    return (
+      <Onboarding
+        userId={userId}
+        onComplete={() => setUserProfile(prev => prev ? { ...prev, onboardingComplete: true } : prev)}
+      />
+    )
+  }
 
   const goHome = () => {
     setHomeKey(k => k + 1)
@@ -318,7 +468,14 @@ export default function App() {
     )
   }
   if (screen === 'course-setup') {
-    return <CourseSetup userId={userId} onSave={goHome} onCancel={() => setScreen('course-catalog')} />
+    return (
+      <CourseSetup
+        userId={userId}
+        course={editingCourse}
+        onSave={() => { setEditingCourse(undefined); goHome() }}
+        onCancel={() => { setEditingCourse(undefined); setScreen('course-catalog') }}
+      />
+    )
   }
   if (screen === 'player-setup') {
     return (
@@ -334,10 +491,11 @@ export default function App() {
     return (
       <NewRound
         userId={userId}
-        onStart={roundId => { setActiveRoundId(roundId); setScreen('scorecard') }}
-        onCancel={goHome}
+        onStart={roundId => { setActiveRoundId(roundId); setPlayAgainRound(null); setScreen('scorecard') }}
+        onCancel={() => { setPlayAgainRound(null); goHome() }}
         onAddCourse={() => { setAfterCourseSetup('new-round'); setScreen('course-catalog') }}
         initialStakesMode={newRoundStakesMode}
+        templateRound={playAgainRound}
       />
     )
   }
@@ -353,6 +511,45 @@ export default function App() {
       />
     )
   }
+  if (screen === 'round-history') {
+    return <RoundHistory userId={userId} onBack={goHome} />
+  }
+  if (screen === 'upgrade-account') {
+    return (
+      <UpgradeAccount
+        onComplete={goHome}
+        onCancel={goHome}
+      />
+    )
+  }
+  if (screen === 'settings') {
+    return (
+      <Settings
+        email={session.user.email ?? ''}
+        onBack={goHome}
+        onSignOut={() => supabase.auth.signOut()}
+        isAdmin={userProfile?.isAdmin}
+        onAdmin={() => setScreen('admin')}
+        isAnonymous={isAnonymous}
+        onUpgrade={() => setScreen('upgrade-account')}
+      />
+    )
+  }
+  if (screen === 'admin' && userProfile?.isAdmin) {
+    return <AdminDashboard userId={userId} onBack={goHome} />
+  }
+
+  const handleDeleteCourse = async (courseId: string) => {
+    if (!window.confirm('Delete this course? This cannot be undone.')) return
+    await supabase.from('courses').delete().eq('id', courseId)
+    setHomeKey(k => k + 1)
+  }
+
+  const handlePlayAgain = (round: Round) => {
+    setPlayAgainRound(round)
+    setNewRoundStakesMode(round.game?.stakesMode ?? 'standard')
+    setScreen('new-round')
+  }
 
   return (
     <Home
@@ -363,8 +560,17 @@ export default function App() {
       onAddCourse={() => { setAfterCourseSetup('home'); setScreen('course-catalog') }}
       onAddPlayer={() => { setEditingPlayer(undefined); setScreen('player-setup') }}
       onEditPlayer={(player: Player) => { setEditingPlayer(player); setScreen('player-setup') }}
+      onEditCourse={(course: Course) => { setEditingCourse(course); setScreen('course-setup') }}
+      onDeleteCourse={handleDeleteCourse}
       onResumeRound={roundId => { setActiveRoundId(roundId); setScreen('scorecard') }}
+      onRoundHistory={() => setScreen('round-history')}
+      onSettings={() => setScreen('settings')}
       onSignOut={() => supabase.auth.signOut()}
+      isAdmin={userProfile?.isAdmin ?? false}
+      onAdmin={() => setScreen('admin')}
+      onPlayAgain={handlePlayAgain}
+      isAnonymous={isAnonymous}
+      onUpgrade={() => setScreen('upgrade-account')}
     />
   )
 }

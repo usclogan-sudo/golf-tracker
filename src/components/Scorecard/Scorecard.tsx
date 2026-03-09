@@ -389,6 +389,12 @@ export function Scorecard({ userId, roundId, onEndRound, onHome }: Props) {
           else if (grossScore === par + 1) scoreBadge = 'Bogey'
           else if (grossScore === par + 2) scoreBadge = 'Double'
           else if (grossScore > par + 2) scoreBadge = `+${grossScore - par}`
+
+          // Score validation warnings
+          const warnings: string[] = []
+          if (grossScore === 1 && par >= 4) warnings.push('Hole in one! Verify score')
+          if (grossScore >= par + 5) warnings.push(`That's +${grossScore - par} over par — verify score`)
+
           return (
             <div key={player.id} className="bg-white rounded-2xl shadow-sm border border-gray-100 p-4">
               <div className="flex items-start justify-between mb-3">
@@ -407,6 +413,9 @@ export function Scorecard({ userId, roundId, onEndRound, onHome }: Props) {
                 <p className="text-sm text-gray-500 font-medium">Gross score</p>
                 <ScoreStepper value={grossScore} min={1} max={15} onChange={v => setScore(player.id, v)} />
               </div>
+              {warnings.map((w, i) => (
+                <p key={i} className="text-amber-600 text-xs font-medium mt-2 bg-amber-50 rounded-lg px-3 py-1.5">{w}</p>
+              ))}
             </div>
           )
         })}
@@ -424,8 +433,16 @@ export function Scorecard({ userId, roundId, onEndRound, onHome }: Props) {
         })()}
       </div>
 
-      <div className="fixed bottom-0 inset-x-0 p-4 bg-white/95 backdrop-blur-sm border-t border-gray-200">
-        <div className="max-w-2xl mx-auto flex gap-3">
+      <div className="fixed bottom-0 inset-x-0 bg-white/95 backdrop-blur-sm border-t border-gray-200">
+        {(() => {
+          const missingPlayers = players.filter(p => !holeScores.some(s => s.playerId === p.id && s.holeNumber === currentHole))
+          return missingPlayers.length > 0 ? (
+            <p className="text-amber-600 text-xs font-medium text-center py-1.5 bg-amber-50">
+              Not all players have scores for this hole
+            </p>
+          ) : null
+        })()}
+        <div className="p-4 max-w-2xl mx-auto flex gap-3">
           <button onClick={() => goToHole(Math.max(1, currentHole - 1))} disabled={currentHole === 1}
             className="w-16 h-14 bg-gray-100 rounded-2xl font-bold text-xl text-gray-600 disabled:opacity-30 active:bg-gray-200">←</button>
           {currentHole < 18 ? (
