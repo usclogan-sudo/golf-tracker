@@ -432,6 +432,33 @@ export default function App() {
     })
   }, [session])
 
+  // Browser back button support: push state on screen change, listen for popstate
+  useEffect(() => {
+    const handlePopState = (e: PopStateEvent) => {
+      const s = e.state?.screen as Screen | undefined
+      if (s) {
+        setScreen(s)
+      } else {
+        setHomeKey(k => k + 1)
+        setScreen('home')
+      }
+    }
+    window.addEventListener('popstate', handlePopState)
+    return () => window.removeEventListener('popstate', handlePopState)
+  }, [])
+
+  useEffect(() => {
+    // Don't push duplicate entries for 'home' on initial load
+    const currentState = window.history.state?.screen
+    if (screen !== currentState) {
+      if (screen === 'home') {
+        window.history.replaceState({ screen }, '', window.location.pathname)
+      } else {
+        window.history.pushState({ screen }, '', window.location.pathname)
+      }
+    }
+  }, [screen])
+
   // Still checking auth state
   if (session === undefined) {
     return (
@@ -472,33 +499,6 @@ export default function App() {
     setHomeKey(k => k + 1)
     setScreen('home')
   }
-
-  // Browser back button support: push state on screen change, listen for popstate
-  useEffect(() => {
-    const handlePopState = (e: PopStateEvent) => {
-      const s = e.state?.screen as Screen | undefined
-      if (s) {
-        setScreen(s)
-      } else {
-        setHomeKey(k => k + 1)
-        setScreen('home')
-      }
-    }
-    window.addEventListener('popstate', handlePopState)
-    return () => window.removeEventListener('popstate', handlePopState)
-  }, [])
-
-  useEffect(() => {
-    // Don't push duplicate entries for 'home' on initial load
-    const currentState = window.history.state?.screen
-    if (screen !== currentState) {
-      if (screen === 'home') {
-        window.history.replaceState({ screen }, '', window.location.pathname)
-      } else {
-        window.history.pushState({ screen }, '', window.location.pathname)
-      }
-    }
-  }, [screen])
 
   if (screen === 'course-catalog') {
     return (
