@@ -11,7 +11,7 @@ interface NearbyCourse {
 }
 
 interface Props {
-  onAddCourse: () => void
+  onAddCourse: (courseName?: string) => void
 }
 
 function distanceMiles(lat1: number, lon1: number, lat2: number, lon2: number): number {
@@ -165,7 +165,7 @@ export function NearMeCourses({ onAddCourse }: Props) {
       </div>
       <div className="flex gap-3 overflow-x-auto pb-2 -mx-4 px-4 snap-x snap-mandatory">
         {courses.map(course => (
-          <button key={course.id} onClick={onAddCourse}
+          <button key={course.id} onClick={() => onAddCourse(course.name)}
             className="flex-none w-52 bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden text-left active:scale-95 transition-transform snap-start">
             <div className="h-24 flex flex-col justify-end p-3" style={{ background: courseGradient(course.name) }}>
               <div className="bg-black/30 backdrop-blur-sm rounded-lg px-2 py-1 self-start">

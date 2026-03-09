@@ -8,9 +8,10 @@ interface Props {
   player?: Player
   onSave: () => void
   onCancel: () => void
+  onDelete?: () => void
 }
 
-export function PlayerSetup({ userId, player, onSave, onCancel }: Props) {
+export function PlayerSetup({ userId, player, onSave, onCancel, onDelete }: Props) {
   const [name, setName] = useState(player?.name ?? '')
   const [handicapIndex, setHandicapIndex] = useState(
     player !== undefined ? String(player.handicapIndex) : '',
@@ -32,9 +33,7 @@ export function PlayerSetup({ userId, player, onSave, onCancel }: Props) {
     if (handicapIndex === '' || isNaN(hcp) || hcp < -10 || hcp > 54) {
       errs.handicap = 'Must be between -10 and 54'
     }
-    if (!ghin.trim()) {
-      errs.ghin = 'GHIN number is required'
-    } else if (!/^\d+$/.test(ghin.trim())) {
+    if (ghin.trim() && !/^\d+$/.test(ghin.trim())) {
       errs.ghin = 'Must be numeric'
     }
     setErrors(errs)
@@ -220,6 +219,19 @@ export function PlayerSetup({ userId, player, onSave, onCancel }: Props) {
         </section>
 
         {errors.save && <p className="text-red-500 text-sm text-center">{errors.save}</p>}
+
+        {player && onDelete && (
+          <section className="bg-white rounded-2xl shadow-sm p-4 border border-red-200">
+            <button
+              onClick={() => {
+                if (window.confirm(`Delete ${player.name}? This cannot be undone.`)) onDelete()
+              }}
+              className="w-full text-red-500 font-semibold text-sm"
+            >
+              Delete Player
+            </button>
+          </section>
+        )}
       </div>
 
       <div className="fixed bottom-0 inset-x-0 p-4 bg-white/95 backdrop-blur-sm border-t border-gray-200">

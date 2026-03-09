@@ -3,19 +3,22 @@ import { v4 as uuidv4 } from 'uuid'
 import { supabase, courseToRow } from '../../lib/supabase'
 import type { Course, Hole, Tee } from '../../types'
 
+// Standard stroke index allocation (odd on front, even on back, hardest first)
+const STANDARD_SI = [7, 11, 3, 15, 1, 9, 5, 13, 17, 8, 12, 4, 16, 2, 10, 6, 14, 18]
+
 function defaultHoles(): Hole[] {
   return Array.from({ length: 18 }, (_, i) => ({
-    number: i + 1, par: 4, strokeIndex: i + 1, yardages: {},
+    number: i + 1, par: 4, strokeIndex: STANDARD_SI[i], yardages: {},
   }))
 }
 function sumYards(holes: Hole[], teeName: string, from = 0, to = 18) {
   return holes.slice(from, to).reduce((s, h) => s + (h.yardages[teeName] ?? 0), 0)
 }
 
-interface Props { userId: string; course?: Course; onSave: () => void; onCancel: () => void }
+interface Props { userId: string; course?: Course; onSave: () => void; onCancel: () => void; initialName?: string }
 
-export function CourseSetup({ userId, course: editCourse, onSave, onCancel }: Props) {
-  const [name, setName] = useState(editCourse?.name ?? '')
+export function CourseSetup({ userId, course: editCourse, onSave, onCancel, initialName }: Props) {
+  const [name, setName] = useState(editCourse?.name ?? initialName ?? '')
   const [tees, setTees] = useState<Tee[]>(editCourse?.tees ?? [{ name: 'Blue', rating: 72.1, slope: 128 }])
   const [holes, setHoles] = useState<Hole[]>(editCourse?.holes ?? defaultHoles())
   const [saving, setSaving] = useState(false)
@@ -145,7 +148,22 @@ export function CourseSetup({ userId, course: editCourse, onSave, onCancel }: Pr
           </div>
         </section>
         <section className="bg-white rounded-2xl shadow-sm p-4">
-          <h2 className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">Holes</h2>
+          <div className="flex items-center justify-between mb-3">
+            <h2 className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Holes</h2>
+            <div className="flex gap-1.5">
+              {[
+                { label: 'Par 72', pars: [4,4,4,3,5,4,4,3,5,4,4,4,3,5,4,4,3,5] },
+                { label: 'Par 71', pars: [4,4,4,3,5,4,4,3,4,4,4,4,3,5,4,4,3,5] },
+                { label: 'Par 70', pars: [4,4,4,3,5,4,4,3,4,4,4,4,3,5,4,4,3,4] },
+              ].map(tmpl => (
+                <button key={tmpl.label} onClick={() => {
+                  setHoles(prev => prev.map((h, i) => ({ ...h, par: tmpl.pars[i] })))
+                }}
+                  className="px-2.5 py-1 text-xs font-semibold rounded-lg bg-green-50 text-green-700 border border-green-200 active:bg-green-100"
+                >{tmpl.label}</button>
+              ))}
+            </div>
+          </div>
           {errors.si && <div className="bg-red-50 border border-red-200 rounded-xl p-3 mb-3"><p className="text-red-600 text-sm">{errors.si}</p></div>}
           <div className="overflow-x-auto -mx-4 px-4">
             <table className="w-full text-sm border-collapse">

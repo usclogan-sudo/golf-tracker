@@ -284,8 +284,7 @@ function PlayerPicker({
     if (!newName.trim()) { setAddError('Name is required'); return }
     const hcp = parseFloat(newHcp)
     if (isNaN(hcp) || hcp < -10 || hcp > 54) { setAddError('Handicap must be between -10 and 54'); return }
-    if (!newGhin.trim()) { setAddError('GHIN number is required'); return }
-    if (!/^\d+$/.test(newGhin.trim())) { setAddError('GHIN must be numeric'); return }
+    if (newGhin.trim() && !/^\d+$/.test(newGhin.trim())) { setAddError('GHIN must be numeric'); return }
     setSaving(true)
     try {
       const newPlayer: Player = { id: uuidv4(), name: newName.trim(), handicapIndex: hcp, tee: newTee, ghinNumber: newGhin.trim(), createdAt: new Date() }

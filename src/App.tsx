@@ -135,7 +135,7 @@ function Home({
   userId: string
   onNewRound: () => void
   onNewHighRollerRound: () => void
-  onAddCourse: () => void
+  onAddCourse: (courseName?: string) => void
   onAddPlayer: () => void
   onResumeRound: (roundId: string) => void
   onEditPlayer: (player: Player) => void
@@ -158,7 +158,7 @@ function Home({
   const [recentRounds, setRecentRounds] = useState<Round[]>([])
 
   useEffect(() => {
-    supabase.from('courses').select('*').order('name').then(({ data }) => {
+    supabase.from('courses').select('*').eq('user_id', userId).order('name').then(({ data }) => {
       if (data) setCourses(data.map(rowToCourse))
     })
     supabase.from('players').select('*').eq('user_id', userId).order('name').then(({ data }) => {
@@ -328,7 +328,7 @@ function Home({
           </section>
         )}
 
-        <NearMeCourses onAddCourse={onAddCourse} />
+        <NearMeCourses onAddCourse={(name) => onAddCourse(name)} />
 
         <section>
           <div className="flex items-center justify-between mb-3">
@@ -403,6 +403,7 @@ export default function App() {
   const [userProfile, setUserProfile] = useState<UserProfile | null>(null)
   const [profileLoading, setProfileLoading] = useState(true)
   const [playAgainRound, setPlayAgainRound] = useState<Round | null>(null)
+  const [newCourseName, setNewCourseName] = useState('')
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => setSession(session))
@@ -472,6 +473,33 @@ export default function App() {
     setScreen('home')
   }
 
+  // Browser back button support: push state on screen change, listen for popstate
+  useEffect(() => {
+    const handlePopState = (e: PopStateEvent) => {
+      const s = e.state?.screen as Screen | undefined
+      if (s) {
+        setScreen(s)
+      } else {
+        setHomeKey(k => k + 1)
+        setScreen('home')
+      }
+    }
+    window.addEventListener('popstate', handlePopState)
+    return () => window.removeEventListener('popstate', handlePopState)
+  }, [])
+
+  useEffect(() => {
+    // Don't push duplicate entries for 'home' on initial load
+    const currentState = window.history.state?.screen
+    if (screen !== currentState) {
+      if (screen === 'home') {
+        window.history.replaceState({ screen }, '', window.location.pathname)
+      } else {
+        window.history.pushState({ screen }, '', window.location.pathname)
+      }
+    }
+  }, [screen])
+
   if (screen === 'course-catalog') {
     return (
       <CourseCatalog
@@ -486,8 +514,9 @@ export default function App() {
       <CourseSetup
         userId={userId}
         course={editingCourse}
-        onSave={() => { setEditingCourse(undefined); goHome() }}
-        onCancel={() => { setEditingCourse(undefined); setScreen('course-catalog') }}
+        initialName={newCourseName}
+        onSave={() => { setEditingCourse(undefined); setNewCourseName(''); goHome() }}
+        onCancel={() => { setEditingCourse(undefined); setNewCourseName(''); setScreen('course-catalog') }}
       />
     )
   }
@@ -498,6 +527,11 @@ export default function App() {
         player={editingPlayer}
         onSave={() => { setEditingPlayer(undefined); goHome() }}
         onCancel={() => { setEditingPlayer(undefined); goHome() }}
+        onDelete={editingPlayer ? async () => {
+          await supabase.from('players').delete().eq('id', editingPlayer.id)
+          setEditingPlayer(undefined)
+          goHome()
+        } : undefined}
       />
     )
   }
@@ -578,7 +612,15 @@ export default function App() {
       userId={userId}
       onNewRound={() => { setNewRoundStakesMode('standard'); setScreen('new-round') }}
       onNewHighRollerRound={() => { setNewRoundStakesMode('high_roller'); setScreen('new-round') }}
-      onAddCourse={() => { setAfterCourseSetup('home'); setScreen('course-catalog') }}
+      onAddCourse={(courseName) => {
+        setAfterCourseSetup('home')
+        if (courseName) {
+          setNewCourseName(courseName)
+          setScreen('course-setup')
+        } else {
+          setScreen('course-catalog')
+        }
+      }}
       onAddPlayer={() => { setEditingPlayer(undefined); setScreen('player-setup') }}
       onEditPlayer={(player: Player) => { setEditingPlayer(player); setScreen('player-setup') }}
       onEditCourse={(course: Course) => { setEditingCourse(course); setScreen('course-setup') }}

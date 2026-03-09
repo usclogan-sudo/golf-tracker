@@ -90,6 +90,8 @@ export function Scorecard({ userId, roundId, onEndRound, onHome }: Props) {
   const [holeScores, setHoleScores] = useState<HoleScore[]>([])
   const [bbbPoints, setBbbPoints] = useState<BBBPoint[]>([])
   const [loading, setLoading] = useState(true)
+  const [saveError, setSaveError] = useState<string | null>(null)
+  const [lastChange, setLastChange] = useState<{ playerId: string; holeNumber: number; previousScore: number } | null>(null)
 
   useEffect(() => {
     Promise.all([
@@ -126,20 +128,41 @@ export function Scorecard({ userId, roundId, onEndRound, onHome }: Props) {
   }
 
   const setScore = async (playerId: string, grossScore: number) => {
+    setSaveError(null)
     const existing = holeScores.find(s => s.playerId === playerId && s.holeNumber === currentHole)
-    if (existing) {
-      setHoleScores(prev => prev.map(s => s.id === existing.id ? { ...s, grossScore } : s))
-      await supabase.from('hole_scores').update({ gross_score: grossScore }).eq('id', existing.id)
-    } else {
-      const newScore: HoleScore = { id: uuidv4(), roundId, playerId, holeNumber: currentHole, grossScore }
-      setHoleScores(prev => [...prev, newScore])
-      await supabase.from('hole_scores').insert(holeScoreToRow(newScore, userId))
+    const previousScore = existing?.grossScore ?? par
+    setLastChange({ playerId, holeNumber: currentHole, previousScore })
+    try {
+      if (existing) {
+        setHoleScores(prev => prev.map(s => s.id === existing.id ? { ...s, grossScore } : s))
+        const { error } = await supabase.from('hole_scores').update({ gross_score: grossScore }).eq('id', existing.id)
+        if (error) throw error
+      } else {
+        const newScore: HoleScore = { id: uuidv4(), roundId, playerId, holeNumber: currentHole, grossScore }
+        setHoleScores(prev => [...prev, newScore])
+        const { error } = await supabase.from('hole_scores').insert(holeScoreToRow(newScore, userId))
+        if (error) throw error
+      }
+    } catch {
+      setSaveError('Score failed to save — check your connection')
     }
   }
 
+  const undoLastChange = async () => {
+    if (!lastChange) return
+    const existing = holeScores.find(s => s.playerId === lastChange.playerId && s.holeNumber === lastChange.holeNumber)
+    if (existing) {
+      setHoleScores(prev => prev.map(s => s.id === existing.id ? { ...s, grossScore: lastChange.previousScore } : s))
+      await supabase.from('hole_scores').update({ gross_score: lastChange.previousScore }).eq('id', existing.id)
+    }
+    setLastChange(null)
+  }
+
   const goToHole = async (holeNum: number) => {
+    setSaveError(null)
     setRound(prev => prev ? { ...prev, currentHole: holeNum } : prev)
-    await supabase.from('rounds').update({ current_hole: holeNum }).eq('id', roundId)
+    const { error } = await supabase.from('rounds').update({ current_hole: holeNum }).eq('id', roundId)
+    if (error) setSaveError('Failed to save hole change — check your connection')
   }
 
   const endRound = async () => {
@@ -242,7 +265,7 @@ export function Scorecard({ userId, roundId, onEndRound, onHome }: Props) {
               )}
             </h1>
           </div>
-          <button onClick={onHome} className="text-green-300 text-sm font-medium px-3 py-1.5 rounded-lg hover:bg-green-700">Home</button>
+          <button onClick={() => { if (window.confirm('Leave scoring? Your round is saved and you can resume from the Home screen.')) onHome() }} className="text-green-300 text-sm font-medium px-3 py-1.5 rounded-lg hover:bg-green-700">Home</button>
         </div>
         <div className="max-w-2xl mx-auto mt-2 flex gap-1 overflow-x-auto pb-1">
           {Array.from({ length: 18 }, (_, i) => i + 1).map(n => {
@@ -258,6 +281,12 @@ export function Scorecard({ userId, roundId, onEndRound, onHome }: Props) {
       </header>
 
       <div className="px-4 py-4 max-w-2xl mx-auto space-y-4">
+        {saveError && (
+          <div className="bg-red-50 border border-red-200 rounded-xl px-4 py-3 flex items-center justify-between">
+            <p className="text-red-700 text-sm font-semibold">{saveError}</p>
+            <button onClick={() => setSaveError(null)} className="text-red-400 text-lg font-bold ml-2">&times;</button>
+          </div>
+        )}
         {/* Game status bars */}
         {skinsResult && <SkinsStatus carry={currentCarry} potCents={game!.buyInCents * players.length} />}
         {bestBallResult && <BestBallStatus holesWon={bestBallResult.holesWon} />}
@@ -444,7 +473,11 @@ export function Scorecard({ userId, roundId, onEndRound, onHome }: Props) {
         })()}
         <div className="p-4 max-w-2xl mx-auto flex gap-3">
           <button onClick={() => goToHole(Math.max(1, currentHole - 1))} disabled={currentHole === 1}
-            className="w-16 h-14 bg-gray-100 rounded-2xl font-bold text-xl text-gray-600 disabled:opacity-30 active:bg-gray-200">←</button>
+            className="w-16 h-14 bg-gray-100 rounded-2xl font-bold text-xl text-gray-600 disabled:opacity-30 active:bg-gray-200">&larr;</button>
+          {lastChange && lastChange.holeNumber === currentHole && (
+            <button onClick={undoLastChange}
+              className="w-16 h-14 bg-amber-100 rounded-2xl text-amber-700 font-bold text-xs active:bg-amber-200" aria-label="Undo">Undo</button>
+          )}
           {currentHole < 18 ? (
             <button onClick={() => goToHole(currentHole + 1)}
               className="flex-1 h-14 bg-green-700 text-white text-lg font-bold rounded-2xl active:bg-green-800 transition-colors">Next Hole →</button>
