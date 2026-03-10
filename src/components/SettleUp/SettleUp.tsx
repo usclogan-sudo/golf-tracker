@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { supabase, rowToRound, rowToRoundPlayer, rowToHoleScore, rowToBuyIn, rowToBBBPoint } from '../../lib/supabase'
+import { supabase, rowToRound, rowToRoundPlayer, rowToHoleScore, rowToBuyIn, rowToBBBPoint, rowToJunkRecord } from '../../lib/supabase'
 import {
   buildCourseHandicaps,
   strokesOnHole,
@@ -13,6 +13,8 @@ import {
   calculateNassauPayouts,
   calculateWolfPayouts,
   calculateBBBPayouts,
+  calculateJunks,
+  JUNK_LABELS,
   buildSettlements,
   venmoLink,
   venmoWebLink,
@@ -21,13 +23,15 @@ import {
   paypalLink,
   fmtMoney,
 } from '../../lib/gameLogic'
-import type { PlayerPayout, Settlement } from '../../lib/gameLogic'
+import type { PlayerPayout, Settlement, JunkResult } from '../../lib/gameLogic'
 import type {
   Round,
   RoundPlayer,
   HoleScore,
   BuyIn,
   BBBPoint,
+  JunkRecord,
+  JunkType,
   Player,
   SkinsConfig,
   BestBallConfig,
@@ -115,6 +119,7 @@ export function SettleUp({ roundId, onDone, onContinue }: Props) {
   const [holeScores, setHoleScores] = useState<HoleScore[]>([])
   const [buyIns, setBuyIns] = useState<BuyIn[]>([])
   const [bbbPoints, setBbbPoints] = useState<BBBPoint[]>([])
+  const [junkRecords, setJunkRecords] = useState<JunkRecord[]>([])
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
@@ -124,12 +129,14 @@ export function SettleUp({ roundId, onDone, onContinue }: Props) {
       supabase.from('hole_scores').select('*').eq('round_id', roundId),
       supabase.from('buy_ins').select('*').eq('round_id', roundId),
       supabase.from('bbb_points').select('*').eq('round_id', roundId),
-    ]).then(([roundRes, rpRes, hsRes, biRes, bbbRes]) => {
+      supabase.from('junk_records').select('*').eq('round_id', roundId),
+    ]).then(([roundRes, rpRes, hsRes, biRes, bbbRes, junkRes]) => {
       if (roundRes.data) setRound(rowToRound(roundRes.data))
       if (rpRes.data) setRoundPlayers(rpRes.data.map(rowToRoundPlayer))
       if (hsRes.data) setHoleScores(hsRes.data.map(rowToHoleScore))
       if (biRes.data) setBuyIns(biRes.data.map(rowToBuyIn))
       if (bbbRes.data) setBbbPoints(bbbRes.data.map(rowToBBBPoint))
+      if (junkRes.data) setJunkRecords(junkRes.data.map(rowToJunkRecord))
       setLoading(false)
     })
   }, [roundId])
@@ -169,6 +176,11 @@ export function SettleUp({ roundId, onDone, onContinue }: Props) {
     if (!game || game.type !== 'bingo_bango_bongo') return null
     return calculateBBB(players, bbbPoints)
   }, [game, players, bbbPoints])
+
+  const junkResult = useMemo((): JunkResult | null => {
+    if (!round?.junkConfig || junkRecords.length === 0) return null
+    return calculateJunks(players, junkRecords, round.junkConfig)
+  }, [round?.junkConfig, players, junkRecords])
 
   const payouts = useMemo((): PlayerPayout[] => {
     if (!game || !snapshot) return []
@@ -481,6 +493,43 @@ export function SettleUp({ roundId, onDone, onContinue }: Props) {
                   )
                 })}
             </div>
+          </section>
+        )}
+
+        {/* ── Junk Results ── */}
+        {junkResult && round?.junkConfig && (
+          <section className="bg-white rounded-2xl shadow-sm p-4 space-y-3">
+            <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">
+              Junk Side Bets — {fmtMoney(round.junkConfig.valueCents)}/junk
+            </p>
+            <div className="space-y-2">
+              {players
+                .slice()
+                .sort((a, b) => (junkResult.netCents[b.id] ?? 0) - (junkResult.netCents[a.id] ?? 0))
+                .map(p => {
+                  const net = junkResult.netCents[p.id] ?? 0
+                  const tallies = junkResult.tallies[p.id]
+                  const junkDetails = tallies
+                    ? round.junkConfig!.types
+                        .filter(jt => tallies[jt] > 0)
+                        .map(jt => `${JUNK_LABELS[jt].emoji}${tallies[jt]}`)
+                        .join(' ')
+                    : ''
+                  return (
+                    <div key={p.id} className={`flex items-center justify-between p-3 rounded-xl ${net > 0 ? 'bg-indigo-50' : net < 0 ? 'bg-red-50' : 'bg-gray-50'}`}>
+                      <div>
+                        <span className="font-semibold text-gray-800">{p.name}</span>
+                        {junkDetails && <span className="text-xs ml-2">{junkDetails}</span>}
+                      </div>
+                      <span className={`font-bold ${net > 0 ? 'text-indigo-700' : net < 0 ? 'text-red-600' : 'text-gray-400'}`}>
+                        {net === 0 ? '$0' : `${net > 0 ? '+' : ''}${fmtMoney(Math.abs(net))}`}
+                        {net < 0 && <span className="text-xs font-normal ml-0.5">owes</span>}
+                      </span>
+                    </div>
+                  )
+                })}
+            </div>
+            <p className="text-xs text-gray-400">Junks are peer-to-peer — settle separately from the main pot.</p>
           </section>
         )}
 

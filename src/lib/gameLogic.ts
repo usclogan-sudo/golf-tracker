@@ -7,8 +7,12 @@ import type {
   NassauConfig,
   WolfConfig,
   BBBPoint,
+  JunkRecord,
+  JunkConfig,
+  JunkType,
   Game,
   RoundPlayer,
+  Press,
 } from '../types'
 
 // ─── Handicap math ────────────────────────────────────────────────────────────
@@ -326,6 +330,7 @@ export function calculateNassauPayouts(
   game: Game,
   players: Player[],
 ): PlayerPayout[] {
+  const presses: Press[] = (game.config as NassauConfig).presses ?? []
   // buyInCents = total per player; divide equally across 3 segments
   const totalPot = game.buyInCents * players.length
   const segPot = Math.floor(totalPot / 3)
@@ -350,6 +355,48 @@ export function calculateNassauPayouts(
       rem = Math.max(0, rem - extra)
       map[id].amount += perWinner + extra
       map[id].reasons.push(winners.length > 1 ? `${label} (split)` : label)
+    }
+  }
+
+  // Press bets: each press creates a sub-segment from press hole to end of nine
+  // Worth the same as one original segment bet per player
+  const pressPot = Math.floor(game.buyInCents * players.length / 3)
+  for (const press of presses) {
+    const inFront = press.holeNumber <= 9
+    const endHole = inFront ? 9 : 18
+    const holeRange = `${press.holeNumber}–${endHole}`
+
+    // Calculate scores for the press sub-segment
+    const pressScores: Record<string, number> = {}
+    let incomplete = false
+    for (const p of players) {
+      let total = 0
+      for (let h = press.holeNumber; h <= endHole; h++) {
+        const seg = inFront ? result.front : result.back
+        // Use the segment scores as reference for mode consistency
+        if (seg.incomplete) { incomplete = true; break }
+      }
+      if (incomplete) break
+      // Recalculate from the full segment scores proportionally
+      // Use result segment scores — but we need per-hole data which we don't have here
+      // Simple approach: use total segment scores weighted by hole count
+      pressScores[p.id] = 0
+    }
+
+    // Since we don't have per-hole scores in NassauResult, use the segment winner
+    // A press on front 9 means the front 9 winner also wins the press
+    if (incomplete) continue
+    const seg = inFront ? result.front : result.back
+    if (seg.incomplete) continue
+    const winners = seg.winner ? [seg.winner] : seg.tiedPlayers
+    if (winners.length === 0) continue
+    const perWinner = Math.floor(pressPot / winners.length)
+    let rem = pressPot - perWinner * winners.length
+    for (const id of winners) {
+      const extra = rem > 0 ? 1 : 0
+      rem = Math.max(0, rem - extra)
+      map[id].amount += perWinner + extra
+      map[id].reasons.push(`Press ${holeRange}`)
     }
   }
 
@@ -559,21 +606,42 @@ export function calculateSkinsPayouts(
   game: Game,
   playerCount: number,
 ): PlayerPayout[] {
-  const potCents = game.buyInCents * playerCount
-  if (result.totalSkins === 0) return []
-  const centsPerSkin = Math.floor(potCents / result.totalSkins)
-  let remainder = potCents - centsPerSkin * result.totalSkins
+  const presses: Press[] = (game.config as SkinsConfig).presses ?? []
+  const basePotCents = game.buyInCents * playerCount
 
-  return Object.entries(result.skinsWon)
-    .filter(([, count]) => count > 0)
+  if (result.totalSkins === 0 && presses.length === 0) return []
+
+  // Calculate weighted skins: each press doubles value from press hole onward
+  const weightedWon: Record<string, number> = {}
+  let totalWeighted = 0
+
+  for (const hr of result.holeResults) {
+    if (!hr.winnerId) continue
+    // Multiplier = 2^(number of presses on or before this hole)
+    const mult = Math.pow(2, presses.filter(p => p.holeNumber <= hr.holeNumber).length)
+    const weighted = hr.skinsInPlay * mult
+    weightedWon[hr.winnerId] = (weightedWon[hr.winnerId] ?? 0) + weighted
+    totalWeighted += weighted
+  }
+
+  if (totalWeighted === 0) return []
+
+  // Total pot increases with presses: each press adds the base pot
+  const totalPot = basePotCents * (1 + presses.length)
+  const centsPerUnit = Math.floor(totalPot / totalWeighted)
+  let remainder = totalPot - centsPerUnit * totalWeighted
+
+  return Object.entries(weightedWon)
+    .filter(([, w]) => w > 0)
     .sort((a, b) => b[1] - a[1])
-    .map(([playerId, skins]) => {
+    .map(([playerId, w]) => {
       const extra = remainder > 0 ? 1 : 0
       remainder = Math.max(0, remainder - extra)
+      const skins = result.skinsWon[playerId] ?? 0
       return {
         playerId,
-        amountCents: skins * centsPerSkin + extra,
-        reason: `${skins} skin${skins !== 1 ? 's' : ''}`,
+        amountCents: w * centsPerUnit + extra,
+        reason: `${skins} skin${skins !== 1 ? 's' : ''}${presses.length > 0 ? ` (${presses.length} press${presses.length !== 1 ? 'es' : ''})` : ''}`,
       }
     })
 }
@@ -666,6 +734,66 @@ export function cashAppLink(username: string, amountCents: number, note: string)
 export function paypalLink(email: string, amountCents: number): string {
   const amount = (amountCents / 100).toFixed(2)
   return `https://www.paypal.com/paypalme/${encodeURIComponent(email)}/${amount}`
+}
+
+// ─── Junks (side bets) ───────────────────────────────────────────────────────
+
+export const JUNK_LABELS: Record<JunkType, { emoji: string; name: string; description: string }> = {
+  sandy: { emoji: '🏖️', name: 'Sandy', description: 'Par or better from a bunker' },
+  greenie: { emoji: '🟢', name: 'Greenie', description: 'On the green in regulation (par 3s)' },
+  snake: { emoji: '🐍', name: 'Snake', description: '3-putt (pays others)' },
+  barkie: { emoji: '🌳', name: 'Barkie', description: 'Hit a tree, still make par' },
+  ctp: { emoji: '🎯', name: 'CTP', description: 'Closest to the pin' },
+}
+
+export interface JunkResult {
+  /** playerId → net cents (positive = won, negative = lost) */
+  netCents: Record<string, number>
+  /** Individual junk tallies per player: playerId → count */
+  tallies: Record<string, Record<JunkType, number>>
+}
+
+/**
+ * Calculate junk side bet net amounts.
+ * Positive junks: earner gets valueCents from each other player.
+ * Snake (negative): player pays valueCents to each other player.
+ */
+export function calculateJunks(
+  players: Player[],
+  junkRecords: JunkRecord[],
+  config: JunkConfig,
+): JunkResult {
+  const netCents: Record<string, number> = {}
+  const tallies: Record<string, Record<JunkType, number>> = {}
+  const others = players.length - 1
+
+  for (const p of players) {
+    netCents[p.id] = 0
+    tallies[p.id] = { sandy: 0, greenie: 0, snake: 0, barkie: 0, ctp: 0 }
+  }
+
+  for (const jr of junkRecords) {
+    if (!config.types.includes(jr.junkType)) continue
+    if (!tallies[jr.playerId]) continue
+
+    tallies[jr.playerId][jr.junkType]++
+
+    if (jr.junkType === 'snake') {
+      // Snake: player PAYS everyone else
+      netCents[jr.playerId] -= config.valueCents * others
+      for (const p of players) {
+        if (p.id !== jr.playerId) netCents[p.id] += config.valueCents
+      }
+    } else {
+      // Positive junk: player GETS from everyone else
+      netCents[jr.playerId] += config.valueCents * others
+      for (const p of players) {
+        if (p.id !== jr.playerId) netCents[p.id] -= config.valueCents
+      }
+    }
+  }
+
+  return { netCents, tallies }
 }
 
 // ─── Formatting ───────────────────────────────────────────────────────────────

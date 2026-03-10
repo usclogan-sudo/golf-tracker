@@ -78,9 +78,15 @@ export interface CourseSnapshot {
 export type GameType = 'skins' | 'best_ball' | 'nassau' | 'wolf' | 'bingo_bango_bongo'
 
 export type SkinsMode = 'gross' | 'net'
+export interface Press {
+  holeNumber: number
+  playerId: string
+}
+
 export interface SkinsConfig {
   mode: SkinsMode
   carryovers: boolean
+  presses?: Press[]
 }
 
 export type BestBallMode = 'gross' | 'net'
@@ -94,6 +100,7 @@ export interface BestBallConfig {
 
 export interface NassauConfig {
   mode: 'gross' | 'net'
+  presses?: Press[]
 }
 
 export interface WolfConfig {
@@ -104,6 +111,23 @@ export interface WolfConfig {
 
 export interface BBBConfig {
   mode: 'gross' | 'net'
+}
+
+// ─── Junks (side bets) ─────────────────────────────────────────────────────
+
+export type JunkType = 'sandy' | 'greenie' | 'snake' | 'barkie' | 'ctp'
+
+export interface JunkConfig {
+  valueCents: number  // value per junk (e.g. 100 = $1 per junk per player)
+  types: JunkType[]   // which junks are active this round
+}
+
+export interface JunkRecord {
+  id: string
+  roundId: string
+  holeNumber: number
+  playerId: string
+  junkType: JunkType
 }
 
 export interface BBBPoint {
@@ -154,6 +178,9 @@ export interface Round {
 
   // One game per round
   game?: Game
+
+  // Optional junk side bets (independent of main game)
+  junkConfig?: JunkConfig
 
   // Explicitly assigned treasurer
   treasurerPlayerId?: string

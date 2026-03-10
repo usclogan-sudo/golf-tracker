@@ -14,9 +14,10 @@ import { RoundHistory } from './components/RoundHistory/RoundHistory'
 import { Settings } from './components/Settings/Settings'
 import { Onboarding } from './components/Onboarding/Onboarding'
 import { AdminDashboard } from './components/Admin/AdminDashboard'
+import { Stats } from './components/Stats/Stats'
 import type { Course, Round, UserProfile, GameType, StakesMode } from './types'
 
-type Screen = 'home' | 'course-catalog' | 'course-setup' | 'new-round' | 'scorecard' | 'settle-up' | 'round-history' | 'settings' | 'onboarding' | 'admin' | 'upgrade-account'
+type Screen = 'home' | 'course-catalog' | 'course-setup' | 'new-round' | 'scorecard' | 'settle-up' | 'round-history' | 'stats' | 'settings' | 'onboarding' | 'admin' | 'upgrade-account'
 
 const GAME_EMOJI: Record<GameType, string> = {
   skins: '🎰 Skins',
@@ -102,6 +103,7 @@ function Home({
   onEditCourse,
   onDeleteCourse,
   onRoundHistory,
+  onStats,
   onSettings,
   onSignOut,
   isAdmin,
@@ -120,6 +122,7 @@ function Home({
   onEditCourse: (course: Course) => void
   onDeleteCourse: (courseId: string) => void
   onRoundHistory: () => void
+  onStats: () => void
   onSettings: () => void
   onSignOut: () => void
   isAdmin: boolean
@@ -195,9 +198,14 @@ function Home({
             )}
           </div>
           {roundCount > 0 && (
-            <button onClick={onRoundHistory} className="mt-3 text-green-300 text-sm font-medium flex items-center gap-1.5 hover:text-white transition-colors">
-              <span>📋</span> View Round History
-            </button>
+            <div className="mt-3 flex items-center gap-4">
+              <button onClick={onRoundHistory} className="text-green-300 text-sm font-medium flex items-center gap-1.5 hover:text-white transition-colors">
+                <span>📋</span> Round History
+              </button>
+              <button onClick={onStats} className="text-green-300 text-sm font-medium flex items-center gap-1.5 hover:text-white transition-colors">
+                <span>📊</span> Leaderboard
+              </button>
+            </div>
           )}
         </div>
       </header>
@@ -517,6 +525,9 @@ export default function App() {
   if (screen === 'round-history') {
     return <RoundHistory userId={userId} onBack={goHome} />
   }
+  if (screen === 'stats') {
+    return <Stats userId={userId} onBack={goHome} />
+  }
   if (screen === 'upgrade-account') {
     return (
       <UpgradeAccount
@@ -603,6 +614,7 @@ export default function App() {
       onDeleteCourse={handleDeleteCourse}
       onResumeRound={roundId => { setActiveRoundId(roundId); setScreen('scorecard') }}
       onRoundHistory={() => setScreen('round-history')}
+      onStats={() => setScreen('stats')}
       onSettings={() => setScreen('settings')}
       onSignOut={() => supabase.auth.signOut()}
       isAdmin={userProfile?.isAdmin ?? false}

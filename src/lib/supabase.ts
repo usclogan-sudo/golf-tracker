@@ -1,5 +1,5 @@
 import { createClient } from '@supabase/supabase-js'
-import type { Course, Player, Round, RoundPlayer, HoleScore, BuyIn, BBBPoint, UserProfile, GamePreset, GameType, StakesMode } from '../types'
+import type { Course, Player, Round, RoundPlayer, HoleScore, BuyIn, BBBPoint, JunkRecord, JunkType, UserProfile, GamePreset, GameType, StakesMode } from '../types'
 
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL as string
 const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY as string
@@ -43,6 +43,7 @@ export function rowToRound(row: any): Round {
     currentHole: row.current_hole,
     courseSnapshot: row.course_snapshot ?? undefined,
     game: row.game ?? undefined,
+    junkConfig: row.junk_config ?? undefined,
     treasurerPlayerId: row.treasurer_player_id ?? undefined,
     players: row.players ?? undefined,
   }
@@ -132,6 +133,7 @@ export function roundToRow(r: Round, userId: string) {
     current_hole: r.currentHole,
     course_snapshot: r.courseSnapshot ?? null,
     game: r.game ?? null,
+    junk_config: r.junkConfig ?? null,
     treasurer_player_id: r.treasurerPlayerId ?? null,
     players: r.players ?? null,
   }
@@ -182,6 +184,29 @@ export function bbbPointToRow(bp: BBBPoint, userId: string) {
     bingo: bp.bingo,
     bango: bp.bango,
     bongo: bp.bongo,
+  }
+}
+
+// ─── Junk Record mappers ────────────────────────────────────────────────────
+
+export function rowToJunkRecord(row: any): JunkRecord {
+  return {
+    id: row.id,
+    roundId: row.round_id,
+    holeNumber: row.hole_number,
+    playerId: row.player_id,
+    junkType: row.junk_type as JunkType,
+  }
+}
+
+export function junkRecordToRow(jr: JunkRecord, userId: string) {
+  return {
+    id: jr.id,
+    user_id: userId,
+    round_id: jr.roundId,
+    hole_number: jr.holeNumber,
+    player_id: jr.playerId,
+    junk_type: jr.junkType,
   }
 }
 

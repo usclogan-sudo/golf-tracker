@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { v4 as uuidv4 } from 'uuid'
-import { supabase, rowToRound, rowToRoundPlayer, rowToHoleScore, rowToBBBPoint, holeScoreToRow, bbbPointToRow } from '../../lib/supabase'
+import { supabase, rowToRound, rowToRoundPlayer, rowToHoleScore, rowToBBBPoint, rowToJunkRecord, holeScoreToRow, bbbPointToRow, junkRecordToRow } from '../../lib/supabase'
 import {
   buildCourseHandicaps,
   calculateSkins,
@@ -9,12 +9,15 @@ import {
   wolfForHole,
   strokesOnHole,
   fmtMoney,
+  JUNK_LABELS,
 } from '../../lib/gameLogic'
 import type {
   Round,
   RoundPlayer,
   HoleScore,
   BBBPoint,
+  JunkRecord,
+  JunkType,
   SkinsConfig,
   BestBallConfig,
   NassauConfig,
@@ -89,6 +92,7 @@ export function Scorecard({ userId, roundId, onEndRound, onHome }: Props) {
   const [roundPlayers, setRoundPlayers] = useState<RoundPlayer[]>([])
   const [holeScores, setHoleScores] = useState<HoleScore[]>([])
   const [bbbPoints, setBbbPoints] = useState<BBBPoint[]>([])
+  const [junkRecords, setJunkRecords] = useState<JunkRecord[]>([])
   const [loading, setLoading] = useState(true)
   const [saveError, setSaveError] = useState<string | null>(null)
   const [lastChange, setLastChange] = useState<{ playerId: string; holeNumber: number; previousScore: number } | null>(null)
@@ -99,13 +103,67 @@ export function Scorecard({ userId, roundId, onEndRound, onHome }: Props) {
       supabase.from('round_players').select('*').eq('round_id', roundId),
       supabase.from('hole_scores').select('*').eq('round_id', roundId),
       supabase.from('bbb_points').select('*').eq('round_id', roundId),
-    ]).then(([roundRes, rpRes, hsRes, bbbRes]) => {
+      supabase.from('junk_records').select('*').eq('round_id', roundId),
+    ]).then(([roundRes, rpRes, hsRes, bbbRes, junkRes]) => {
       if (roundRes.data) setRound(rowToRound(roundRes.data))
       if (rpRes.data) setRoundPlayers(rpRes.data.map(rowToRoundPlayer))
       if (hsRes.data) setHoleScores(hsRes.data.map(rowToHoleScore))
       if (bbbRes.data) setBbbPoints(bbbRes.data.map(rowToBBBPoint))
+      if (junkRes.data) setJunkRecords(junkRes.data.map(rowToJunkRecord))
       setLoading(false)
     })
+  }, [roundId])
+
+  // ─── Realtime subscriptions for multi-device sync ──────────────────────────
+  useEffect(() => {
+    const channel = supabase
+      .channel(`round-${roundId}`)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'hole_scores', filter: `round_id=eq.${roundId}` }, (payload) => {
+        if (payload.eventType === 'INSERT') {
+          const row = payload.new as any
+          setHoleScores(prev => {
+            if (prev.some(s => s.id === row.id)) return prev
+            return [...prev, rowToHoleScore(row)]
+          })
+        } else if (payload.eventType === 'UPDATE') {
+          const row = payload.new as any
+          setHoleScores(prev => prev.map(s => s.id === row.id ? rowToHoleScore(row) : s))
+        } else if (payload.eventType === 'DELETE') {
+          const row = payload.old as any
+          setHoleScores(prev => prev.filter(s => s.id !== row.id))
+        }
+      })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'bbb_points', filter: `round_id=eq.${roundId}` }, (payload) => {
+        if (payload.eventType === 'INSERT') {
+          const row = payload.new as any
+          setBbbPoints(prev => prev.some(p => p.id === row.id) ? prev : [...prev, rowToBBBPoint(row)])
+        } else if (payload.eventType === 'UPDATE') {
+          const row = payload.new as any
+          setBbbPoints(prev => prev.map(p => p.id === row.id ? rowToBBBPoint(row) : p))
+        } else if (payload.eventType === 'DELETE') {
+          const row = payload.old as any
+          setBbbPoints(prev => prev.filter(p => p.id !== row.id))
+        }
+      })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'junk_records', filter: `round_id=eq.${roundId}` }, (payload) => {
+        if (payload.eventType === 'INSERT') {
+          const row = payload.new as any
+          setJunkRecords(prev => prev.some(jr => jr.id === row.id) ? prev : [...prev, rowToJunkRecord(row)])
+        } else if (payload.eventType === 'UPDATE') {
+          const row = payload.new as any
+          setJunkRecords(prev => prev.map(jr => jr.id === row.id ? rowToJunkRecord(row) : jr))
+        } else if (payload.eventType === 'DELETE') {
+          const row = payload.old as any
+          setJunkRecords(prev => prev.filter(jr => jr.id !== row.id))
+        }
+      })
+      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'rounds', filter: `id=eq.${roundId}` }, (payload) => {
+        const row = payload.new as any
+        setRound(rowToRound(row))
+      })
+      .subscribe()
+
+    return () => { supabase.removeChannel(channel) }
   }, [roundId])
 
   const players = round?.players ?? []
@@ -200,6 +258,17 @@ export function Scorecard({ userId, roundId, onEndRound, onHome }: Props) {
     await supabase.from('rounds').update({ game: updatedGame }).eq('id', roundId)
   }
 
+  // Press handler (Skins & Nassau)
+  const handlePress = async () => {
+    if (!round?.game) return
+    const config = round.game.config as any
+    const presses = [...(config.presses ?? []), { holeNumber: currentHole, playerId: userId }]
+    const updatedConfig = { ...config, presses }
+    const updatedGame = { ...round.game, config: updatedConfig }
+    setRound(prev => prev ? { ...prev, game: updatedGame } : prev)
+    await supabase.from('rounds').update({ game: updatedGame }).eq('id', roundId)
+  }
+
   // BBB point handler
   const setBBBPoint = async (category: 'bingo' | 'bango' | 'bongo', playerId: string) => {
     const existing = bbbPoints.find(p => p.holeNumber === currentHole)
@@ -221,6 +290,19 @@ export function Scorecard({ userId, roundId, onEndRound, onHome }: Props) {
       }
       setBbbPoints(prev => [...prev, newPoint])
       await supabase.from('bbb_points').insert(bbbPointToRow(newPoint, userId))
+    }
+  }
+
+  // Junk toggle handler
+  const toggleJunk = async (junkType: JunkType, playerId: string) => {
+    const existing = junkRecords.find(jr => jr.holeNumber === currentHole && jr.playerId === playerId && jr.junkType === junkType)
+    if (existing) {
+      setJunkRecords(prev => prev.filter(jr => jr.id !== existing.id))
+      await supabase.from('junk_records').delete().eq('id', existing.id)
+    } else {
+      const newRecord: JunkRecord = { id: uuidv4(), roundId, holeNumber: currentHole, playerId, junkType }
+      setJunkRecords(prev => [...prev, newRecord])
+      await supabase.from('junk_records').insert(junkRecordToRow(newRecord, userId))
     }
   }
 
@@ -252,6 +334,7 @@ export function Scorecard({ userId, roundId, onEndRound, onHome }: Props) {
     return <div className="min-h-screen bg-gray-50 flex items-center justify-center"><p className="text-gray-400">Loading round…</p></div>
   }
 
+  const junkConfig = round?.junkConfig
   const wolfConfig = game?.type === 'wolf' ? game.config as WolfConfig : null
   const wolfId = wolfConfig ? wolfForHole(wolfConfig.wolfOrder, currentHole) : null
   const wolfDecision = wolfConfig?.holeDecisions?.[currentHole]
@@ -262,7 +345,13 @@ export function Scorecard({ userId, roundId, onEndRound, onHome }: Props) {
       <header className={`${headerClass} text-white px-4 py-3 sticky top-0 z-10 shadow-xl`}>
         <div className="max-w-2xl mx-auto flex items-center justify-between">
           <div>
-            <p className="text-xs text-green-300 font-medium">{snapshot.courseName}</p>
+            <p className="text-xs text-green-300 font-medium flex items-center gap-1.5">
+              {snapshot.courseName}
+              <span className="inline-flex items-center gap-1 text-[10px] bg-green-500/30 px-1.5 py-0.5 rounded-full">
+                <span className="w-1.5 h-1.5 bg-green-400 rounded-full animate-pulse" />
+                Live
+              </span>
+            </p>
             <h1 className="text-xl font-bold flex items-center gap-2">
               Hole {currentHole}
               <span className="text-green-300 font-normal text-base">Par {par} · SI {strokeIndex}</span>
@@ -300,35 +389,56 @@ export function Scorecard({ userId, roundId, onEndRound, onHome }: Props) {
           </div>
         )}
         {/* Game status bars */}
-        {skinsResult && <SkinsStatus carry={currentCarry} potCents={game!.buyInCents * players.length} />}
+        {skinsResult && (
+          <div className="flex items-center gap-2">
+            <div className="flex-1">
+              <SkinsStatus carry={currentCarry} potCents={game!.buyInCents * players.length * (1 + ((game!.config as any).presses?.length ?? 0))} />
+            </div>
+            <button
+              onClick={handlePress}
+              className="px-3 py-2 bg-orange-500 text-white text-xs font-bold rounded-xl active:bg-orange-600 flex-shrink-0"
+            >
+              Press{(game!.config as any).presses?.length ? ` (${(game!.config as any).presses.length})` : ''}
+            </button>
+          </div>
+        )}
         {bestBallResult && <BestBallStatus holesWon={bestBallResult.holesWon} />}
 
         {/* Nassau status */}
         {nassauResult && (() => {
           const getName = (id: string | null) => id ? (players.find(p => p.id === id)?.name ?? '?') : null
+          const pressCount = (game!.config as any).presses?.length ?? 0
           const segs = [
             { label: 'F9', seg: nassauResult.front },
             { label: 'B9', seg: nassauResult.back },
             { label: '18', seg: nassauResult.total },
           ]
           return (
-            <div className="bg-teal-50 border border-teal-200 rounded-xl px-3 py-2 flex items-center gap-2">
-              <span className="font-bold text-teal-700 text-sm mr-1">Nassau</span>
-              {segs.map(({ label, seg }) => {
-                const leaderName = seg.incomplete
-                  ? '—'
-                  : seg.winner
-                  ? getName(seg.winner)
-                  : seg.tiedPlayers.length > 1
-                  ? 'Tied'
-                  : '—'
-                return (
-                  <div key={label} className="text-center px-2 border-l border-teal-200">
-                    <p className="text-xs text-teal-500">{label}</p>
-                    <p className="text-xs font-semibold text-teal-800 truncate max-w-[64px]">{leaderName}</p>
-                  </div>
-                )
-              })}
+            <div className="flex items-center gap-2">
+              <div className="flex-1 bg-teal-50 border border-teal-200 rounded-xl px-3 py-2 flex items-center gap-2">
+                <span className="font-bold text-teal-700 text-sm mr-1">Nassau</span>
+                {segs.map(({ label, seg }) => {
+                  const leaderName = seg.incomplete
+                    ? '—'
+                    : seg.winner
+                    ? getName(seg.winner)
+                    : seg.tiedPlayers.length > 1
+                    ? 'Tied'
+                    : '—'
+                  return (
+                    <div key={label} className="text-center px-2 border-l border-teal-200">
+                      <p className="text-xs text-teal-500">{label}</p>
+                      <p className="text-xs font-semibold text-teal-800 truncate max-w-[64px]">{leaderName}</p>
+                    </div>
+                  )
+                })}
+              </div>
+              <button
+                onClick={handlePress}
+                className="px-3 py-2 bg-orange-500 text-white text-xs font-bold rounded-xl active:bg-orange-600 flex-shrink-0"
+              >
+                Press{pressCount ? ` (${pressCount})` : ''}
+              </button>
             </div>
           )
         })()}
@@ -413,6 +523,48 @@ export function Scorecard({ userId, roundId, onEndRound, onHome }: Props) {
               <BBBRow category="bingo" icon="🟢" label="Bingo — First on green" />
               <BBBRow category="bango" icon="📍" label="Bango — Closest to pin" />
               <BBBRow category="bongo" icon="🏆" label="Bongo — First to hole out" />
+            </div>
+          )
+        })()}
+
+        {/* Junk panel */}
+        {junkConfig && junkConfig.types.length > 0 && (() => {
+          const holeJunks = junkRecords.filter(jr => jr.holeNumber === currentHole)
+          return (
+            <div className="bg-indigo-50 border border-indigo-200 rounded-xl p-3 space-y-3">
+              <p className="font-bold text-indigo-800 text-sm">
+                🎲 Junks — Hole {currentHole}
+                <span className="text-indigo-400 font-normal text-xs ml-2">{fmtMoney(junkConfig.valueCents)}/junk</span>
+              </p>
+              {junkConfig.types.map(jt => {
+                const info = JUNK_LABELS[jt]
+                const isSnake = jt === 'snake'
+                return (
+                  <div key={jt} className="space-y-1">
+                    <p className={`text-xs font-semibold ${isSnake ? 'text-red-600' : 'text-indigo-700'}`}>
+                      {info.emoji} {info.name} — {info.description}
+                    </p>
+                    <div className="flex flex-wrap gap-1.5">
+                      {players.map(p => {
+                        const active = holeJunks.some(jr => jr.playerId === p.id && jr.junkType === jt)
+                        return (
+                          <button
+                            key={p.id}
+                            onClick={() => toggleJunk(jt, p.id)}
+                            className={`px-2.5 py-1 rounded-lg text-xs font-semibold transition-colors ${
+                              active
+                                ? isSnake ? 'bg-red-500 text-white' : 'bg-indigo-500 text-white'
+                                : 'bg-white border border-indigo-200 text-indigo-700'
+                            }`}
+                          >
+                            {p.name}
+                          </button>
+                        )
+                      })}
+                    </div>
+                  </div>
+                )
+              })}
             </div>
           )
         })()}

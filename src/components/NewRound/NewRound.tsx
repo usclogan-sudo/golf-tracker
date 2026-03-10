@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { v4 as uuidv4 } from 'uuid'
 import { supabase, courseToRow, playerToRow, roundToRow, roundPlayerToRow, buyInToRow, rowToCourse, rowToPlayer, rowToSharedCourse, rowToGamePreset, rowToUserProfile } from '../../lib/supabase'
-import { fmtMoney } from '../../lib/gameLogic'
+import { fmtMoney, JUNK_LABELS } from '../../lib/gameLogic'
 import { venturaCourses } from '../../data/venturaCourses'
 import type {
   Course,
@@ -14,6 +14,8 @@ import type {
   NassauConfig,
   WolfConfig,
   BBBConfig,
+  JunkConfig,
+  JunkType,
   BuyIn,
   PaymentMethod,
   GameType,
@@ -495,12 +497,14 @@ function GameSetup({
   onNext,
   onBack,
   initialGame,
+  initialJunkConfig,
 }: {
   players: Player[]
   initialStakesMode: StakesMode
-  onNext: (game: Game) => void
+  onNext: (game: Game, junkConfig?: JunkConfig) => void
   onBack: () => void
   initialGame?: Game
+  initialJunkConfig?: JunkConfig
 }) {
   const [gamePresets, setGamePresets] = useState<GamePreset[]>([])
   const [stakesMode, setStakesMode] = useState<StakesMode>(initialGame?.stakesMode ?? initialStakesMode)
@@ -549,6 +553,24 @@ function GameSetup({
   const [bbbMode, setBbbMode] = useState<'gross' | 'net'>(
     initialGame?.type === 'bingo_bango_bongo' ? (initialGame.config as any).mode : 'net'
   )
+
+  // Junks (side bets, independent of main game)
+  const [junksEnabled, setJunksEnabled] = useState(!!initialJunkConfig)
+  const [junkValueDollars, setJunkValueDollars] = useState(
+    initialJunkConfig ? String(initialJunkConfig.valueCents / 100) : '1'
+  )
+  const [junkTypes, setJunkTypes] = useState<Set<JunkType>>(
+    new Set(initialJunkConfig?.types ?? ['sandy', 'greenie', 'snake'])
+  )
+
+  const toggleJunkType = (jt: JunkType) => {
+    setJunkTypes(prev => {
+      const next = new Set(prev)
+      if (next.has(jt)) next.delete(jt)
+      else next.add(jt)
+      return next
+    })
+  }
 
   useEffect(() => {
     supabase.from('game_presets').select('*').order('sort_order').then(({ data }) => {
@@ -1031,12 +1053,87 @@ function GameSetup({
             </div>
           </section>
         )}
+
+        {/* Junk Side Bets */}
+        <section className="bg-white rounded-2xl shadow-sm p-4 space-y-3">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Junk Side Bets</p>
+              <p className="text-xs text-gray-400 mt-0.5">Optional peer-to-peer bets tracked per hole</p>
+            </div>
+            <button
+              onClick={() => setJunksEnabled(v => !v)}
+              className={`relative w-12 h-7 rounded-full transition-colors ${junksEnabled ? 'bg-green-600' : 'bg-gray-300'}`}
+            >
+              <span className={`absolute top-0.5 w-6 h-6 bg-white rounded-full shadow transition-transform ${junksEnabled ? 'translate-x-5' : 'translate-x-0.5'}`} />
+            </button>
+          </div>
+
+          {junksEnabled && (
+            <>
+              <div className="flex flex-wrap gap-2">
+                {(Object.keys(JUNK_LABELS) as JunkType[]).map(jt => {
+                  const info = JUNK_LABELS[jt]
+                  const active = junkTypes.has(jt)
+                  return (
+                    <button
+                      key={jt}
+                      onClick={() => toggleJunkType(jt)}
+                      className={`px-3 py-2 rounded-xl text-sm font-semibold transition-colors ${
+                        active
+                          ? jt === 'snake' ? 'bg-red-100 border-2 border-red-300 text-red-700' : 'bg-green-100 border-2 border-green-300 text-green-800'
+                          : 'bg-gray-100 border-2 border-transparent text-gray-500'
+                      }`}
+                    >
+                      {info.emoji} {info.name}
+                    </button>
+                  )
+                })}
+              </div>
+
+              <div>
+                <p className="text-sm text-gray-600 mb-2">Value per junk</p>
+                <div className="flex gap-2">
+                  {[50, 100, 200, 500].map(cents => (
+                    <button
+                      key={cents}
+                      onClick={() => setJunkValueDollars(String(cents / 100))}
+                      className={`px-3 h-10 rounded-xl font-semibold text-sm transition-colors ${
+                        Math.round(parseFloat(junkValueDollars || '0') * 100) === cents
+                          ? 'bg-green-700 text-white'
+                          : 'bg-gray-100 text-gray-700'
+                      }`}
+                    >
+                      {fmtMoney(cents)}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div className="bg-indigo-50 rounded-xl p-3 text-xs text-indigo-700 space-y-1">
+                <p className="font-semibold">How junks work:</p>
+                {Array.from(junkTypes).map(jt => {
+                  const info = JUNK_LABELS[jt]
+                  return <p key={jt}>{info.emoji} <strong>{info.name}</strong> — {info.description}</p>
+                })}
+                {junkTypes.has('snake') && (
+                  <p className="text-red-600 font-medium mt-1">Snake is negative — the player pays everyone else!</p>
+                )}
+              </div>
+            </>
+          )}
+        </section>
       </div>
 
       <div className="fixed bottom-0 inset-x-0 p-4 bg-white/95 backdrop-blur-sm border-t border-gray-200">
         <div className="max-w-2xl mx-auto">
           <button
-            onClick={() => onNext(makeGame())}
+            onClick={() => {
+              const jc = junksEnabled && junkTypes.size > 0
+                ? { valueCents: Math.max(0, Math.round(parseFloat(junkValueDollars || '0') * 100)), types: Array.from(junkTypes) }
+                : undefined
+              onNext(makeGame(), jc)
+            }}
             disabled={!canContinue}
             className="w-full h-14 bg-green-700 text-white text-lg font-bold rounded-2xl shadow-lg disabled:opacity-40 active:bg-green-800 transition-colors"
           >
@@ -1055,6 +1152,7 @@ function TreasurerAndBuyIns({
   course,
   players,
   game,
+  junkConfig,
   onCreateRound,
   onBack,
 }: {
@@ -1062,6 +1160,7 @@ function TreasurerAndBuyIns({
   course: Course
   players: Player[]
   game: Game
+  junkConfig?: JunkConfig
   onCreateRound: (roundId: string) => void
   onBack: () => void
 }) {
@@ -1100,6 +1199,7 @@ function TreasurerAndBuyIns({
         },
         players,
         game,
+        junkConfig,
         treasurerPlayerId: treasurerId,
       }
 
@@ -1282,6 +1382,7 @@ export function NewRound({ userId, onStart, onCancel, onAddCourse, initialStakes
   const [course, setCourse] = useState<Course | null>(templateCourse)
   const [players, setPlayers] = useState<Player[] | null>(null)
   const [game, setGame] = useState<Game | null>(null)
+  const [junkConfig, setJunkConfig] = useState<JunkConfig | undefined>(templateRound?.junkConfig)
 
   const preSelectedPlayerIds = templateRound?.players?.map(p => p.id)
 
@@ -1315,9 +1416,10 @@ export function NewRound({ userId, onStart, onCancel, onAddCourse, initialStakes
       <GameSetup
         players={players}
         initialStakesMode={initialStakesMode}
-        onNext={g => { setGame(g); setStep('money') }}
+        onNext={(g, jc) => { setGame(g); setJunkConfig(jc); setStep('money') }}
         onBack={() => setStep('players')}
         initialGame={templateRound?.game}
+        initialJunkConfig={junkConfig}
       />
     )
   }
@@ -1329,6 +1431,7 @@ export function NewRound({ userId, onStart, onCancel, onAddCourse, initialStakes
         course={course}
         players={players}
         game={game}
+        junkConfig={junkConfig}
         onBack={() => setStep('game')}
         onCreateRound={rid => onStart(rid)}
       />
