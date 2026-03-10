@@ -46,6 +46,8 @@ export function rowToRound(row: any): Round {
     junkConfig: row.junk_config ?? undefined,
     treasurerPlayerId: row.treasurer_player_id ?? undefined,
     players: row.players ?? undefined,
+    groups: row.groups ?? undefined,
+    createdBy: row.user_id ?? undefined,
   }
 }
 
@@ -136,6 +138,7 @@ export function roundToRow(r: Round, userId: string) {
     junk_config: r.junkConfig ?? null,
     treasurer_player_id: r.treasurerPlayerId ?? null,
     players: r.players ?? null,
+    groups: r.groups ?? null,
   }
 }
 

@@ -29,6 +29,7 @@ interface Props {
   roundId: string
   onEndRound: () => void
   onHome: () => void
+  readOnly?: boolean
 }
 
 function ScoreStepper({
@@ -87,7 +88,7 @@ function BestBallStatus({ holesWon }: { holesWon: { A: number; B: number; tied: 
   )
 }
 
-export function Scorecard({ userId, roundId, onEndRound, onHome }: Props) {
+export function Scorecard({ userId, roundId, onEndRound, onHome, readOnly = false }: Props) {
   const [round, setRound] = useState<Round | null>(null)
   const [roundPlayers, setRoundPlayers] = useState<RoundPlayer[]>([])
   const [holeScores, setHoleScores] = useState<HoleScore[]>([])
@@ -96,6 +97,7 @@ export function Scorecard({ userId, roundId, onEndRound, onHome }: Props) {
   const [loading, setLoading] = useState(true)
   const [saveError, setSaveError] = useState<string | null>(null)
   const [lastChange, setLastChange] = useState<{ playerId: string; holeNumber: number; previousScore: number } | null>(null)
+  const [activeGroupTab, setActiveGroupTab] = useState<number | 'all'>(1)
 
   useEffect(() => {
     Promise.all([
@@ -349,7 +351,7 @@ export function Scorecard({ userId, roundId, onEndRound, onHome }: Props) {
               {snapshot.courseName}
               <span className="inline-flex items-center gap-1 text-[10px] bg-green-500/30 px-1.5 py-0.5 rounded-full">
                 <span className="w-1.5 h-1.5 bg-green-400 rounded-full animate-pulse" />
-                Live
+                {readOnly ? 'Spectating' : 'Live'}
               </span>
             </p>
             <h1 className="text-xl font-bold flex items-center gap-2">
@@ -364,8 +366,8 @@ export function Scorecard({ userId, roundId, onEndRound, onHome }: Props) {
             </h1>
           </div>
           <div className="flex items-center gap-2">
-            <button onClick={endRound} className="text-yellow-300 text-sm font-medium px-3 py-1.5 rounded-lg hover:bg-green-700">End Round</button>
-            <button onClick={() => { if (window.confirm('Leave scoring? Your round is saved and you can resume from the Home screen.')) onHome() }} className="text-green-300 text-sm font-medium px-3 py-1.5 rounded-lg hover:bg-green-700">Home</button>
+            {!readOnly && <button onClick={endRound} className="text-yellow-300 text-sm font-medium px-3 py-1.5 rounded-lg hover:bg-green-700">End Round</button>}
+            <button onClick={() => { if (readOnly || window.confirm('Leave scoring? Your round is saved and you can resume from the Home screen.')) onHome() }} className="text-green-300 text-sm font-medium px-3 py-1.5 rounded-lg hover:bg-green-700">Home</button>
           </div>
         </div>
         <div className="max-w-2xl mx-auto mt-2 flex gap-1 overflow-x-auto pb-1">
@@ -381,6 +383,37 @@ export function Scorecard({ userId, roundId, onEndRound, onHome }: Props) {
         </div>
       </header>
 
+      {/* Group tabs */}
+      {round.groups && (() => {
+        const groupNums = [...new Set(Object.values(round.groups))].sort((a, b) => a - b)
+        if (groupNums.length <= 1) return null
+        return (
+          <div className="bg-white border-b border-gray-200 px-4 py-2 sticky top-[calc(5.5rem+2rem)] z-[5]">
+            <div className="max-w-2xl mx-auto flex gap-1 overflow-x-auto">
+              {groupNums.map(gn => (
+                <button
+                  key={gn}
+                  onClick={() => setActiveGroupTab(gn)}
+                  className={`px-4 py-1.5 rounded-lg text-sm font-semibold transition-colors flex-shrink-0 ${
+                    activeGroupTab === gn ? 'bg-green-700 text-white' : 'bg-gray-100 text-gray-600'
+                  }`}
+                >
+                  Group {gn}
+                </button>
+              ))}
+              <button
+                onClick={() => setActiveGroupTab('all')}
+                className={`px-4 py-1.5 rounded-lg text-sm font-semibold transition-colors flex-shrink-0 ${
+                  activeGroupTab === 'all' ? 'bg-green-700 text-white' : 'bg-gray-100 text-gray-600'
+                }`}
+              >
+                All
+              </button>
+            </div>
+          </div>
+        )
+      })()}
+
       <div className="px-4 py-4 max-w-2xl mx-auto space-y-4">
         {saveError && (
           <div className="bg-red-50 border border-red-200 rounded-xl px-4 py-3 flex items-center justify-between">
@@ -394,12 +427,14 @@ export function Scorecard({ userId, roundId, onEndRound, onHome }: Props) {
             <div className="flex-1">
               <SkinsStatus carry={currentCarry} potCents={game!.buyInCents * players.length * (1 + ((game!.config as any).presses?.length ?? 0))} />
             </div>
-            <button
-              onClick={handlePress}
-              className="px-3 py-2 bg-orange-500 text-white text-xs font-bold rounded-xl active:bg-orange-600 flex-shrink-0"
-            >
-              Press{(game!.config as any).presses?.length ? ` (${(game!.config as any).presses.length})` : ''}
-            </button>
+            {!readOnly && (
+              <button
+                onClick={handlePress}
+                className="px-3 py-2 bg-orange-500 text-white text-xs font-bold rounded-xl active:bg-orange-600 flex-shrink-0"
+              >
+                Press{(game!.config as any).presses?.length ? ` (${(game!.config as any).presses.length})` : ''}
+              </button>
+            )}
           </div>
         )}
         {bestBallResult && <BestBallStatus holesWon={bestBallResult.holesWon} />}
@@ -433,18 +468,20 @@ export function Scorecard({ userId, roundId, onEndRound, onHome }: Props) {
                   )
                 })}
               </div>
-              <button
-                onClick={handlePress}
-                className="px-3 py-2 bg-orange-500 text-white text-xs font-bold rounded-xl active:bg-orange-600 flex-shrink-0"
-              >
-                Press{pressCount ? ` (${pressCount})` : ''}
-              </button>
+              {!readOnly && (
+                <button
+                  onClick={handlePress}
+                  className="px-3 py-2 bg-orange-500 text-white text-xs font-bold rounded-xl active:bg-orange-600 flex-shrink-0"
+                >
+                  Press{pressCount ? ` (${pressCount})` : ''}
+                </button>
+              )}
             </div>
           )
         })()}
 
         {/* Wolf panel */}
-        {wolfConfig && wolfId && (() => {
+        {!readOnly && wolfConfig && wolfId && (() => {
           const wolfPlayer = players.find(p => p.id === wolfId)
           const nonWolfs = players.filter(p => p.id !== wolfId)
           return (
@@ -488,7 +525,7 @@ export function Scorecard({ userId, roundId, onEndRound, onHome }: Props) {
         })()}
 
         {/* BBB panel */}
-        {game?.type === 'bingo_bango_bongo' && (() => {
+        {!readOnly && game?.type === 'bingo_bango_bongo' && (() => {
           const BBBRow = ({
             category,
             icon,
@@ -528,7 +565,7 @@ export function Scorecard({ userId, roundId, onEndRound, onHome }: Props) {
         })()}
 
         {/* Junk panel */}
-        {junkConfig && junkConfig.types.length > 0 && (() => {
+        {!readOnly && junkConfig && junkConfig.types.length > 0 && (() => {
           const holeJunks = junkRecords.filter(jr => jr.holeNumber === currentHole)
           return (
             <div className="bg-indigo-50 border border-indigo-200 rounded-xl p-3 space-y-3">
@@ -593,6 +630,41 @@ export function Scorecard({ userId, roundId, onEndRound, onHome }: Props) {
           const runningVsPar = runningGross - runningPar
           const holesPlayed = scoredHoles.length
 
+          // Determine if this player's card should be editable or compact read-only
+          const playerGroup = round.groups?.[player.id]
+          const hasGroups = round.groups && Object.keys(round.groups).length > 0
+          const groupNums = hasGroups ? [...new Set(Object.values(round.groups!))].sort((a, b) => a - b) : []
+          const isInActiveGroup = !hasGroups || groupNums.length <= 1 || activeGroupTab === 'all' || activeGroupTab === playerGroup
+          const isEditable = !readOnly && isInActiveGroup && activeGroupTab !== 'all'
+
+          // Filter out players not in the active group tab (unless showing 'all')
+          if (hasGroups && groupNums.length > 1 && activeGroupTab !== 'all' && playerGroup !== activeGroupTab) {
+            return null
+          }
+
+          // Compact read-only row for "all" tab or readOnly mode with groups
+          if (!isEditable) {
+            return (
+              <div key={player.id} className="bg-white rounded-xl shadow-sm border border-gray-100 px-4 py-2.5 flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <p className="font-semibold text-gray-800 text-sm">{player.name}</p>
+                  {hasGroups && groupNums.length > 1 && (
+                    <span className="text-[10px] font-bold uppercase px-1.5 py-0.5 rounded bg-gray-100 text-gray-500">G{playerGroup}</span>
+                  )}
+                </div>
+                <div className="flex items-center gap-3 text-right">
+                  <span className="text-sm font-bold text-gray-800">{grossScore}</span>
+                  {strokesGiven > 0 && <span className="text-xs text-green-700 font-semibold">Net {netScore}</span>}
+                  {holesPlayed > 0 && (
+                    <span className={`text-xs font-semibold ${runningVsPar > 0 ? 'text-red-500' : runningVsPar < 0 ? 'text-green-600' : 'text-gray-400'}`}>
+                      {runningGross} ({runningVsPar > 0 ? '+' : ''}{runningVsPar})
+                    </span>
+                  )}
+                </div>
+              </div>
+            )
+          }
+
           // Score validation warnings
           const warnings: string[] = []
           if (grossScore === 1 && par >= 4) warnings.push('Hole in one! Verify score')
@@ -642,7 +714,7 @@ export function Scorecard({ userId, roundId, onEndRound, onHome }: Props) {
       </div>
 
       <div className="fixed bottom-0 inset-x-0 bg-white/95 backdrop-blur-sm border-t border-gray-200">
-        {(() => {
+        {!readOnly && (() => {
           const missingPlayers = players.filter(p => !holeScores.some(s => s.playerId === p.id && s.holeNumber === currentHole))
           return missingPlayers.length > 0 ? (
             <p className="text-amber-600 text-xs font-medium text-center py-1.5 bg-amber-50">
@@ -653,13 +725,16 @@ export function Scorecard({ userId, roundId, onEndRound, onHome }: Props) {
         <div className="p-4 max-w-2xl mx-auto flex gap-3">
           <button onClick={() => goToHole(Math.max(1, currentHole - 1))} disabled={currentHole === 1}
             className="w-16 h-14 bg-gray-100 rounded-2xl font-bold text-xl text-gray-600 disabled:opacity-30 active:bg-gray-200">&larr;</button>
-          {lastChange && lastChange.holeNumber === currentHole && (
+          {!readOnly && lastChange && lastChange.holeNumber === currentHole && (
             <button onClick={undoLastChange}
               className="w-16 h-14 bg-amber-100 rounded-2xl text-amber-700 font-bold text-xs active:bg-amber-200" aria-label="Undo">Undo</button>
           )}
           {currentHole < 18 ? (
             <button onClick={() => goToHole(currentHole + 1)}
               className="flex-1 h-14 bg-green-700 text-white text-lg font-bold rounded-2xl active:bg-green-800 transition-colors">Next Hole →</button>
+          ) : readOnly ? (
+            <button onClick={onHome}
+              className="flex-1 h-14 bg-gray-600 text-white text-lg font-bold rounded-2xl active:bg-gray-700 transition-colors">Back to Home</button>
           ) : (
             <button onClick={endRound}
               className="flex-1 h-14 bg-yellow-500 text-white text-lg font-bold rounded-2xl active:bg-yellow-600 transition-colors">🏁 End Round & Settle Up</button>

@@ -112,6 +112,7 @@ function Home({
   isAnonymous,
   onUpgrade,
   onEndRound,
+  onViewRound,
 }: {
   userId: string
   userProfile: UserProfile | null
@@ -131,9 +132,11 @@ function Home({
   isAnonymous?: boolean
   onUpgrade?: () => void
   onEndRound?: (roundId: string) => void
+  onViewRound?: (roundId: string) => void
 }) {
   const [courses, setCourses] = useState<Course[]>([])
-  const [activeRounds, setActiveRounds] = useState<any[]>([])
+  const [activeRounds, setActiveRounds] = useState<Round[]>([])
+  const [participantRounds, setParticipantRounds] = useState<Round[]>([])
   const [roundCount, setRoundCount] = useState(0)
   const [recentRounds, setRecentRounds] = useState<Round[]>([])
 
@@ -142,7 +145,16 @@ function Home({
       if (data) setCourses(data.map(rowToCourse))
     })
     supabase.from('rounds').select('*').eq('status', 'active').then(({ data }) => {
-      if (data) setActiveRounds(data.map(rowToRound))
+      if (data) {
+        const all = data.map(rowToRound)
+        // Rounds I created (scoremaster)
+        setActiveRounds(all.filter(r => r.createdBy === userId))
+        // Rounds I'm a participant in but didn't create
+        setParticipantRounds(all.filter(r =>
+          r.createdBy !== userId &&
+          r.players?.some(p => p.id === userId)
+        ))
+      }
     })
     supabase.from('rounds').select('id', { count: 'exact', head: true }).then(({ count }) => {
       setRoundCount(count ?? 0)
@@ -256,6 +268,39 @@ function Home({
           </section>
         )}
 
+        {/* Participant rounds — rounds you're playing in but someone else is scoring */}
+        {participantRounds.length > 0 && onViewRound && (
+          <section className="space-y-3">
+            <h2 className="font-display font-semibold text-gray-800 text-base">Your Active Games</h2>
+            {participantRounds.map(round => (
+              <button
+                key={round.id}
+                onClick={() => onViewRound(round.id)}
+                className="w-full rounded-2xl overflow-hidden shadow-md active:scale-[0.98] transition-transform"
+              >
+                <div className="bg-gradient-to-r from-blue-500 to-cyan-400 px-5 py-4">
+                  <div className="flex items-center justify-between">
+                    <div className="text-left">
+                      <p className="font-display font-bold text-blue-950 text-lg leading-tight">Live Scoreboard</p>
+                      <p className="text-blue-800 text-sm mt-0.5">{round.courseSnapshot?.courseName ?? 'Unknown course'}</p>
+                    </div>
+                    <div className="text-right">
+                      <p className="font-display font-bold text-blue-950 text-2xl">&#9971; {round.currentHole}</p>
+                      <p className="text-blue-800 text-xs">Hole</p>
+                    </div>
+                  </div>
+                  <div className="mt-3 bg-blue-950/20 rounded-xl px-4 py-2 flex items-center justify-between">
+                    <span className="text-blue-900 text-sm font-semibold">
+                      {round.players?.length ?? 0} players · {round.game?.type ? (GAME_EMOJI[round.game.type] ?? round.game.type) : 'Unknown'}
+                    </span>
+                    <span className="text-blue-900 text-sm font-bold">Tap to Watch &rarr;</span>
+                  </div>
+                </div>
+              </button>
+            ))}
+          </section>
+        )}
+
         <button onClick={onNewRound}
           className="w-full rounded-2xl shadow-lg overflow-hidden active:scale-[0.98] transition-transform"
           style={{ background: 'linear-gradient(135deg, #155c36 0%, #288f52 100%)' }}>
@@ -326,7 +371,7 @@ function Home({
               </div>
               <div className="flex-1 min-w-0">
                 <p className="font-semibold text-gray-900 truncate">{userProfile.displayName}</p>
-                <p className="text-sm text-gray-500">HCP {userProfile.handicapIndex ?? '—'} · {userProfile.tee} tees</p>
+                <p className="text-sm text-gray-500">HCP {userProfile.handicapIndex ?? '—'}</p>
               </div>
               <span className="text-xs text-green-700 font-semibold">Edit</span>
             </button>
@@ -382,6 +427,7 @@ export default function App() {
   const [profileLoading, setProfileLoading] = useState(true)
   const [playAgainRound, setPlayAgainRound] = useState<Round | null>(null)
   const [newCourseName, setNewCourseName] = useState('')
+  const [scorecardReadOnly, setScorecardReadOnly] = useState(false)
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => setSession(session))
@@ -511,7 +557,7 @@ export default function App() {
     )
   }
   if (screen === 'scorecard' && activeRoundId) {
-    return <Scorecard userId={userId} roundId={activeRoundId} onEndRound={() => setScreen('settle-up')} onHome={goHome} />
+    return <Scorecard userId={userId} roundId={activeRoundId} onEndRound={() => setScreen('settle-up')} onHome={() => { setScorecardReadOnly(false); goHome() }} readOnly={scorecardReadOnly} />
   }
   if (screen === 'settle-up' && activeRoundId) {
     return (
@@ -612,7 +658,7 @@ export default function App() {
       }}
       onEditCourse={(course: Course) => { setEditingCourse(course); setScreen('course-setup') }}
       onDeleteCourse={handleDeleteCourse}
-      onResumeRound={roundId => { setActiveRoundId(roundId); setScreen('scorecard') }}
+      onResumeRound={roundId => { setScorecardReadOnly(false); setActiveRoundId(roundId); setScreen('scorecard') }}
       onRoundHistory={() => setScreen('round-history')}
       onStats={() => setScreen('stats')}
       onSettings={() => setScreen('settings')}
@@ -623,6 +669,7 @@ export default function App() {
       isAnonymous={isAnonymous}
       onUpgrade={() => setScreen('upgrade-account')}
       onEndRound={handleEndRound}
+      onViewRound={roundId => { setScorecardReadOnly(true); setActiveRoundId(roundId); setScreen('scorecard') }}
     />
   )
 }

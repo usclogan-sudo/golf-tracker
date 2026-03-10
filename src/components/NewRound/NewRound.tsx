@@ -248,7 +248,8 @@ function PlayerPicker({
   const [addError, setAddError] = useState('')
   const [saving, setSaving] = useState(false)
 
-  const MAX_PLAYERS = 8
+  const MAX_PLAYERS = 20
+  const MAX_PER_GROUP = 5
   const headerClass = stakesMode === 'high_roller' ? 'hr-header' : 'app-header'
 
   useEffect(() => {
@@ -489,7 +490,162 @@ function PlayerPicker({
   )
 }
 
-// ─── Step 3: Game Setup ───────────────────────────────────────────────────────
+// ─── Step 3: Group Assignment ─────────────────────────────────────────────────
+
+const MAX_PER_GROUP_CONST = 5
+
+function GroupAssignment({
+  players,
+  initialGroups,
+  onNext,
+  onBack,
+  stakesMode,
+}: {
+  players: Player[]
+  initialGroups?: Record<string, number>
+  onNext: (groups: Record<string, number>) => void
+  onBack: () => void
+  stakesMode: StakesMode
+}) {
+  const [groups, setGroups] = useState<Record<string, number>>(() => {
+    if (initialGroups) return { ...initialGroups }
+    // Auto-assign round-robin
+    const numGroups = Math.ceil(players.length / MAX_PER_GROUP_CONST)
+    const g: Record<string, number> = {}
+    players.forEach((p, i) => { g[p.id] = (i % numGroups) + 1 })
+    return g
+  })
+
+  const numGroups = Math.max(...Object.values(groups), 1)
+  const groupNumbers = Array.from({ length: numGroups }, (_, i) => i + 1)
+
+  const autoAssign = () => {
+    const ng = Math.ceil(players.length / MAX_PER_GROUP_CONST)
+    const g: Record<string, number> = {}
+    players.forEach((p, i) => { g[p.id] = (i % ng) + 1 })
+    setGroups(g)
+  }
+
+  const addGroup = () => {
+    // Just makes the UI show an extra group number option
+    const maxGroup = Math.max(...Object.values(groups), 0)
+    if (maxGroup < 4) {
+      // Move the first player from the largest group to the new group
+      const newGroupNum = maxGroup + 1
+      const largestGroup = groupNumbers.reduce((best, gn) => {
+        const count = players.filter(p => groups[p.id] === gn).length
+        const bestCount = players.filter(p => groups[p.id] === best).length
+        return count > bestCount ? gn : best
+      }, 1)
+      const playerToMove = players.find(p => groups[p.id] === largestGroup)
+      if (playerToMove) {
+        setGroups(prev => ({ ...prev, [playerToMove.id]: newGroupNum }))
+      }
+    }
+  }
+
+  // Validation
+  const groupSizes = groupNumbers.map(gn => players.filter(p => groups[p.id] === gn).length)
+  const allValid = groupSizes.every(s => s >= 1 && s <= MAX_PER_GROUP_CONST)
+  const allAssigned = players.every(p => groups[p.id] != null)
+
+  const headerClass = stakesMode === 'high_roller' ? 'hr-header' : 'app-header'
+
+  return (
+    <div className="min-h-screen bg-gray-50 pb-28">
+      <header className={`${headerClass} text-white px-4 py-4 sticky top-0 z-10 shadow-xl flex items-center gap-3`}>
+        <button
+          onClick={onBack}
+          className="w-10 h-10 flex items-center justify-center rounded-full hover:bg-black/20 text-xl"
+          aria-label="Back"
+        >
+          ←
+        </button>
+        <div>
+          <h1 className="text-xl font-bold">Assign Groups</h1>
+          <p className="text-green-300 text-xs">{players.length} players · {numGroups} group{numGroups !== 1 ? 's' : ''}</p>
+        </div>
+      </header>
+
+      <div className="px-4 py-4 max-w-2xl mx-auto space-y-4">
+        <div className="flex gap-2">
+          <button
+            onClick={autoAssign}
+            className="flex-1 h-10 bg-green-50 border border-green-200 text-green-700 text-sm font-semibold rounded-xl active:bg-green-100"
+          >
+            Auto-assign
+          </button>
+          {numGroups < 4 && (
+            <button
+              onClick={addGroup}
+              className="h-10 px-4 bg-gray-100 text-gray-700 text-sm font-semibold rounded-xl active:bg-gray-200"
+            >
+              + Group
+            </button>
+          )}
+        </div>
+
+        {groupNumbers.map(gn => {
+          const groupPlayers = players.filter(p => groups[p.id] === gn)
+          return (
+            <div key={gn} className="bg-white rounded-2xl shadow-sm border border-gray-100 p-4 space-y-2">
+              <div className="flex items-center justify-between">
+                <p className="font-bold text-gray-800">Group {gn}</p>
+                <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${
+                  groupPlayers.length > MAX_PER_GROUP_CONST ? 'bg-red-100 text-red-600' :
+                  groupPlayers.length === 0 ? 'bg-red-100 text-red-600' :
+                  'bg-green-100 text-green-700'
+                }`}>
+                  {groupPlayers.length}/{MAX_PER_GROUP_CONST}
+                </span>
+              </div>
+              {groupPlayers.map(player => (
+                <div key={player.id} className="flex items-center justify-between bg-gray-50 rounded-xl px-3 py-2">
+                  <div>
+                    <p className="font-medium text-gray-800 text-sm">{player.name}</p>
+                    <p className="text-xs text-gray-500">HCP {player.handicapIndex}</p>
+                  </div>
+                  <div className="flex gap-1">
+                    {groupNumbers.map(targetGn => (
+                      <button
+                        key={targetGn}
+                        onClick={() => setGroups(prev => ({ ...prev, [player.id]: targetGn }))}
+                        className={`w-7 h-7 rounded-lg text-xs font-bold transition-colors ${
+                          groups[player.id] === targetGn
+                            ? 'bg-green-700 text-white'
+                            : 'bg-white border border-gray-200 text-gray-500'
+                        }`}
+                      >
+                        {targetGn}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              ))}
+              {groupPlayers.length === 0 && (
+                <p className="text-gray-400 text-sm text-center py-2">No players assigned</p>
+              )}
+            </div>
+          )
+        })}
+      </div>
+
+      <div className="fixed bottom-0 inset-x-0 p-4 bg-white/95 backdrop-blur-sm border-t border-gray-200">
+        <div className="max-w-2xl mx-auto">
+          <button
+            onClick={() => onNext(groups)}
+            disabled={!allValid || !allAssigned}
+            className="w-full h-14 bg-green-700 text-white text-lg font-bold rounded-2xl shadow-lg disabled:opacity-40 active:bg-green-800 transition-colors"
+          >
+            {!allValid ? 'Fix group sizes (1–5 each)' : 'Next: Choose Game'}
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// ─── Step 4: Game Setup ───────────────────────────────────────────────────────
 
 function GameSetup({
   players,
@@ -1153,6 +1309,7 @@ function TreasurerAndBuyIns({
   players,
   game,
   junkConfig,
+  groups,
   onCreateRound,
   onBack,
 }: {
@@ -1161,6 +1318,7 @@ function TreasurerAndBuyIns({
   players: Player[]
   game: Game
   junkConfig?: JunkConfig
+  groups?: Record<string, number>
   onCreateRound: (roundId: string) => void
   onBack: () => void
 }) {
@@ -1201,6 +1359,7 @@ function TreasurerAndBuyIns({
         game,
         junkConfig,
         treasurerPlayerId: treasurerId,
+        groups,
       }
 
       const buyIns: BuyIn[] = players.map(p => ({
@@ -1378,13 +1537,27 @@ export function NewRound({ userId, onStart, onCancel, onAddCourse, initialStakes
       }
     : null
 
-  const [step, setStep] = useState<'course' | 'players' | 'game' | 'money'>(templateCourse ? 'players' : 'course')
+  const [step, setStep] = useState<'course' | 'players' | 'groups' | 'game' | 'money'>(templateCourse ? 'players' : 'course')
   const [course, setCourse] = useState<Course | null>(templateCourse)
   const [players, setPlayers] = useState<Player[] | null>(null)
+  const [groups, setGroups] = useState<Record<string, number> | undefined>(templateRound?.groups)
   const [game, setGame] = useState<Game | null>(null)
   const [junkConfig, setJunkConfig] = useState<JunkConfig | undefined>(templateRound?.junkConfig)
 
   const preSelectedPlayerIds = templateRound?.players?.map(p => p.id)
+
+  const handlePlayersNext = (ps: Player[]) => {
+    setPlayers(ps)
+    if (ps.length <= MAX_PER_GROUP_CONST) {
+      // Auto-assign all to group 1 and skip
+      const g: Record<string, number> = {}
+      ps.forEach(p => { g[p.id] = 1 })
+      setGroups(g)
+      setStep('game')
+    } else {
+      setStep('groups')
+    }
+  }
 
   if (step === 'course') {
     return (
@@ -1403,10 +1576,22 @@ export function NewRound({ userId, onStart, onCancel, onAddCourse, initialStakes
       <PlayerPicker
         userId={userId}
         course={course}
-        onNext={ps => { setPlayers(ps); setStep('game') }}
+        onNext={handlePlayersNext}
         onBack={() => setStep('course')}
         stakesMode={initialStakesMode}
         preSelectedIds={preSelectedPlayerIds}
+      />
+    )
+  }
+
+  if (step === 'groups' && players) {
+    return (
+      <GroupAssignment
+        players={players}
+        initialGroups={groups}
+        onNext={g => { setGroups(g); setStep('game') }}
+        onBack={() => setStep('players')}
+        stakesMode={initialStakesMode}
       />
     )
   }
@@ -1417,7 +1602,7 @@ export function NewRound({ userId, onStart, onCancel, onAddCourse, initialStakes
         players={players}
         initialStakesMode={initialStakesMode}
         onNext={(g, jc) => { setGame(g); setJunkConfig(jc); setStep('money') }}
-        onBack={() => setStep('players')}
+        onBack={() => players.length > MAX_PER_GROUP_CONST ? setStep('groups') : setStep('players')}
         initialGame={templateRound?.game}
         initialJunkConfig={junkConfig}
       />
@@ -1432,6 +1617,7 @@ export function NewRound({ userId, onStart, onCancel, onAddCourse, initialStakes
         players={players}
         game={game}
         junkConfig={junkConfig}
+        groups={groups}
         onBack={() => setStep('game')}
         onCreateRound={rid => onStart(rid)}
       />

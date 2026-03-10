@@ -17,7 +17,6 @@ export function Settings({ userId, email, onBack, onSignOut, isAdmin, onAdmin, i
   const [profile, setProfile] = useState<UserProfile | null>(null)
   const [displayName, setDisplayName] = useState('')
   const [handicapIndex, setHandicapIndex] = useState('')
-  const [tee, setTee] = useState('White')
   const [profileSaving, setProfileSaving] = useState(false)
   const [profileMessage, setProfileMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null)
 
@@ -37,7 +36,6 @@ export function Settings({ userId, email, onBack, onSignOut, isAdmin, onAdmin, i
         setProfile(p)
         setDisplayName(p.displayName ?? '')
         setHandicapIndex(p.handicapIndex != null ? String(p.handicapIndex) : '')
-        setTee(p.tee ?? 'White')
       }
     })
   }, [userId])
@@ -51,7 +49,6 @@ export function Settings({ userId, email, onBack, onSignOut, isAdmin, onAdmin, i
     const { error } = await supabase.from('user_profiles').update({
       display_name: displayName.trim(),
       handicap_index: hcp,
-      tee,
     }).eq('user_id', userId)
     setProfileSaving(false)
     if (error) {
@@ -102,8 +99,6 @@ export function Settings({ userId, email, onBack, onSignOut, isAdmin, onAdmin, i
     }
   }
 
-  const TEE_OPTIONS = ['White', 'Blue', 'Gold', 'Red', 'Black', 'Green']
-
   return (
     <div className="min-h-screen bg-gray-50 pb-8">
       <header className="app-header text-white px-4 py-4 sticky top-0 z-10 shadow-xl flex items-center gap-3">
@@ -141,24 +136,6 @@ export function Settings({ userId, email, onBack, onSignOut, isAdmin, onAdmin, i
                 onChange={e => setHandicapIndex(e.target.value)}
                 className="w-full h-12 px-4 rounded-xl border border-gray-300 text-base focus:outline-none focus:ring-2 focus:ring-green-600"
               />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Default Tee</label>
-              <div className="flex gap-2 flex-wrap">
-                {TEE_OPTIONS.map(t => (
-                  <button
-                    key={t}
-                    onClick={() => setTee(t)}
-                    className={`px-4 py-2 rounded-xl text-sm font-medium transition-colors ${
-                      tee === t
-                        ? 'bg-green-700 text-white'
-                        : 'bg-gray-100 text-gray-600 active:bg-gray-200'
-                    }`}
-                  >
-                    {t}
-                  </button>
-                ))}
-              </div>
             </div>
             {profileMessage && (
               <p className={`text-sm ${profileMessage.type === 'error' ? 'text-red-500' : 'text-green-600'}`}>

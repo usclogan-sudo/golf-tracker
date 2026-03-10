@@ -187,6 +187,12 @@ export interface Round {
 
   // Players embedded for convenience (source of truth for new rounds)
   players?: Player[]
+
+  // Group assignments: playerId → group number (1-based)
+  groups?: Record<string, number>
+
+  // Round creator's user ID (for scoremaster vs viewer distinction)
+  createdBy?: string
 }
 
 // ─── Join / score tables ──────────────────────────────────────────────────────
