@@ -395,6 +395,7 @@ export default function App() {
   const [playAgainRound, setPlayAgainRound] = useState<Round | null>(null)
   const [newCourseName, setNewCourseName] = useState('')
   const [scorecardReadOnly, setScorecardReadOnly] = useState(false)
+  const [appConfirmModal, setAppConfirmModal] = useState<{ title: string; message: string; onConfirm: () => void; destructive?: boolean } | null>(null)
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => setSession(session))
@@ -573,8 +574,6 @@ export default function App() {
   if (screen === 'admin' && userProfile?.isAdmin) {
     return <AdminDashboard userId={userId} onBack={goHome} />
   }
-
-  const [appConfirmModal, setAppConfirmModal] = useState<{ title: string; message: string; onConfirm: () => void; destructive?: boolean } | null>(null)
 
   const handleDeleteCourse = (courseId: string) => {
     setAppConfirmModal({
