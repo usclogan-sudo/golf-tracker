@@ -83,7 +83,6 @@ export function Stats({ userId, onBack }: Props) {
 
       const roundScores = allScores.filter(s => s.roundId === round.id)
       const roundPlayers = allRoundPlayers.filter(rp => rp.roundId === round.id)
-      const totalPar = snapshot.holes.reduce((s, h) => s + h.par, 0)
 
       // Gross totals per player
       for (const player of players) {

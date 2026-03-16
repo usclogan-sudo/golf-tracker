@@ -285,7 +285,6 @@ function PlayerPicker({
   const [saving, setSaving] = useState(false)
 
   const MAX_PLAYERS = 20
-  const MAX_PER_GROUP = 5
   const headerClass = stakesMode === 'high_roller' ? 'hr-header' : 'app-header'
 
   useEffect(() => {
@@ -1066,7 +1065,7 @@ function GameSetup({
               </div>
             </div>
             <button
-              onClick={() => setCarryovers(v => !v)}
+              onClick={() => setCarryovers((v: boolean) => !v)}
               className={`w-full h-12 rounded-xl font-semibold border-2 ${
                 carryovers ? 'bg-amber-50 border-amber-300 text-gray-800' : 'bg-gray-50 border-gray-200 text-gray-600'
               }`}

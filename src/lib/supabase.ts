@@ -259,7 +259,7 @@ export async function fetchOrCreateProfile(userId: string): Promise<UserProfile>
     .eq('user_id', userId)
     .maybeSingle()
   if (data) return rowToUserProfile(data)
-  const newProfile: UserProfile = { userId, isAdmin: false, onboardingComplete: false }
+  const newProfile: UserProfile = { userId, isAdmin: false, onboardingComplete: false, tee: 'White' }
   await supabase.from('user_profiles').insert(userProfileToRow(newProfile))
   return newProfile
 }

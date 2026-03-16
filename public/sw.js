@@ -1,4 +1,4 @@
-const CACHE_NAME = 'fore-skins-v1'
+const CACHE_NAME = 'fore-skins-v2'
 
 self.addEventListener('install', (event) => {
   event.waitUntil(

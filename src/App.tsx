@@ -40,19 +40,6 @@ function coursePhotoClass(name: string): string {
   return `course-photo-${(Math.abs(hash) % 5) + 1}`
 }
 
-function playerInitials(name: string): string {
-  return name.split(' ').map(w => w[0]).join('').toUpperCase().slice(0, 2)
-}
-
-const AVATAR_COLORS = [
-  'bg-emerald-700', 'bg-teal-700', 'bg-cyan-700',
-  'bg-blue-700', 'bg-violet-700', 'bg-rose-700',
-]
-function avatarColor(name: string): string {
-  let hash = 0
-  for (let i = 0; i < name.length; i++) hash = (hash * 31 + name.charCodeAt(i)) & 0xffffff
-  return AVATAR_COLORS[Math.abs(hash) % AVATAR_COLORS.length]
-}
 
 function StatChip({ label, value, accent }: { label: string; value: string | number; accent?: boolean }) {
   return (
@@ -112,7 +99,6 @@ function Home({
   onSignOut,
   isAdmin,
   onAdmin,
-  onPlayAgain,
   isAnonymous,
   onUpgrade,
   onEndRound,
@@ -133,7 +119,6 @@ function Home({
   onSignOut: () => void
   isAdmin: boolean
   onAdmin: () => void
-  onPlayAgain: (round: Round) => void
   isAnonymous?: boolean
   onUpgrade?: () => void
   onEndRound?: (roundId: string) => void
@@ -351,12 +336,12 @@ function Home({
               Your Courses
               {courses.length > 0 && <span className="ml-2 text-xs font-normal text-gray-400 bg-gray-100 rounded-full px-2 py-0.5">{courses.length}</span>}
             </h2>
-            <button onClick={onAddCourse} className="text-amber-600 text-sm font-semibold flex items-center gap-1">
+            <button onClick={() => onAddCourse()} className="text-amber-600 text-sm font-semibold flex items-center gap-1">
               <span className="text-lg leading-none">+</span> Add
             </button>
           </div>
           {courses.length === 0 && (
-            <button onClick={onAddCourse} className="w-full border-2 border-dashed border-gray-200 rounded-2xl py-8 text-center active:bg-gray-50">
+            <button onClick={() => onAddCourse()} className="w-full border-2 border-dashed border-gray-200 rounded-2xl py-8 text-center active:bg-gray-50">
               <p className="text-3xl mb-2">🏌️</p>
               <p className="text-gray-500 font-medium">Add your first course</p>
               <p className="text-gray-400 text-sm mt-1">Holes, pars, slope & rating</p>
@@ -588,12 +573,6 @@ export default function App() {
     })
   }
 
-  const handlePlayAgain = (round: Round) => {
-    setPlayAgainRound(round)
-    setNewRoundStakesMode(round.game?.stakesMode ?? 'standard')
-    setScreen('new-round')
-  }
-
   const handleEndRound = async (roundId: string) => {
     const [hsRes, roundRes] = await Promise.all([
       supabase.from('hole_scores').select('player_id, hole_number').eq('round_id', roundId),
@@ -650,7 +629,6 @@ export default function App() {
       onSignOut={() => supabase.auth.signOut()}
       isAdmin={userProfile?.isAdmin ?? false}
       onAdmin={() => setScreen('admin')}
-      onPlayAgain={handlePlayAgain}
       isAnonymous={isAnonymous}
       onUpgrade={() => setScreen('upgrade-account')}
       onEndRound={handleEndRound}

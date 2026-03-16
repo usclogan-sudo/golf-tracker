@@ -384,7 +384,6 @@ export function calculateNassauPayouts(
     const pressScores: Record<string, number> = {}
     let incomplete = false
     for (const p of players) {
-      let total = 0
       for (let h = press.holeNumber; h <= endHole; h++) {
         const seg = inFront ? result.front : result.back
         // Use the segment scores as reference for mode consistency

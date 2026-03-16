@@ -31,7 +31,6 @@ import type {
   BuyIn,
   BBBPoint,
   JunkRecord,
-  JunkType,
   Player,
   SkinsConfig,
   BestBallConfig,

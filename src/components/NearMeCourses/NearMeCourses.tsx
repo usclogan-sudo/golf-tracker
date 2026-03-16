@@ -120,7 +120,7 @@ export function NearMeCourses({ onAddCourse }: Props) {
           <p className="font-semibold text-amber-800">Location access denied</p>
           <p className="text-amber-700 text-sm mt-1">
             Enable location in your browser settings, or{' '}
-            <button onClick={onAddCourse} className="underline font-semibold">add a course manually</button>.
+            <button onClick={() => onAddCourse()} className="underline font-semibold">add a course manually</button>.
           </p>
         </div>
       </section>
@@ -148,7 +148,7 @@ export function NearMeCourses({ onAddCourse }: Props) {
         <h2 className="font-display font-semibold text-gray-800 text-base mb-3">Courses Near You</h2>
         <div className="bg-white border border-gray-200 rounded-2xl px-5 py-5 text-center shadow-sm">
           <p className="text-gray-500">No courses found within 25 miles.</p>
-          <button onClick={onAddCourse} className="mt-3 text-amber-600 font-semibold text-sm underline">Add a course manually</button>
+          <button onClick={() => onAddCourse()} className="mt-3 text-amber-600 font-semibold text-sm underline">Add a course manually</button>
         </div>
       </section>
     )
@@ -180,7 +180,7 @@ export function NearMeCourses({ onAddCourse }: Props) {
             </div>
           </button>
         ))}
-        <button onClick={onAddCourse}
+        <button onClick={() => onAddCourse()}
           className="flex-none w-44 bg-gray-50 border-2 border-dashed border-gray-200 rounded-2xl flex flex-col items-center justify-center py-8 px-4 active:bg-gray-100 snap-start">
           <span className="text-3xl mb-2">+</span>
           <p className="text-gray-500 text-sm font-medium text-center">Add Custom Course</p>
