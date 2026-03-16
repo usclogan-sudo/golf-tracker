@@ -1,6 +1,8 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useState, useCallback } from 'react'
 import { v4 as uuidv4 } from 'uuid'
 import { supabase, rowToRound, rowToRoundPlayer, rowToHoleScore, rowToBBBPoint, rowToJunkRecord, holeScoreToRow, bbbPointToRow, junkRecordToRow } from '../../lib/supabase'
+import { getCelebration, CelebrationToast, CelebrationFullscreen } from '../Celebrations'
+import { ConfirmModal } from '../ConfirmModal'
 import {
   buildCourseHandicaps,
   calculateSkins,
@@ -30,6 +32,17 @@ interface Props {
   onEndRound: () => void
   onHome: () => void
   readOnly?: boolean
+}
+
+function getScoreClass(score: number, par: number): string {
+  const diff = score - par
+  if (score === 1) return 'score-eagle'
+  if (diff <= -2) return 'score-eagle'
+  if (diff === -1) return 'score-birdie'
+  if (diff === 0) return 'score-par'
+  if (diff === 1) return 'score-bogey'
+  if (diff === 2) return 'score-double'
+  return 'score-worse'
 }
 
 function ScoreStepper({
@@ -98,6 +111,8 @@ export function Scorecard({ userId, roundId, onEndRound, onHome, readOnly = fals
   const [saveError, setSaveError] = useState<string | null>(null)
   const [lastChange, setLastChange] = useState<{ playerId: string; holeNumber: number; previousScore: number } | null>(null)
   const [activeGroupTab, setActiveGroupTab] = useState<number | 'all'>(1)
+  const [celebration, setCelebration] = useState<{ level: 'toast' | 'fullscreen'; title: string; subtitle?: string; emoji: string; playerName: string } | null>(null)
+  const [confirmModal, setConfirmModal] = useState<{ title: string; message: string; onConfirm: () => void; destructive?: boolean } | null>(null)
 
   useEffect(() => {
     Promise.all([
@@ -192,6 +207,14 @@ export function Scorecard({ userId, roundId, onEndRound, onHome, readOnly = fals
     const existing = holeScores.find(s => s.playerId === playerId && s.holeNumber === currentHole)
     const previousScore = existing?.grossScore ?? par
     setLastChange({ playerId, holeNumber: currentHole, previousScore })
+
+    // Trigger celebration
+    const celeb = getCelebration(grossScore, par)
+    if (celeb) {
+      const playerName = players.find(p => p.id === playerId)?.name ?? ''
+      setCelebration({ ...celeb, playerName })
+    }
+
     try {
       if (existing) {
         setHoleScores(prev => prev.map(s => s.id === existing.id ? { ...s, grossScore } : s))
@@ -225,19 +248,34 @@ export function Scorecard({ userId, roundId, onEndRound, onHome, readOnly = fals
     if (error) setSaveError('Failed to save hole change — check your connection')
   }
 
-  const endRound = async () => {
+  const confirmEndRound = () => {
     const totalHoles = snapshot?.holes.length ?? 18
     const holesWithAllScores = Array.from({ length: totalHoles }, (_, i) => i + 1)
       .filter(n => players.every(p => holeScores.some(s => s.playerId === p.id && s.holeNumber === n)))
       .length
     const missing = totalHoles - holesWithAllScores
     const msg = missing > 0
-      ? `End round? ${holesWithAllScores} of ${totalHoles} holes scored (${missing} incomplete). You can still view results in Settle Up.`
-      : `End round? All ${totalHoles} holes scored. View results in Settle Up.`
-    if (!window.confirm(msg)) return
-    setRound(prev => prev ? { ...prev, status: 'complete' } : prev)
-    await supabase.from('rounds').update({ status: 'complete' }).eq('id', roundId)
-    onEndRound()
+      ? `${holesWithAllScores} of ${totalHoles} holes scored (${missing} incomplete). You can still view results in Settle Up.`
+      : `All ${totalHoles} holes scored. View results in Settle Up.`
+    setConfirmModal({
+      title: 'End Round?',
+      message: msg,
+      onConfirm: async () => {
+        setConfirmModal(null)
+        setRound(prev => prev ? { ...prev, status: 'complete' } : prev)
+        await supabase.from('rounds').update({ status: 'complete' }).eq('id', roundId)
+        onEndRound()
+      },
+    })
+  }
+
+  const confirmGoHome = () => {
+    if (readOnly) { onHome(); return }
+    setConfirmModal({
+      title: 'Leave Scoring?',
+      message: 'Your round is saved and you can resume from the Home screen.',
+      onConfirm: () => { setConfirmModal(null); onHome() },
+    })
   }
 
   // Wolf decision handler
@@ -347,16 +385,16 @@ export function Scorecard({ userId, roundId, onEndRound, onHome, readOnly = fals
       <header className={`${headerClass} text-white px-4 py-3 sticky top-0 z-10 shadow-xl`}>
         <div className="max-w-2xl mx-auto flex items-center justify-between">
           <div>
-            <p className="text-xs text-green-300 font-medium flex items-center gap-1.5">
+            <p className="text-xs text-gray-300 font-medium flex items-center gap-1.5">
               {snapshot.courseName}
-              <span className="inline-flex items-center gap-1 text-[10px] bg-green-500/30 px-1.5 py-0.5 rounded-full">
-                <span className="w-1.5 h-1.5 bg-green-400 rounded-full animate-pulse" />
+              <span className="inline-flex items-center gap-1 text-[10px] bg-amber-500/30 px-1.5 py-0.5 rounded-full">
+                <span className="w-1.5 h-1.5 bg-amber-400 rounded-full animate-pulse" />
                 {readOnly ? 'Spectating' : 'Live'}
               </span>
             </p>
             <h1 className="text-xl font-bold flex items-center gap-2">
               Hole {currentHole}
-              <span className="text-green-300 font-normal text-base">Par {par} · SI {strokeIndex}</span>
+              <span className="text-gray-300 font-normal text-base">Par {par} · SI {strokeIndex}</span>
               {game?.stakesMode === 'high_roller' && (
                 <span className="text-xs font-bold px-2 py-0.5 rounded-full"
                   style={{ background: 'linear-gradient(135deg,#d97706,#fbbf24)', color: '#000' }}>
@@ -366,17 +404,17 @@ export function Scorecard({ userId, roundId, onEndRound, onHome, readOnly = fals
             </h1>
           </div>
           <div className="flex items-center gap-2">
-            {!readOnly && <button onClick={endRound} className="text-yellow-300 text-sm font-medium px-3 py-1.5 rounded-lg hover:bg-green-700">End Round</button>}
-            <button onClick={() => { if (readOnly || window.confirm('Leave scoring? Your round is saved and you can resume from the Home screen.')) onHome() }} className="text-green-300 text-sm font-medium px-3 py-1.5 rounded-lg hover:bg-green-700">Home</button>
+            {!readOnly && <button onClick={confirmEndRound} className="text-yellow-300 text-sm font-medium px-3 py-1.5 rounded-lg hover:bg-gray-600">End Round</button>}
+            <button onClick={confirmGoHome} className="text-gray-300 text-sm font-medium px-3 py-1.5 rounded-lg hover:bg-gray-600">Home</button>
           </div>
         </div>
-        <div className="max-w-2xl mx-auto mt-2 flex gap-1 overflow-x-auto pb-1">
-          {Array.from({ length: 18 }, (_, i) => i + 1).map(n => {
+        <div className="max-w-2xl mx-auto mt-2 flex gap-1.5 overflow-x-auto pb-1">
+          {Array.from({ length: snapshot?.holes.length ?? 18 }, (_, i) => i + 1).map(n => {
             const hasScore = players.length > 0 && players.every(p => holeScores.some(s => s.playerId === p.id && s.holeNumber === n))
             return (
               <button key={n} onClick={() => goToHole(n)}
-                className={`w-7 h-7 rounded-full text-xs font-bold flex-shrink-0 transition-colors ${
-                  n === currentHole ? 'bg-white text-green-800' : hasScore ? 'bg-green-500 text-white' : 'bg-green-900/40 text-green-400 border border-green-600/30'
+                className={`w-10 h-10 min-w-[2.5rem] rounded-full text-sm font-bold flex-shrink-0 transition-colors flex items-center justify-center ${
+                  n === currentHole ? 'bg-white text-gray-800 ring-2 ring-amber-400' : hasScore ? 'bg-amber-500 text-white' : 'bg-gray-700/40 text-gray-400 border border-gray-500/30'
                 }`}>{n}</button>
             )
           })}
@@ -395,7 +433,7 @@ export function Scorecard({ userId, roundId, onEndRound, onHome, readOnly = fals
                   key={gn}
                   onClick={() => setActiveGroupTab(gn)}
                   className={`px-4 py-1.5 rounded-lg text-sm font-semibold transition-colors flex-shrink-0 ${
-                    activeGroupTab === gn ? 'bg-green-700 text-white' : 'bg-gray-100 text-gray-600'
+                    activeGroupTab === gn ? 'bg-gray-800 text-white' : 'bg-gray-100 text-gray-600'
                   }`}
                 >
                   Group {gn}
@@ -404,7 +442,7 @@ export function Scorecard({ userId, roundId, onEndRound, onHome, readOnly = fals
               <button
                 onClick={() => setActiveGroupTab('all')}
                 className={`px-4 py-1.5 rounded-lg text-sm font-semibold transition-colors flex-shrink-0 ${
-                  activeGroupTab === 'all' ? 'bg-green-700 text-white' : 'bg-gray-100 text-gray-600'
+                  activeGroupTab === 'all' ? 'bg-gray-800 text-white' : 'bg-gray-100 text-gray-600'
                 }`}
               >
                 All
@@ -443,10 +481,12 @@ export function Scorecard({ userId, roundId, onEndRound, onHome, readOnly = fals
         {nassauResult && (() => {
           const getName = (id: string | null) => id ? (players.find(p => p.id === id)?.name ?? '?') : null
           const pressCount = (game!.config as any).presses?.length ?? 0
+          const totalHoles = snapshot?.holes.length ?? 18
+          const half = Math.ceil(totalHoles / 2)
           const segs = [
-            { label: 'F9', seg: nassauResult.front },
-            { label: 'B9', seg: nassauResult.back },
-            { label: '18', seg: nassauResult.total },
+            { label: `F${half}`, seg: nassauResult.front },
+            { label: `B${totalHoles - half}`, seg: nassauResult.back },
+            { label: `${totalHoles}`, seg: nassauResult.total },
           ]
           return (
             <div className="flex items-center gap-2">
@@ -653,8 +693,8 @@ export function Scorecard({ userId, roundId, onEndRound, onHome, readOnly = fals
                   )}
                 </div>
                 <div className="flex items-center gap-3 text-right">
-                  <span className="text-sm font-bold text-gray-800">{grossScore}</span>
-                  {strokesGiven > 0 && <span className="text-xs text-green-700 font-semibold">Net {netScore}</span>}
+                  <span className={`text-sm font-bold px-1.5 py-0.5 rounded ${getScoreClass(grossScore, par)}`}>{grossScore}</span>
+                  {strokesGiven > 0 && <span className="text-xs text-amber-600 font-semibold">Net {netScore}</span>}
                   {holesPlayed > 0 && (
                     <span className={`text-xs font-semibold ${runningVsPar > 0 ? 'text-red-500' : runningVsPar < 0 ? 'text-green-600' : 'text-gray-400'}`}>
                       {runningGross} ({runningVsPar > 0 ? '+' : ''}{runningVsPar})
@@ -676,12 +716,12 @@ export function Scorecard({ userId, roundId, onEndRound, onHome, readOnly = fals
                 <div>
                   <p className="font-bold text-gray-800 text-lg">{player.name}</p>
                   <p className="text-sm text-gray-500">HCP {player.handicapIndex}
-                    {strokesGiven > 0 && <span className="ml-2 text-green-700 font-semibold">+{strokesGiven} stroke{strokesGiven !== 1 ? 's' : ''}</span>}
+                    {strokesGiven > 0 && <span className="ml-2 text-amber-600 font-semibold">+{strokesGiven} stroke{strokesGiven !== 1 ? 's' : ''}</span>}
                   </p>
                 </div>
                 <div className="text-right">
-                  <p className="text-xs text-gray-400">{scoreBadge}</p>
-                  {strokesGiven > 0 && <p className="text-sm font-semibold text-green-700">Net {netScore}</p>}
+                  <span className={`inline-block text-xs font-bold px-2 py-0.5 rounded-full ${getScoreClass(grossScore, par)}`}>{scoreBadge}</span>
+                  {strokesGiven > 0 && <p className="text-sm font-semibold text-amber-600 mt-0.5">Net {netScore}</p>}
                   {holesPlayed > 0 && (
                     <p className={`text-xs font-semibold mt-0.5 ${runningVsPar > 0 ? 'text-red-500' : runningVsPar < 0 ? 'text-green-600' : 'text-gray-400'}`}>
                       Thru {holesPlayed}: {runningGross} ({runningVsPar > 0 ? '+' : ''}{runningVsPar})
@@ -706,14 +746,14 @@ export function Scorecard({ userId, roundId, onEndRound, onHome, readOnly = fals
           if (!hr || hr.winnerId === null) return null
           const winner = players.find(p => p.id === hr.winnerId)
           return (
-            <div className="bg-green-50 border border-green-200 rounded-xl px-4 py-3 text-center">
-              <p className="text-green-800 font-bold">🏆 {winner?.name} wins {hr.skinsInPlay} skin{hr.skinsInPlay !== 1 ? 's' : ''}</p>
+            <div className="bg-amber-50 border border-amber-200 rounded-xl px-4 py-3 text-center">
+              <p className="text-gray-800 font-bold">🏆 {winner?.name} wins {hr.skinsInPlay} skin{hr.skinsInPlay !== 1 ? 's' : ''}</p>
             </div>
           )
         })()}
       </div>
 
-      <div className="fixed bottom-0 inset-x-0 bg-white/95 backdrop-blur-sm border-t border-gray-200">
+      <div className="fixed bottom-0 inset-x-0 bg-white/95 backdrop-blur-sm border-t border-gray-200 safe-bottom">
         {!readOnly && (() => {
           const missingPlayers = players.filter(p => !holeScores.some(s => s.playerId === p.id && s.holeNumber === currentHole))
           return missingPlayers.length > 0 ? (
@@ -729,18 +769,36 @@ export function Scorecard({ userId, roundId, onEndRound, onHome, readOnly = fals
             <button onClick={undoLastChange}
               className="w-16 h-14 bg-amber-100 rounded-2xl text-amber-700 font-bold text-xs active:bg-amber-200" aria-label="Undo">Undo</button>
           )}
-          {currentHole < 18 ? (
+          {currentHole < (snapshot?.holes.length ?? 18) ? (
             <button onClick={() => goToHole(currentHole + 1)}
-              className="flex-1 h-14 bg-green-700 text-white text-lg font-bold rounded-2xl active:bg-green-800 transition-colors">Next Hole →</button>
+              className="flex-1 h-14 bg-gray-800 text-white text-lg font-bold rounded-2xl active:bg-gray-900 transition-colors">Next Hole →</button>
           ) : readOnly ? (
             <button onClick={onHome}
               className="flex-1 h-14 bg-gray-600 text-white text-lg font-bold rounded-2xl active:bg-gray-700 transition-colors">Back to Home</button>
           ) : (
-            <button onClick={endRound}
+            <button onClick={confirmEndRound}
               className="flex-1 h-14 bg-yellow-500 text-white text-lg font-bold rounded-2xl active:bg-yellow-600 transition-colors">🏁 End Round & Settle Up</button>
           )}
         </div>
       </div>
+
+      {/* Celebrations */}
+      {celebration && celebration.level === 'toast' && (
+        <CelebrationToast config={celebration} playerName={celebration.playerName} onDone={() => setCelebration(null)} />
+      )}
+      {celebration && celebration.level === 'fullscreen' && (
+        <CelebrationFullscreen config={celebration} playerName={celebration.playerName} onDismiss={() => setCelebration(null)} />
+      )}
+
+      {/* Confirm modal */}
+      <ConfirmModal
+        open={!!confirmModal}
+        title={confirmModal?.title ?? ''}
+        message={confirmModal?.message ?? ''}
+        onConfirm={confirmModal?.onConfirm ?? (() => {})}
+        onCancel={() => setConfirmModal(null)}
+        destructive={confirmModal?.destructive}
+      />
     </div>
   )
 }

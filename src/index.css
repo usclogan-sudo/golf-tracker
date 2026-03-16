@@ -23,7 +23,7 @@
 
 @layer utilities {
   .app-header {
-    background: linear-gradient(160deg, #051a0e 0%, #0a2e19 55%, #0f3d22 100%);
+    background: linear-gradient(160deg, #111827 0%, #1f2937 55%, #374151 100%);
   }
   .hr-header {
     background: linear-gradient(160deg, #1a0e00 0%, #3d2800 55%, #5c3d00 100%);
@@ -34,15 +34,22 @@
     -webkit-text-fill-color: transparent;
     background-clip: text;
   }
-  .course-photo-1 { background: linear-gradient(135deg, #1a4731 0%, #2d6a4f 100%); }
-  .course-photo-2 { background: linear-gradient(135deg, #0d3320 0%, #1b4d35 100%); }
-  .course-photo-3 { background: linear-gradient(135deg, #14532d 0%, #166534 100%); }
-  .course-photo-4 { background: linear-gradient(135deg, #0f3d22 0%, #1c5c36 100%); }
-  .course-photo-5 { background: linear-gradient(135deg, #0a2e19 0%, #155c36 100%); }
+  .course-photo-1 { background: linear-gradient(135deg, #1f2937 0%, #374151 100%); }
+  .course-photo-2 { background: linear-gradient(135deg, #111827 0%, #1f2937 100%); }
+  .course-photo-3 { background: linear-gradient(135deg, #1e293b 0%, #334155 100%); }
+  .course-photo-4 { background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%); }
+  .course-photo-5 { background: linear-gradient(135deg, #18181b 0%, #27272a 100%); }
   .score-eagle  { background: linear-gradient(135deg, #d97706, #fbbf24); color: #fff; }
   .score-birdie { background: linear-gradient(135deg, #1d4ed8, #3b82f6); color: #fff; }
   .score-par    { background: #e5e7eb; color: #374151; }
   .score-bogey  { background: #fed7aa; color: #92400e; }
   .score-double { background: #fecaca; color: #991b1b; }
   .score-worse  { background: #dc2626; color: #fff; }
+}
+
+/* Safe area padding for iPhone notch/home indicator */
+@supports (padding-bottom: env(safe-area-inset-bottom)) {
+  .safe-bottom {
+    padding-bottom: env(safe-area-inset-bottom);
+  }
 }

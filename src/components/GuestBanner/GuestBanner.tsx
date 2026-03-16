@@ -22,7 +22,7 @@ export function GuestBanner({ onUpgrade }: Props) {
       </div>
       <button
         onClick={onUpgrade}
-        className="w-full h-12 bg-green-700 text-white font-bold rounded-xl active:bg-green-800 transition-colors text-sm"
+        className="w-full h-12 bg-gray-800 text-white font-bold rounded-xl active:bg-gray-900 transition-colors text-sm"
       >
         Lock In Your Data &mdash; Create Account
       </button>

@@ -15,12 +15,24 @@ interface PlayerStats {
   totalGross: number
   bestGross: number | null
   totalWinningsCents: number
+  roundsWon: number
+}
+
+interface ScoreDistribution {
+  eagles: number
+  birdies: number
+  pars: number
+  bogeys: number
+  doubles: number
+  worse: number
 }
 
 export function Stats({ userId, onBack }: Props) {
   const [loading, setLoading] = useState(true)
   const [stats, setStats] = useState<PlayerStats[]>([])
   const [totalRounds, setTotalRounds] = useState(0)
+  const [scoreDist, setScoreDist] = useState<ScoreDistribution>({ eagles: 0, birdies: 0, pars: 0, bogeys: 0, doubles: 0, worse: 0 })
+  const [mostPlayedCourse, setMostPlayedCourse] = useState('')
 
   useEffect(() => {
     loadStats()
@@ -60,7 +72,9 @@ export function Stats({ userId, onBack }: Props) {
     const allJunkRecords: JunkRecord[] = (junkRes.data ?? []).map(rowToJunkRecord)
 
     // Build player map from round snapshots
-    const playerMap = new Map<string, { name: string; roundsPlayed: number; grossTotals: number[]; winningsCents: number }>()
+    const playerMap = new Map<string, { name: string; roundsPlayed: number; grossTotals: number[]; winningsCents: number; roundsWon: number }>()
+    const dist: ScoreDistribution = { eagles: 0, birdies: 0, pars: 0, bogeys: 0, doubles: 0, worse: 0 }
+    const courseCounts = new Map<string, number>()
 
     for (const round of rounds) {
       const players: Player[] = round.players ?? []
@@ -77,13 +91,31 @@ export function Stats({ userId, onBack }: Props) {
         const gross = pScores.reduce((s, sc) => s + sc.grossScore, 0)
 
         if (!playerMap.has(player.id)) {
-          playerMap.set(player.id, { name: player.name, roundsPlayed: 0, grossTotals: [], winningsCents: 0 })
+          playerMap.set(player.id, { name: player.name, roundsPlayed: 0, grossTotals: [], winningsCents: 0, roundsWon: 0 })
         }
         const entry = playerMap.get(player.id)!
         entry.roundsPlayed++
-        if (pScores.length >= 18) {
+        if (pScores.length >= snapshot.holes.length) {
           entry.grossTotals.push(gross)
         }
+
+        // Scoring distribution (all players combined)
+        for (const sc of pScores) {
+          const hole = snapshot.holes.find(h => h.number === sc.holeNumber)
+          if (!hole) continue
+          const diff = sc.grossScore - hole.par
+          if (sc.grossScore === 1 || diff <= -2) dist.eagles++
+          else if (diff === -1) dist.birdies++
+          else if (diff === 0) dist.pars++
+          else if (diff === 1) dist.bogeys++
+          else if (diff === 2) dist.doubles++
+          else dist.worse++
+        }
+      }
+
+      // Track course frequency
+      if (snapshot.courseName) {
+        courseCounts.set(snapshot.courseName, (courseCounts.get(snapshot.courseName) ?? 0) + 1)
       }
 
       // Calculate payouts for this round
@@ -119,6 +151,7 @@ export function Stats({ userId, onBack }: Props) {
           const entry = playerMap.get(payout.playerId)
           if (entry) {
             entry.winningsCents += (payout.amountCents - buyIn)
+            if (payout.amountCents > buyIn) entry.roundsWon++
           }
         }
         // Players who didn't win lose their buy-in
@@ -144,6 +177,15 @@ export function Stats({ userId, onBack }: Props) {
       }
     }
 
+    setScoreDist(dist)
+    // Most played course
+    let maxCount = 0
+    let topCourse = ''
+    for (const [name, count] of courseCounts) {
+      if (count > maxCount) { maxCount = count; topCourse = name }
+    }
+    setMostPlayedCourse(topCourse)
+
     // Convert to sorted array
     const statsArr: PlayerStats[] = Array.from(playerMap.entries()).map(([id, data]) => ({
       id,
@@ -156,6 +198,7 @@ export function Stats({ userId, onBack }: Props) {
         ? Math.min(...data.grossTotals)
         : null,
       totalWinningsCents: data.winningsCents,
+      roundsWon: data.roundsWon,
     }))
 
     statsArr.sort((a, b) => b.totalWinningsCents - a.totalWinningsCents)
@@ -172,14 +215,14 @@ export function Stats({ userId, onBack }: Props) {
   return (
     <div className="min-h-screen bg-gray-50 pb-8">
       <header className="app-header text-white px-4 py-4 sticky top-0 z-10 shadow-xl flex items-center gap-3">
-        <button onClick={onBack} className="w-10 h-10 flex items-center justify-center rounded-full hover:bg-green-700 text-xl" aria-label="Back">←</button>
+        <button onClick={onBack} className="w-10 h-10 flex items-center justify-center rounded-full hover:bg-gray-600 text-xl" aria-label="Back">←</button>
         <h1 className="text-xl font-bold">Leaderboard</h1>
       </header>
 
       <div className="px-4 py-5 max-w-2xl mx-auto space-y-5">
         {loading ? (
           <div className="flex justify-center py-16">
-            <div className="w-8 h-8 border-2 border-green-500 border-t-transparent rounded-full animate-spin" />
+            <div className="w-8 h-8 border-2 border-amber-500 border-t-transparent rounded-full animate-spin" />
           </div>
         ) : stats.length === 0 ? (
           <div className="text-center py-16">
@@ -198,7 +241,35 @@ export function Stats({ userId, onBack }: Props) {
                 <p className="text-2xl font-bold text-gray-900 font-display">{stats.length}</p>
                 <p className="text-xs text-gray-500">Players</p>
               </div>
+              {mostPlayedCourse && (
+                <div className="flex-1 text-center">
+                  <p className="text-sm font-bold text-gray-900 font-display truncate">{mostPlayedCourse}</p>
+                  <p className="text-xs text-gray-500">Top Course</p>
+                </div>
+              )}
             </div>
+
+            {/* Scoring Distribution */}
+            {(scoreDist.eagles + scoreDist.birdies + scoreDist.pars + scoreDist.bogeys + scoreDist.doubles + scoreDist.worse) > 0 && (
+              <section className="bg-white rounded-2xl shadow-sm p-4">
+                <h2 className="font-display font-semibold text-gray-800 text-base mb-3">Scoring Distribution</h2>
+                <div className="grid grid-cols-3 gap-2 text-center">
+                  {[
+                    { label: 'Eagles+', count: scoreDist.eagles, color: 'bg-yellow-50 text-yellow-700' },
+                    { label: 'Birdies', count: scoreDist.birdies, color: 'bg-green-50 text-green-700' },
+                    { label: 'Pars', count: scoreDist.pars, color: 'bg-gray-50 text-gray-700' },
+                    { label: 'Bogeys', count: scoreDist.bogeys, color: 'bg-orange-50 text-orange-700' },
+                    { label: 'Doubles', count: scoreDist.doubles, color: 'bg-red-50 text-red-600' },
+                    { label: 'Worse', count: scoreDist.worse, color: 'bg-red-50 text-red-700' },
+                  ].map(({ label, count, color }) => (
+                    <div key={label} className={`rounded-xl p-2 ${color}`}>
+                      <p className="text-lg font-bold font-display">{count}</p>
+                      <p className="text-xs">{label}</p>
+                    </div>
+                  ))}
+                </div>
+              </section>
+            )}
 
             <section>
               <h2 className="font-display font-semibold text-gray-800 text-base mb-3">Lifetime Standings</h2>
@@ -220,6 +291,7 @@ export function Stats({ userId, onBack }: Props) {
                           {player.roundsPlayed} round{player.roundsPlayed !== 1 ? 's' : ''}
                           {player.totalGross > 0 && ` · Avg ${player.totalGross}`}
                           {player.bestGross && ` · Best ${player.bestGross}`}
+                          {player.roundsPlayed > 0 && ` · ${Math.round((player.roundsWon / player.roundsPlayed) * 100)}% win`}
                         </p>
                       </div>
                       <div className="text-right">

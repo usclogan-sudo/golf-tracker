@@ -223,6 +223,13 @@ export function rowToUserProfile(row: any): UserProfile {
     displayName: row.display_name ?? undefined,
     handicapIndex: row.handicap_index ?? undefined,
     tee: row.tee ?? 'White',
+    venmoUsername: row.venmo_username ?? undefined,
+    zelleIdentifier: row.zelle_identifier ?? undefined,
+    cashAppUsername: row.cashapp_username ?? undefined,
+    paypalEmail: row.paypal_email ?? undefined,
+    preferredPayment: row.preferred_payment ?? undefined,
+    avatarUrl: row.avatar_url ?? undefined,
+    avatarPreset: row.avatar_preset ?? undefined,
     createdAt: row.created_at ? new Date(row.created_at) : undefined,
   }
 }
@@ -235,6 +242,13 @@ export function userProfileToRow(p: UserProfile) {
     display_name: p.displayName ?? null,
     handicap_index: p.handicapIndex ?? null,
     tee: p.tee ?? 'White',
+    venmo_username: p.venmoUsername ?? null,
+    zelle_identifier: p.zelleIdentifier ?? null,
+    cashapp_username: p.cashAppUsername ?? null,
+    paypal_email: p.paypalEmail ?? null,
+    preferred_payment: p.preferredPayment ?? null,
+    avatar_url: p.avatarUrl ?? null,
+    avatar_preset: p.avatarPreset ?? null,
   }
 }
 

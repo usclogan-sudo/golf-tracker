@@ -71,7 +71,7 @@ export function CourseCatalog({ userId, onDone, onAddCustom }: Props) {
       <header className="app-header text-white px-4 py-4 sticky top-0 z-10 shadow-xl flex items-center gap-3">
         <button
           onClick={onDone}
-          className="w-10 h-10 flex items-center justify-center rounded-full hover:bg-green-700 text-xl"
+          className="w-10 h-10 flex items-center justify-center rounded-full hover:bg-gray-600 text-xl"
           aria-label="Back"
         >
           ←
@@ -88,7 +88,7 @@ export function CourseCatalog({ userId, onDone, onAddCustom }: Props) {
             placeholder="Search courses or city…"
             value={query}
             onChange={e => setQuery(e.target.value)}
-            className="w-full h-12 pl-11 pr-4 rounded-2xl border border-gray-200 bg-white text-base focus:outline-none focus:ring-2 focus:ring-green-600 shadow-sm"
+            className="w-full h-12 pl-11 pr-4 rounded-2xl border border-gray-200 bg-white text-base focus:outline-none focus:ring-2 focus:ring-amber-500 shadow-sm"
           />
         </div>
 
@@ -122,14 +122,14 @@ export function CourseCatalog({ userId, onDone, onAddCustom }: Props) {
                     disabled={isAdding || isAdded}
                     className={`w-full bg-white rounded-2xl shadow-sm border text-left px-4 py-4 flex items-center gap-4 transition-all
                       ${isAdded
-                        ? 'border-green-300 bg-green-50'
+                        ? 'border-amber-300 bg-amber-50'
                         : 'border-gray-100 active:bg-gray-50'
                       }
                       ${isAdding ? 'opacity-70' : ''}
                     `}
                   >
                     <div className={`w-12 h-12 rounded-xl flex items-center justify-center flex-shrink-0 text-xl
-                      ${isAdded ? 'bg-green-100' : 'bg-gray-100'}`}>
+                      ${isAdded ? 'bg-amber-100' : 'bg-gray-100'}`}>
                       {isAdded ? '✓' : '⛳'}
                     </div>
                     <div className="flex-1 min-w-0">
@@ -141,11 +141,11 @@ export function CourseCatalog({ userId, onDone, onAddCustom }: Props) {
                       </p>
                     </div>
                     {isAdding ? (
-                      <div className="w-5 h-5 border-2 border-green-500 border-t-transparent rounded-full animate-spin flex-shrink-0" />
+                      <div className="w-5 h-5 border-2 border-amber-500 border-t-transparent rounded-full animate-spin flex-shrink-0" />
                     ) : isAdded ? (
-                      <span className="text-green-600 font-semibold text-sm flex-shrink-0">Added</span>
+                      <span className="text-amber-600 font-semibold text-sm flex-shrink-0">Added</span>
                     ) : (
-                      <span className="text-green-700 font-semibold text-sm flex-shrink-0">+ Add</span>
+                      <span className="text-amber-600 font-semibold text-sm flex-shrink-0">+ Add</span>
                     )}
                   </button>
                 )
@@ -164,7 +164,7 @@ export function CourseCatalog({ userId, onDone, onAddCustom }: Props) {
         <div className="max-w-2xl mx-auto">
           <button
             onClick={onAddCustom}
-            className="w-full h-14 border-2 border-green-700 text-green-700 text-base font-bold rounded-2xl active:bg-green-50 transition-colors"
+            className="w-full h-14 border-2 border-green-700 text-amber-600 text-base font-bold rounded-2xl active:bg-amber-50 transition-colors"
           >
             + Add Custom Course
           </button>

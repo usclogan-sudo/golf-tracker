@@ -88,7 +88,7 @@ function PaymentButtons({ toPlayer, amountCents, note }: { toPlayer: Player; amo
             )}
             {hasCashApp && (
               <a href={cashAppLink(toPlayer.cashAppUsername!, amountCents, fullNote)} target="_blank" rel="noopener noreferrer"
-                className="flex-1 min-w-[120px] h-11 bg-green-600 text-white font-semibold rounded-xl flex items-center justify-center gap-1.5 active:bg-green-700 text-sm">
+                className="flex-1 min-w-[120px] h-11 bg-green-600 text-white font-semibold rounded-xl flex items-center justify-center gap-1.5 active:bg-gray-800 text-sm">
                 Cash App
               </a>
             )}
@@ -243,7 +243,7 @@ export function SettleUp({ roundId, onDone, onContinue }: Props) {
               </span>
             )}
           </h1>
-          <p className="text-green-300 text-sm mt-0.5">{snapshot.courseName} · {gameLabel}</p>
+          <p className="text-gray-300 text-sm mt-0.5">{snapshot.courseName} · {gameLabel}</p>
         </div>
       </header>
 
@@ -272,7 +272,7 @@ export function SettleUp({ roundId, onDone, onContinue }: Props) {
                       onClick={() => togglePaid(b)}
                       className={`px-4 py-2 rounded-xl text-sm font-semibold transition-colors ${
                         isPaid
-                          ? 'bg-green-600 text-white active:bg-green-700'
+                          ? 'bg-green-600 text-white active:bg-gray-800'
                           : 'bg-red-100 text-red-700 active:bg-red-200'
                       }`}
                     >
@@ -419,9 +419,9 @@ export function SettleUp({ roundId, onDone, onContinue }: Props) {
           <section className="bg-white rounded-2xl shadow-sm p-4 space-y-3">
             <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Nassau Results</p>
             {[
-              { label: 'Front 9 (1–9)', seg: nassauResult.front },
-              { label: 'Back 9 (10–18)', seg: nassauResult.back },
-              { label: 'Full 18', seg: nassauResult.total },
+              { label: `Front (${nassauResult.front.holeRange})`, seg: nassauResult.front },
+              { label: `Back (${nassauResult.back.holeRange})`, seg: nassauResult.back },
+              { label: `Total (${nassauResult.total.holeRange})`, seg: nassauResult.total },
             ].map(({ label, seg }) => {
               const winner = seg.winner ? playerById(seg.winner) : null
               const tiedNames = seg.tiedPlayers.map(id => playerById(id)?.name).filter(Boolean).join(', ')
@@ -592,10 +592,10 @@ export function SettleUp({ roundId, onDone, onContinue }: Props) {
         )}
       </div>
 
-      <div className="fixed bottom-0 inset-x-0 p-4 bg-white/95 backdrop-blur-sm border-t border-gray-200">
+      <div className="fixed bottom-0 inset-x-0 p-4 bg-white/95 backdrop-blur-sm border-t border-gray-200 safe-bottom">
         <div className="max-w-2xl mx-auto flex gap-3">
           <button onClick={onContinue} className="flex-1 h-14 border-2 border-gray-200 text-gray-600 font-semibold rounded-2xl active:bg-gray-50">← Back to Scores</button>
-          <button onClick={onDone} className="flex-1 h-14 bg-green-700 text-white text-lg font-bold rounded-2xl active:bg-green-800 transition-colors">✓ Done</button>
+          <button onClick={onDone} className="flex-1 h-14 bg-gray-800 text-white text-lg font-bold rounded-2xl active:bg-gray-900 transition-colors">✓ Done</button>
         </div>
       </div>
     </div>

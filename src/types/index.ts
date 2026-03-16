@@ -46,6 +46,13 @@ export interface UserProfile {
   displayName?: string
   handicapIndex?: number
   tee: string
+  venmoUsername?: string
+  zelleIdentifier?: string
+  cashAppUsername?: string
+  paypalEmail?: string
+  preferredPayment?: string
+  avatarUrl?: string
+  avatarPreset?: string
   createdAt?: Date
 }
 

@@ -31,6 +31,40 @@ interface Props {
   templateRound?: Round | null
 }
 
+const STEP_ORDER = ['course', 'players', 'groups', 'game', 'money'] as const
+const STEP_LABELS: Record<string, string> = {
+  course: 'Course',
+  players: 'Players',
+  groups: 'Groups',
+  game: 'Game',
+  money: 'Stakes',
+}
+
+function StepIndicator({ current, skipGroups, stakesMode }: { current: string; skipGroups: boolean; stakesMode?: StakesMode }) {
+  const steps = STEP_ORDER.filter(s => !(s === 'groups' && skipGroups))
+  const currentIdx = steps.indexOf(current as any)
+  const isHR = stakesMode === 'high_roller'
+  return (
+    <div className="flex items-center justify-center gap-1 py-2 px-4 bg-white/5">
+      {steps.map((s, i) => {
+        const isActive = s === current
+        const isDone = i < currentIdx
+        return (
+          <div key={s} className="flex items-center gap-1">
+            {i > 0 && <div className={`w-4 h-0.5 ${isDone ? (isHR ? 'bg-amber-500' : 'bg-amber-400') : 'bg-white/20'}`} />}
+            <div className={`flex items-center gap-1 px-2 py-1 rounded-full text-xs font-semibold transition-colors ${
+              isActive ? (isHR ? 'bg-amber-500/30 text-amber-300' : 'bg-amber-400/20 text-amber-400') : isDone ? 'text-white/70' : 'text-white/30'
+            }`}>
+              {isDone ? <span>✓</span> : null}
+              <span>{STEP_LABELS[s]}</span>
+            </div>
+          </div>
+        )
+      })}
+    </div>
+  )
+}
+
 const STANDARD_PRESETS = [500, 1000, 2000, 5000]
 const HIGH_ROLLER_PRESETS = [10000, 25000, 50000, 100000]
 
@@ -167,7 +201,7 @@ function CoursePicker({
           value={query}
           onChange={e => setQuery(e.target.value)}
           autoFocus
-          className="w-full h-12 px-4 rounded-xl border border-gray-300 text-base focus:outline-none focus:ring-2 focus:ring-green-600"
+          className="w-full h-12 px-4 rounded-xl border border-gray-300 text-base focus:outline-none focus:ring-2 focus:ring-amber-500"
         />
 
         <div className="space-y-2">
@@ -197,7 +231,7 @@ function CoursePicker({
                   </p>
                 </div>
                 {selecting === course.id && (
-                  <div className="w-5 h-5 border-2 border-green-500 border-t-transparent rounded-full animate-spin flex-shrink-0" />
+                  <div className="w-5 h-5 border-2 border-amber-500 border-t-transparent rounded-full animate-spin flex-shrink-0" />
                 )}
               </div>
             </button>
@@ -210,7 +244,7 @@ function CoursePicker({
 
         <button
           onClick={onAddCourse}
-          className="w-full h-12 border-2 border-dashed border-green-300 text-green-700 font-semibold rounded-2xl active:bg-green-50"
+          className="w-full h-12 border-2 border-dashed border-amber-300 text-amber-600 font-semibold rounded-2xl active:bg-amber-50"
         >
           + Add Custom Course
         </button>
@@ -228,6 +262,7 @@ function PlayerPicker({
   onBack,
   stakesMode,
   preSelectedIds,
+  stepIndicator,
 }: {
   userId: string
   course: Course
@@ -235,6 +270,7 @@ function PlayerPicker({
   onBack: () => void
   stakesMode: StakesMode
   preSelectedIds?: string[]
+  stepIndicator?: React.ReactNode
 }) {
   const [allPlayers, setAllPlayers] = useState<Player[]>([])
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set(preSelectedIds ?? []))
@@ -338,9 +374,10 @@ function PlayerPicker({
         </button>
         <div>
           <h1 className="text-xl font-bold">Select Players</h1>
-          <p className="text-green-300 text-xs truncate">{course.name}</p>
+          <p className="text-gray-300 text-xs truncate">{course.name}</p>
         </div>
       </header>
+      {stepIndicator}
 
       <div className="px-4 py-4 max-w-2xl mx-auto space-y-3">
         <input
@@ -348,7 +385,7 @@ function PlayerPicker({
           placeholder="Search players…"
           value={query}
           onChange={e => setQuery(e.target.value)}
-          className="w-full h-12 px-4 rounded-xl border border-gray-300 text-base focus:outline-none focus:ring-2 focus:ring-green-600"
+          className="w-full h-12 px-4 rounded-xl border border-gray-300 text-base focus:outline-none focus:ring-2 focus:ring-amber-500"
         />
 
         <p className="text-xs text-gray-500 px-1">
@@ -367,7 +404,7 @@ function PlayerPicker({
                 <div
                   key={player.id}
                   className={`bg-white rounded-2xl shadow-sm border transition-colors ${
-                    selected ? 'border-green-400 bg-green-50' : 'border-gray-100'
+                    selected ? 'border-amber-400 bg-amber-50' : 'border-gray-100'
                   }`}
                 >
                   <button
@@ -377,7 +414,7 @@ function PlayerPicker({
                   >
                     <div
                       className={`w-6 h-6 rounded-full border-2 flex items-center justify-center flex-shrink-0 transition-colors ${
-                        selected ? 'border-green-600 bg-green-600' : 'border-gray-300'
+                        selected ? 'border-gray-500 bg-amber-600' : 'border-gray-300'
                       }`}
                     >
                       {selected && <span className="text-white text-xs font-bold">✓</span>}
@@ -398,7 +435,7 @@ function PlayerPicker({
                             onClick={() => setPlayerTees(prev => ({ ...prev, [player.id]: t.name }))}
                             className={`px-3 py-1 rounded-lg text-sm font-medium transition-colors ${
                               activeTee === t.name
-                                ? 'bg-green-700 text-white'
+                                ? 'bg-gray-800 text-white'
                                 : 'bg-gray-100 text-gray-600 active:bg-gray-200'
                             }`}
                           >
@@ -426,7 +463,7 @@ function PlayerPicker({
               placeholder="Name"
               value={newName}
               onChange={e => setNewName(e.target.value)}
-              className="w-full h-11 px-3 rounded-xl border border-gray-300 text-base focus:outline-none focus:ring-2 focus:ring-green-600"
+              className="w-full h-11 px-3 rounded-xl border border-gray-300 text-base focus:outline-none focus:ring-2 focus:ring-amber-500"
             />
             <input
               type="number"
@@ -434,12 +471,12 @@ function PlayerPicker({
               placeholder="Handicap Index"
               value={newHcp}
               onChange={e => setNewHcp(e.target.value)}
-              className="w-full h-11 px-3 rounded-xl border border-gray-300 text-base focus:outline-none focus:ring-2 focus:ring-green-600"
+              className="w-full h-11 px-3 rounded-xl border border-gray-300 text-base focus:outline-none focus:ring-2 focus:ring-amber-500"
             />
             <select
               value={newTee}
               onChange={e => setNewTee(e.target.value)}
-              className="w-full h-11 px-3 rounded-xl border border-gray-300 text-base focus:outline-none focus:ring-2 focus:ring-green-600"
+              className="w-full h-11 px-3 rounded-xl border border-gray-300 text-base focus:outline-none focus:ring-2 focus:ring-amber-500"
             >
               {course.tees.map(t => (
                 <option key={t.name} value={t.name}>{t.name}</option>
@@ -456,7 +493,7 @@ function PlayerPicker({
               <button
                 onClick={handleAddPlayer}
                 disabled={saving}
-                className="flex-1 h-11 bg-green-700 text-white rounded-xl font-semibold disabled:opacity-60"
+                className="flex-1 h-11 bg-gray-800 text-white rounded-xl font-semibold disabled:opacity-60"
               >
                 {saving ? 'Saving…' : 'Add'}
               </button>
@@ -466,7 +503,7 @@ function PlayerPicker({
           <button
             onClick={() => setShowAddForm(true)}
             disabled={selectedIds.size >= MAX_PLAYERS}
-            className="w-full h-12 border-2 border-dashed border-green-300 text-green-700 font-semibold rounded-2xl active:bg-green-50 disabled:opacity-40"
+            className="w-full h-12 border-2 border-dashed border-amber-300 text-amber-600 font-semibold rounded-2xl active:bg-amber-50 disabled:opacity-40"
           >
             + Add Guest Player
           </button>
@@ -478,7 +515,7 @@ function PlayerPicker({
           <button
             onClick={handleNext}
             disabled={selectedIds.size === 0}
-            className="w-full h-14 bg-green-700 text-white text-lg font-bold rounded-2xl shadow-lg disabled:opacity-40 active:bg-green-800 transition-colors"
+            className="w-full h-14 bg-gray-800 text-white text-lg font-bold rounded-2xl shadow-lg disabled:opacity-40 active:bg-gray-900 transition-colors"
           >
             {selectedIds.size === 0
               ? 'Select at Least 1 Player'
@@ -500,12 +537,14 @@ function GroupAssignment({
   onNext,
   onBack,
   stakesMode,
+  stepIndicator,
 }: {
   players: Player[]
   initialGroups?: Record<string, number>
   onNext: (groups: Record<string, number>) => void
   onBack: () => void
   stakesMode: StakesMode
+  stepIndicator?: React.ReactNode
 }) {
   const [groups, setGroups] = useState<Record<string, number>>(() => {
     if (initialGroups) return { ...initialGroups }
@@ -563,15 +602,16 @@ function GroupAssignment({
         </button>
         <div>
           <h1 className="text-xl font-bold">Assign Groups</h1>
-          <p className="text-green-300 text-xs">{players.length} players · {numGroups} group{numGroups !== 1 ? 's' : ''}</p>
+          <p className="text-gray-300 text-xs">{players.length} players · {numGroups} group{numGroups !== 1 ? 's' : ''}</p>
         </div>
       </header>
+      {stepIndicator}
 
       <div className="px-4 py-4 max-w-2xl mx-auto space-y-4">
         <div className="flex gap-2">
           <button
             onClick={autoAssign}
-            className="flex-1 h-10 bg-green-50 border border-green-200 text-green-700 text-sm font-semibold rounded-xl active:bg-green-100"
+            className="flex-1 h-10 bg-amber-50 border border-amber-200 text-amber-600 text-sm font-semibold rounded-xl active:bg-amber-100"
           >
             Auto-assign
           </button>
@@ -594,7 +634,7 @@ function GroupAssignment({
                 <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${
                   groupPlayers.length > MAX_PER_GROUP_CONST ? 'bg-red-100 text-red-600' :
                   groupPlayers.length === 0 ? 'bg-red-100 text-red-600' :
-                  'bg-green-100 text-green-700'
+                  'bg-amber-100 text-amber-600'
                 }`}>
                   {groupPlayers.length}/{MAX_PER_GROUP_CONST}
                 </span>
@@ -612,7 +652,7 @@ function GroupAssignment({
                         onClick={() => setGroups(prev => ({ ...prev, [player.id]: targetGn }))}
                         className={`w-7 h-7 rounded-lg text-xs font-bold transition-colors ${
                           groups[player.id] === targetGn
-                            ? 'bg-green-700 text-white'
+                            ? 'bg-gray-800 text-white'
                             : 'bg-white border border-gray-200 text-gray-500'
                         }`}
                       >
@@ -635,7 +675,7 @@ function GroupAssignment({
           <button
             onClick={() => onNext(groups)}
             disabled={!allValid || !allAssigned}
-            className="w-full h-14 bg-green-700 text-white text-lg font-bold rounded-2xl shadow-lg disabled:opacity-40 active:bg-green-800 transition-colors"
+            className="w-full h-14 bg-gray-800 text-white text-lg font-bold rounded-2xl shadow-lg disabled:opacity-40 active:bg-gray-900 transition-colors"
           >
             {!allValid ? 'Fix group sizes (1–5 each)' : 'Next: Choose Game'}
           </button>
@@ -654,6 +694,7 @@ function GameSetup({
   onBack,
   initialGame,
   initialJunkConfig,
+  stepIndicator,
 }: {
   players: Player[]
   initialStakesMode: StakesMode
@@ -661,6 +702,7 @@ function GameSetup({
   onBack: () => void
   initialGame?: Game
   initialJunkConfig?: JunkConfig
+  stepIndicator?: React.ReactNode
 }) {
   const [gamePresets, setGamePresets] = useState<GamePreset[]>([])
   const [stakesMode, setStakesMode] = useState<StakesMode>(initialGame?.stakesMode ?? initialStakesMode)
@@ -844,7 +886,7 @@ function GameSetup({
         type === gameType
           ? stakesMode === 'high_roller'
             ? 'text-black'
-            : 'bg-green-700 text-white'
+            : 'bg-gray-800 text-white'
           : 'bg-gray-100 text-gray-700'
       }`}
       style={type === gameType && stakesMode === 'high_roller'
@@ -875,6 +917,7 @@ function GameSetup({
           )}
         </div>
       </header>
+      {stepIndicator}
 
       <div className="px-4 py-5 max-w-2xl mx-auto space-y-4">
 
@@ -887,7 +930,7 @@ function GameSetup({
                 <button
                   key={preset.id}
                   onClick={() => applyPreset(preset)}
-                  className="flex-shrink-0 px-4 py-2 rounded-xl bg-green-50 border border-green-200 text-green-800 text-sm font-semibold active:bg-green-100 transition-colors"
+                  className="flex-shrink-0 px-4 py-2 rounded-xl bg-amber-50 border border-amber-200 text-gray-800 text-sm font-semibold active:bg-amber-100 transition-colors"
                 >
                   {preset.name}
                 </button>
@@ -903,7 +946,7 @@ function GameSetup({
             <button
               onClick={() => handleStakesChange('standard')}
               className={`h-14 rounded-xl font-semibold ${
-                stakesMode === 'standard' ? 'bg-green-700 text-white' : 'bg-gray-100 text-gray-700'
+                stakesMode === 'standard' ? 'bg-gray-800 text-white' : 'bg-gray-100 text-gray-700'
               }`}
             >
               🎯 Standard
@@ -955,7 +998,7 @@ function GameSetup({
                   activePreset === cents
                     ? stakesMode === 'high_roller'
                       ? 'text-black'
-                      : 'bg-green-700 text-white'
+                      : 'bg-gray-800 text-white'
                     : 'bg-gray-100 text-gray-700'
                 }`}
                 style={activePreset === cents && stakesMode === 'high_roller'
@@ -988,14 +1031,14 @@ function GameSetup({
                 autoFocus
                 value={buyInDollars}
                 onChange={e => setBuyInDollars(e.target.value)}
-                className="flex-1 h-12 px-4 rounded-xl border border-gray-300 text-base focus:outline-none focus:ring-2 focus:ring-green-600"
+                className="flex-1 h-12 px-4 rounded-xl border border-gray-300 text-base focus:outline-none focus:ring-2 focus:ring-amber-500"
               />
             </div>
           )}
 
-          <div className="bg-green-50 rounded-xl px-4 py-3 flex items-center justify-between">
+          <div className="bg-amber-50 rounded-xl px-4 py-3 flex items-center justify-between">
             <span className="text-sm text-gray-600">Total pot</span>
-            <span className="font-bold text-green-800 text-lg">{fmtMoney(buyInCents * players.length)}</span>
+            <span className="font-bold text-gray-800 text-lg">{fmtMoney(buyInCents * players.length)}</span>
           </div>
 
           {type === 'nassau' && (
@@ -1013,11 +1056,11 @@ function GameSetup({
               <p className="text-sm text-gray-600 mb-2">Scoring</p>
               <div className="grid grid-cols-2 gap-2">
                 <button onClick={() => setSkinsMode('net')}
-                  className={`h-12 rounded-xl font-semibold ${skinsMode === 'net' ? 'bg-green-700 text-white' : 'bg-gray-100 text-gray-700'}`}>
+                  className={`h-12 rounded-xl font-semibold ${skinsMode === 'net' ? 'bg-gray-800 text-white' : 'bg-gray-100 text-gray-700'}`}>
                   Net (handicap)
                 </button>
                 <button onClick={() => setSkinsMode('gross')}
-                  className={`h-12 rounded-xl font-semibold ${skinsMode === 'gross' ? 'bg-green-700 text-white' : 'bg-gray-100 text-gray-700'}`}>
+                  className={`h-12 rounded-xl font-semibold ${skinsMode === 'gross' ? 'bg-gray-800 text-white' : 'bg-gray-100 text-gray-700'}`}>
                   Gross (raw)
                 </button>
               </div>
@@ -1025,7 +1068,7 @@ function GameSetup({
             <button
               onClick={() => setCarryovers(v => !v)}
               className={`w-full h-12 rounded-xl font-semibold border-2 ${
-                carryovers ? 'bg-green-50 border-green-300 text-green-800' : 'bg-gray-50 border-gray-200 text-gray-600'
+                carryovers ? 'bg-amber-50 border-amber-300 text-gray-800' : 'bg-gray-50 border-gray-200 text-gray-600'
               }`}
             >
               Carryovers: {carryovers ? 'ON ✓ (recommended)' : 'OFF'}
@@ -1045,11 +1088,11 @@ function GameSetup({
               <p className="text-sm text-gray-600 mb-2">Format</p>
               <div className="grid grid-cols-2 gap-2">
                 <button onClick={() => setBbScoring('match')}
-                  className={`h-12 rounded-xl font-semibold text-sm ${bbScoring === 'match' ? 'bg-green-700 text-white' : 'bg-gray-100 text-gray-700'}`}>
+                  className={`h-12 rounded-xl font-semibold text-sm ${bbScoring === 'match' ? 'bg-gray-800 text-white' : 'bg-gray-100 text-gray-700'}`}>
                   Match Play
                 </button>
                 <button onClick={() => setBbScoring('total')}
-                  className={`h-12 rounded-xl font-semibold text-sm ${bbScoring === 'total' ? 'bg-green-700 text-white' : 'bg-gray-100 text-gray-700'}`}>
+                  className={`h-12 rounded-xl font-semibold text-sm ${bbScoring === 'total' ? 'bg-gray-800 text-white' : 'bg-gray-100 text-gray-700'}`}>
                   Stroke Play
                 </button>
               </div>
@@ -1058,11 +1101,11 @@ function GameSetup({
               <p className="text-sm text-gray-600 mb-2">Scoring</p>
               <div className="grid grid-cols-2 gap-2">
                 <button onClick={() => setBbMode('net')}
-                  className={`h-12 rounded-xl font-semibold ${bbMode === 'net' ? 'bg-green-700 text-white' : 'bg-gray-100 text-gray-700'}`}>
+                  className={`h-12 rounded-xl font-semibold ${bbMode === 'net' ? 'bg-gray-800 text-white' : 'bg-gray-100 text-gray-700'}`}>
                   Net (handicap)
                 </button>
                 <button onClick={() => setBbMode('gross')}
-                  className={`h-12 rounded-xl font-semibold ${bbMode === 'gross' ? 'bg-green-700 text-white' : 'bg-gray-100 text-gray-700'}`}>
+                  className={`h-12 rounded-xl font-semibold ${bbMode === 'gross' ? 'bg-gray-800 text-white' : 'bg-gray-100 text-gray-700'}`}>
                   Gross (raw)
                 </button>
               </div>
@@ -1107,11 +1150,11 @@ function GameSetup({
               <p className="text-sm text-gray-600 mb-2">Scoring</p>
               <div className="grid grid-cols-2 gap-2">
                 <button onClick={() => setNassauMode('net')}
-                  className={`h-12 rounded-xl font-semibold ${nassauMode === 'net' ? 'bg-green-700 text-white' : 'bg-gray-100 text-gray-700'}`}>
+                  className={`h-12 rounded-xl font-semibold ${nassauMode === 'net' ? 'bg-gray-800 text-white' : 'bg-gray-100 text-gray-700'}`}>
                   Net (handicap)
                 </button>
                 <button onClick={() => setNassauMode('gross')}
-                  className={`h-12 rounded-xl font-semibold ${nassauMode === 'gross' ? 'bg-green-700 text-white' : 'bg-gray-100 text-gray-700'}`}>
+                  className={`h-12 rounded-xl font-semibold ${nassauMode === 'gross' ? 'bg-gray-800 text-white' : 'bg-gray-100 text-gray-700'}`}>
                   Gross (raw)
                 </button>
               </div>
@@ -1120,7 +1163,7 @@ function GameSetup({
               <p className="font-semibold">3 separate bets:</p>
               <p>• Front 9 — lowest total strokes wins</p>
               <p>• Back 9 — lowest total strokes wins</p>
-              <p>• Full 18 — lowest total strokes wins</p>
+              <p>• Full round — lowest total strokes wins</p>
             </div>
           </section>
         )}
@@ -1133,11 +1176,11 @@ function GameSetup({
               <p className="text-sm text-gray-600 mb-2">Scoring</p>
               <div className="grid grid-cols-2 gap-2">
                 <button onClick={() => setWolfMode('net')}
-                  className={`h-12 rounded-xl font-semibold ${wolfMode === 'net' ? 'bg-green-700 text-white' : 'bg-gray-100 text-gray-700'}`}>
+                  className={`h-12 rounded-xl font-semibold ${wolfMode === 'net' ? 'bg-gray-800 text-white' : 'bg-gray-100 text-gray-700'}`}>
                   Net (handicap)
                 </button>
                 <button onClick={() => setWolfMode('gross')}
-                  className={`h-12 rounded-xl font-semibold ${wolfMode === 'gross' ? 'bg-green-700 text-white' : 'bg-gray-100 text-gray-700'}`}>
+                  className={`h-12 rounded-xl font-semibold ${wolfMode === 'gross' ? 'bg-gray-800 text-white' : 'bg-gray-100 text-gray-700'}`}>
                   Gross (raw)
                 </button>
               </div>
@@ -1192,11 +1235,11 @@ function GameSetup({
               <p className="text-sm text-gray-600 mb-2">Scoring</p>
               <div className="grid grid-cols-2 gap-2">
                 <button onClick={() => setBbbMode('net')}
-                  className={`h-12 rounded-xl font-semibold ${bbbMode === 'net' ? 'bg-green-700 text-white' : 'bg-gray-100 text-gray-700'}`}>
+                  className={`h-12 rounded-xl font-semibold ${bbbMode === 'net' ? 'bg-gray-800 text-white' : 'bg-gray-100 text-gray-700'}`}>
                   Net (handicap)
                 </button>
                 <button onClick={() => setBbbMode('gross')}
-                  className={`h-12 rounded-xl font-semibold ${bbbMode === 'gross' ? 'bg-green-700 text-white' : 'bg-gray-100 text-gray-700'}`}>
+                  className={`h-12 rounded-xl font-semibold ${bbbMode === 'gross' ? 'bg-gray-800 text-white' : 'bg-gray-100 text-gray-700'}`}>
                   Gross (raw)
                 </button>
               </div>
@@ -1219,7 +1262,7 @@ function GameSetup({
             </div>
             <button
               onClick={() => setJunksEnabled(v => !v)}
-              className={`relative w-12 h-7 rounded-full transition-colors ${junksEnabled ? 'bg-green-600' : 'bg-gray-300'}`}
+              className={`relative w-12 h-7 rounded-full transition-colors ${junksEnabled ? 'bg-amber-600' : 'bg-gray-300'}`}
             >
               <span className={`absolute top-0.5 w-6 h-6 bg-white rounded-full shadow transition-transform ${junksEnabled ? 'translate-x-5' : 'translate-x-0.5'}`} />
             </button>
@@ -1237,7 +1280,7 @@ function GameSetup({
                       onClick={() => toggleJunkType(jt)}
                       className={`px-3 py-2 rounded-xl text-sm font-semibold transition-colors ${
                         active
-                          ? jt === 'snake' ? 'bg-red-100 border-2 border-red-300 text-red-700' : 'bg-green-100 border-2 border-green-300 text-green-800'
+                          ? jt === 'snake' ? 'bg-red-100 border-2 border-red-300 text-red-700' : 'bg-amber-100 border-2 border-amber-300 text-gray-800'
                           : 'bg-gray-100 border-2 border-transparent text-gray-500'
                       }`}
                     >
@@ -1256,7 +1299,7 @@ function GameSetup({
                       onClick={() => setJunkValueDollars(String(cents / 100))}
                       className={`px-3 h-10 rounded-xl font-semibold text-sm transition-colors ${
                         Math.round(parseFloat(junkValueDollars || '0') * 100) === cents
-                          ? 'bg-green-700 text-white'
+                          ? 'bg-gray-800 text-white'
                           : 'bg-gray-100 text-gray-700'
                       }`}
                     >
@@ -1291,7 +1334,7 @@ function GameSetup({
               onNext(makeGame(), jc)
             }}
             disabled={!canContinue}
-            className="w-full h-14 bg-green-700 text-white text-lg font-bold rounded-2xl shadow-lg disabled:opacity-40 active:bg-green-800 transition-colors"
+            className="w-full h-14 bg-gray-800 text-white text-lg font-bold rounded-2xl shadow-lg disabled:opacity-40 active:bg-gray-900 transition-colors"
           >
             Next: Collect Buy-ins
           </button>
@@ -1312,6 +1355,7 @@ function TreasurerAndBuyIns({
   groups,
   onCreateRound,
   onBack,
+  stepIndicator,
 }: {
   userId: string
   course: Course
@@ -1321,6 +1365,7 @@ function TreasurerAndBuyIns({
   groups?: Record<string, number>
   onCreateRound: (roundId: string) => void
   onBack: () => void
+  stepIndicator?: React.ReactNode
 }) {
   const [treasurerId, setTreasurerId] = useState<string | null>(null)
   const [method, setMethod] = useState<PaymentMethod>('venmo')
@@ -1404,7 +1449,7 @@ function TreasurerAndBuyIns({
         </button>
         <div className="min-w-0">
           <h1 className="text-xl font-bold">Buy-ins & Treasurer</h1>
-          <p className="text-green-300 text-xs truncate">
+          <p className="text-gray-300 text-xs truncate">
             Pot {fmtMoney(potCents)} · {course.name}
             {game.stakesMode === 'high_roller' && (
               <span className="ml-2 font-bold" style={{ color: '#fbbf24' }}>💎 HIGH ROLLER</span>
@@ -1412,6 +1457,7 @@ function TreasurerAndBuyIns({
           </p>
         </div>
       </header>
+      {stepIndicator}
 
       <div className="px-4 py-5 max-w-2xl mx-auto space-y-4">
         <section className="bg-white rounded-2xl shadow-sm p-4 space-y-3">
@@ -1426,13 +1472,13 @@ function TreasurerAndBuyIns({
                 onClick={() => setTreasurerId(p.id)}
                 className={`w-full p-4 rounded-2xl border-2 text-left font-semibold transition-colors ${
                   treasurerId === p.id
-                    ? 'border-green-500 bg-green-50 text-green-900'
+                    ? 'border-amber-500 bg-amber-50 text-gray-900'
                     : 'border-gray-200 bg-white text-gray-700'
                 }`}
               >
                 {p.name}
                 {treasurerId === p.id && (
-                  <span className="ml-2 text-sm font-normal text-green-600">✓ Treasurer</span>
+                  <span className="ml-2 text-sm font-normal text-amber-600">✓ Treasurer</span>
                 )}
               </button>
             ))}
@@ -1450,7 +1496,7 @@ function TreasurerAndBuyIns({
                 key={m}
                 onClick={() => setMethod(m)}
                 className={`h-11 rounded-xl font-semibold capitalize text-sm ${
-                  method === m ? 'bg-green-700 text-white' : 'bg-gray-100 text-gray-700'
+                  method === m ? 'bg-gray-800 text-white' : 'bg-gray-100 text-gray-700'
                 }`}
               >
                 {m}
@@ -1474,13 +1520,13 @@ function TreasurerAndBuyIns({
                 key={p.id}
                 onClick={() => setPaid(prev => ({ ...prev, [p.id]: !prev[p.id] }))}
                 className={`w-full p-4 rounded-2xl border-2 flex items-center justify-between transition-colors ${
-                  paid[p.id] ? 'border-green-400 bg-green-50' : 'border-gray-200 bg-white'
+                  paid[p.id] ? 'border-amber-400 bg-amber-50' : 'border-gray-200 bg-white'
                 }`}
               >
                 <span className="font-semibold text-gray-800">{p.name}</span>
                 <span
                   className={`text-sm font-bold px-3 py-1.5 rounded-full ${
-                    paid[p.id] ? 'bg-green-600 text-white' : 'bg-red-100 text-red-600'
+                    paid[p.id] ? 'bg-amber-600 text-white' : 'bg-red-100 text-red-600'
                   }`}
                 >
                   {paid[p.id] ? '✓ PAID' : 'UNPAID'}
@@ -1507,7 +1553,7 @@ function TreasurerAndBuyIns({
           <button
             onClick={startRound}
             disabled={!canStart || saving}
-            className="w-full h-14 bg-green-700 text-white text-lg font-bold rounded-2xl shadow-lg disabled:opacity-40 active:bg-green-800 transition-colors"
+            className="w-full h-14 bg-gray-800 text-white text-lg font-bold rounded-2xl shadow-lg disabled:opacity-40 active:bg-gray-900 transition-colors"
           >
             {saving
               ? 'Starting…'
@@ -1546,10 +1592,11 @@ export function NewRound({ userId, onStart, onCancel, onAddCourse, initialStakes
 
   const preSelectedPlayerIds = templateRound?.players?.map(p => p.id)
 
+  const skipGroups = !players || players.length <= MAX_PER_GROUP_CONST
+
   const handlePlayersNext = (ps: Player[]) => {
     setPlayers(ps)
     if (ps.length <= MAX_PER_GROUP_CONST) {
-      // Auto-assign all to group 1 and skip
       const g: Record<string, number> = {}
       ps.forEach(p => { g[p.id] = 1 })
       setGroups(g)
@@ -1559,15 +1606,19 @@ export function NewRound({ userId, onStart, onCancel, onAddCourse, initialStakes
     }
   }
 
+  const stepBar = <StepIndicator current={step} skipGroups={skipGroups} stakesMode={initialStakesMode} />
+
   if (step === 'course') {
     return (
-      <CoursePicker
-        userId={userId}
-        onSelect={c => { setCourse(c); setStep('players') }}
-        onAddCourse={onAddCourse}
-        onCancel={onCancel}
-        stakesMode={initialStakesMode}
-      />
+      <>
+        <CoursePicker
+          userId={userId}
+          onSelect={c => { setCourse(c); setStep('players') }}
+          onAddCourse={onAddCourse}
+          onCancel={onCancel}
+          stakesMode={initialStakesMode}
+        />
+      </>
     )
   }
 
@@ -1580,6 +1631,7 @@ export function NewRound({ userId, onStart, onCancel, onAddCourse, initialStakes
         onBack={() => setStep('course')}
         stakesMode={initialStakesMode}
         preSelectedIds={preSelectedPlayerIds}
+        stepIndicator={stepBar}
       />
     )
   }
@@ -1592,6 +1644,7 @@ export function NewRound({ userId, onStart, onCancel, onAddCourse, initialStakes
         onNext={g => { setGroups(g); setStep('game') }}
         onBack={() => setStep('players')}
         stakesMode={initialStakesMode}
+        stepIndicator={stepBar}
       />
     )
   }
@@ -1605,6 +1658,7 @@ export function NewRound({ userId, onStart, onCancel, onAddCourse, initialStakes
         onBack={() => players.length > MAX_PER_GROUP_CONST ? setStep('groups') : setStep('players')}
         initialGame={templateRound?.game}
         initialJunkConfig={junkConfig}
+        stepIndicator={stepBar}
       />
     )
   }
@@ -1620,6 +1674,7 @@ export function NewRound({ userId, onStart, onCancel, onAddCourse, initialStakes
         groups={groups}
         onBack={() => setStep('game')}
         onCreateRound={rid => onStart(rid)}
+        stepIndicator={stepBar}
       />
     )
   }

@@ -28,10 +28,10 @@ export function calcCourseHandicap(
 }
 
 /** How many strokes a player receives on a specific hole */
-export function strokesOnHole(courseHcp: number, strokeIndex: number): number {
+export function strokesOnHole(courseHcp: number, strokeIndex: number, totalHoles: number = 18): number {
   let s = 0
   if (courseHcp >= strokeIndex) s++
-  if (courseHcp >= 18 + strokeIndex) s++
+  if (courseHcp >= totalHoles + strokeIndex) s++
   return s
 }
 
@@ -84,7 +84,9 @@ export function calculateSkins(
 
   let carry = 0
 
-  for (let holeNum = 1; holeNum <= 18; holeNum++) {
+  const totalHoles = snapshot.holes.length
+
+  for (let holeNum = 1; holeNum <= totalHoles; holeNum++) {
     const hole = snapshot.holes.find(h => h.number === holeNum)
     if (!hole) continue
 
@@ -96,7 +98,7 @@ export function calculateSkins(
       const gross = hs.grossScore
       const net =
         config.mode === 'net'
-          ? gross - strokesOnHole(courseHcps[p.id] ?? 0, hole.strokeIndex)
+          ? gross - strokesOnHole(courseHcps[p.id] ?? 0, hole.strokeIndex, totalHoles)
           : gross
       return { playerId: p.id, score: net }
     })
@@ -129,18 +131,19 @@ export function calculateSkins(
 
   let pendingCarry = 0
   if (carry > 0 && config.carryovers) {
-    const hole18 = snapshot.holes.find(h => h.number === 18)
-    const scores18 = players.map(p => {
-      const hs = holeScores.find(s => s.playerId === p.id && s.holeNumber === 18)
-      if (!hs || !hole18) return { playerId: p.id, score: null as number | null }
+    const lastHoleNum = totalHoles
+    const lastHole = snapshot.holes.find(h => h.number === lastHoleNum)
+    const scoresLast = players.map(p => {
+      const hs = holeScores.find(s => s.playerId === p.id && s.holeNumber === lastHoleNum)
+      if (!hs || !lastHole) return { playerId: p.id, score: null as number | null }
       const gross = hs.grossScore
       const net =
         config.mode === 'net'
-          ? gross - strokesOnHole(courseHcps[p.id] ?? 0, hole18.strokeIndex)
+          ? gross - strokesOnHole(courseHcps[p.id] ?? 0, lastHole.strokeIndex, totalHoles)
           : gross
       return { playerId: p.id, score: net }
     })
-    const valid18 = scores18.filter(s => s.score !== null) as Array<{
+    const valid18 = scoresLast.filter(s => s.score !== null) as Array<{
       playerId: string
       score: number
     }>
@@ -188,7 +191,9 @@ export function calculateBestBall(
   const totalScore = { A: 0, B: 0 }
   const holeResults: HoleBestBallResult[] = []
 
-  for (let holeNum = 1; holeNum <= 18; holeNum++) {
+  const totalHoles = snapshot.holes.length
+
+  for (let holeNum = 1; holeNum <= totalHoles; holeNum++) {
     const hole = snapshot.holes.find(h => h.number === holeNum)
     if (!hole) continue
 
@@ -203,7 +208,7 @@ export function calculateBestBall(
       const gross = hs.grossScore
       const score =
         config.mode === 'net'
-          ? gross - strokesOnHole(courseHcps[p.id] ?? 0, hole.strokeIndex)
+          ? gross - strokesOnHole(courseHcps[p.id] ?? 0, hole.strokeIndex, totalHoles)
           : gross
       if (team === 'A') {
         if (bestA === null || score < bestA) bestA = score
@@ -273,6 +278,7 @@ function nassauSegment(
 ): NassauSegmentResult {
   const scores: Record<string, number> = {}
   let incomplete = false
+  const totalHoles = snapshot.holes.length
 
   for (const p of players) {
     let total = 0
@@ -283,7 +289,7 @@ function nassauSegment(
       const gross = hs.grossScore
       total +=
         config.mode === 'net'
-          ? gross - strokesOnHole(courseHcps[p.id] ?? 0, hole.strokeIndex)
+          ? gross - strokesOnHole(courseHcps[p.id] ?? 0, hole.strokeIndex, totalHoles)
           : gross
     }
     scores[p.id] = total
@@ -314,14 +320,16 @@ export function calculateNassau(
   config: NassauConfig,
   courseHcps: Record<string, number>,
 ): NassauResult {
-  const front9 = Array.from({ length: 9 }, (_, i) => i + 1)
-  const back9 = Array.from({ length: 9 }, (_, i) => i + 10)
-  const all18 = Array.from({ length: 18 }, (_, i) => i + 1)
+  const totalHoles = snapshot.holes.length
+  const half = Math.ceil(totalHoles / 2)
+  const front = Array.from({ length: half }, (_, i) => i + 1)
+  const back = Array.from({ length: totalHoles - half }, (_, i) => i + half + 1)
+  const all = Array.from({ length: totalHoles }, (_, i) => i + 1)
 
   return {
-    front: nassauSegment(players, holeScores, snapshot, config, courseHcps, front9, '1–9'),
-    back: nassauSegment(players, holeScores, snapshot, config, courseHcps, back9, '10–18'),
-    total: nassauSegment(players, holeScores, snapshot, config, courseHcps, all18, '1–18'),
+    front: nassauSegment(players, holeScores, snapshot, config, courseHcps, front, `1–${half}`),
+    back: nassauSegment(players, holeScores, snapshot, config, courseHcps, back, `${half + 1}–${totalHoles}`),
+    total: nassauSegment(players, holeScores, snapshot, config, courseHcps, all, `1–${totalHoles}`),
   }
 }
 
@@ -339,9 +347,9 @@ export function calculateNassauPayouts(
   players.forEach(p => (map[p.id] = { amount: 0, reasons: [] }))
 
   const segs = [
-    { seg: result.front, label: 'Front 9 (1–9)' },
-    { seg: result.back, label: 'Back 9 (10–18)' },
-    { seg: result.total, label: 'Total (1–18)' },
+    { seg: result.front, label: `Front (${result.front.holeRange})` },
+    { seg: result.back, label: `Back (${result.back.holeRange})` },
+    { seg: result.total, label: `Total (${result.total.holeRange})` },
   ]
 
   for (const { seg, label } of segs) {
@@ -361,9 +369,15 @@ export function calculateNassauPayouts(
   // Press bets: each press creates a sub-segment from press hole to end of nine
   // Worth the same as one original segment bet per player
   const pressPot = Math.floor(game.buyInCents * players.length / 3)
+  // Derive hole count from the result segments
+  const frontHoles = result.front.holeRange.split('–').map(Number)
+  const frontEnd = frontHoles[1] ?? 9
+  const backHoles = result.back.holeRange.split('–').map(Number)
+  const backEnd = backHoles[1] ?? 18
+
   for (const press of presses) {
-    const inFront = press.holeNumber <= 9
-    const endHole = inFront ? 9 : 18
+    const inFront = press.holeNumber <= frontEnd
+    const endHole = inFront ? frontEnd : backEnd
     const holeRange = `${press.holeNumber}–${endHole}`
 
     // Calculate scores for the press sub-segment
@@ -441,7 +455,9 @@ export function calculateWolf(
   const netUnits: Record<string, number> = {}
   players.forEach(p => (netUnits[p.id] = 0))
 
-  for (let holeNum = 1; holeNum <= 18; holeNum++) {
+  const totalHoles = snapshot.holes.length
+
+  for (let holeNum = 1; holeNum <= totalHoles; holeNum++) {
     const wolfId = wolfForHole(config.wolfOrder, holeNum)
     const decision = config.holeDecisions?.[holeNum]
 
@@ -459,7 +475,7 @@ export function calculateWolf(
       const hs = holeScores.find(s => s.playerId === playerId && s.holeNumber === holeNum)
       if (!hs) return null
       return config.mode === 'net'
-        ? hs.grossScore - strokesOnHole(courseHcps[playerId] ?? 0, hole.strokeIndex)
+        ? hs.grossScore - strokesOnHole(courseHcps[playerId] ?? 0, hole.strokeIndex, totalHoles)
         : hs.grossScore
     }
 

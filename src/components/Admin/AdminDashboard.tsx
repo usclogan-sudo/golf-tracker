@@ -120,7 +120,7 @@ function SharedCoursesTab({ userId }: { userId: string }) {
             value={name}
             onChange={e => setName(e.target.value)}
             placeholder="e.g. River Oaks GC"
-            className="w-full h-12 px-4 rounded-xl border border-gray-300 text-base focus:outline-none focus:ring-2 focus:ring-green-600"
+            className="w-full h-12 px-4 rounded-xl border border-gray-300 text-base focus:outline-none focus:ring-2 focus:ring-amber-500"
           />
         </div>
 
@@ -133,21 +133,21 @@ function SharedCoursesTab({ userId }: { userId: string }) {
                 value={tee.name}
                 onChange={e => setTees(prev => prev.map((t, j) => j === i ? { ...t, name: e.target.value } : t))}
                 placeholder="Tee name"
-                className="flex-1 h-10 px-3 rounded-lg border border-gray-300 text-sm focus:outline-none focus:ring-2 focus:ring-green-600"
+                className="flex-1 h-10 px-3 rounded-lg border border-gray-300 text-sm focus:outline-none focus:ring-2 focus:ring-amber-500"
               />
               <input
                 type="number"
                 value={tee.rating}
                 onChange={e => setTees(prev => prev.map((t, j) => j === i ? { ...t, rating: parseFloat(e.target.value) || 0 } : t))}
                 placeholder="Rating"
-                className="w-20 h-10 px-3 rounded-lg border border-gray-300 text-sm focus:outline-none focus:ring-2 focus:ring-green-600"
+                className="w-20 h-10 px-3 rounded-lg border border-gray-300 text-sm focus:outline-none focus:ring-2 focus:ring-amber-500"
               />
               <input
                 type="number"
                 value={tee.slope}
                 onChange={e => setTees(prev => prev.map((t, j) => j === i ? { ...t, slope: parseInt(e.target.value) || 0 } : t))}
                 placeholder="Slope"
-                className="w-20 h-10 px-3 rounded-lg border border-gray-300 text-sm focus:outline-none focus:ring-2 focus:ring-green-600"
+                className="w-20 h-10 px-3 rounded-lg border border-gray-300 text-sm focus:outline-none focus:ring-2 focus:ring-amber-500"
               />
               {tees.length > 1 && (
                 <button onClick={() => setTees(prev => prev.filter((_, j) => j !== i))}
@@ -157,7 +157,7 @@ function SharedCoursesTab({ userId }: { userId: string }) {
           ))}
           <button
             onClick={() => setTees(prev => [...prev, { name: '', rating: 72, slope: 113 }])}
-            className="text-green-700 text-sm font-semibold"
+            className="text-amber-600 text-sm font-semibold"
           >
             + Add Tee
           </button>
@@ -225,7 +225,7 @@ function SharedCoursesTab({ userId }: { userId: string }) {
         <button
           onClick={handleSave}
           disabled={saving || !name.trim()}
-          className="w-full h-12 bg-green-700 text-white font-semibold rounded-xl disabled:opacity-50 active:bg-green-800 transition-colors"
+          className="w-full h-12 bg-gray-800 text-white font-semibold rounded-xl disabled:opacity-50 active:bg-gray-900 transition-colors"
         >
           {saving ? 'Saving...' : editingId ? 'Update Course' : 'Add Course'}
         </button>
@@ -264,7 +264,7 @@ function SharedCoursesTab({ userId }: { userId: string }) {
       <div className="flex gap-2">
         <button
           onClick={() => setShowForm(true)}
-          className="flex-1 h-10 border-2 border-dashed border-green-300 text-green-700 font-semibold rounded-xl text-sm active:bg-green-50"
+          className="flex-1 h-10 border-2 border-dashed border-amber-300 text-amber-600 font-semibold rounded-xl text-sm active:bg-amber-50"
         >
           + Add Course
         </button>
@@ -413,7 +413,7 @@ function GamePresetsTab({ userId }: { userId: string }) {
             value={presetName}
             onChange={e => setPresetName(e.target.value)}
             placeholder="e.g. Friday Skins"
-            className="w-full h-12 px-4 rounded-xl border border-gray-300 text-base focus:outline-none focus:ring-2 focus:ring-green-600"
+            className="w-full h-12 px-4 rounded-xl border border-gray-300 text-base focus:outline-none focus:ring-2 focus:ring-amber-500"
           />
         </div>
 
@@ -425,7 +425,7 @@ function GamePresetsTab({ userId }: { userId: string }) {
                 key={gt}
                 onClick={() => setGameType(gt)}
                 className={`h-10 rounded-xl text-sm font-semibold transition-colors ${
-                  gameType === gt ? 'bg-green-700 text-white' : 'bg-gray-100 text-gray-700'
+                  gameType === gt ? 'bg-gray-800 text-white' : 'bg-gray-100 text-gray-700'
                 }`}
               >
                 {GAME_TYPE_LABELS[gt]}
@@ -443,7 +443,7 @@ function GamePresetsTab({ userId }: { userId: string }) {
               min="1"
               value={buyInDollars}
               onChange={e => setBuyInDollars(e.target.value)}
-              className="w-full h-12 px-4 rounded-xl border border-gray-300 text-base focus:outline-none focus:ring-2 focus:ring-green-600"
+              className="w-full h-12 px-4 rounded-xl border border-gray-300 text-base focus:outline-none focus:ring-2 focus:ring-amber-500"
             />
           </div>
           <div>
@@ -451,7 +451,7 @@ function GamePresetsTab({ userId }: { userId: string }) {
             <div className="grid grid-cols-2 gap-1">
               <button
                 onClick={() => setStakesMode('standard')}
-                className={`h-12 rounded-xl text-sm font-semibold ${stakesMode === 'standard' ? 'bg-green-700 text-white' : 'bg-gray-100 text-gray-700'}`}
+                className={`h-12 rounded-xl text-sm font-semibold ${stakesMode === 'standard' ? 'bg-gray-800 text-white' : 'bg-gray-100 text-gray-700'}`}
               >
                 Standard
               </button>
@@ -470,13 +470,13 @@ function GamePresetsTab({ userId }: { userId: string }) {
           <div className="grid grid-cols-2 gap-2">
             <button
               onClick={() => setMode('net')}
-              className={`h-10 rounded-xl font-semibold text-sm ${mode === 'net' ? 'bg-green-700 text-white' : 'bg-gray-100 text-gray-700'}`}
+              className={`h-10 rounded-xl font-semibold text-sm ${mode === 'net' ? 'bg-gray-800 text-white' : 'bg-gray-100 text-gray-700'}`}
             >
               Net (handicap)
             </button>
             <button
               onClick={() => setMode('gross')}
-              className={`h-10 rounded-xl font-semibold text-sm ${mode === 'gross' ? 'bg-green-700 text-white' : 'bg-gray-100 text-gray-700'}`}
+              className={`h-10 rounded-xl font-semibold text-sm ${mode === 'gross' ? 'bg-gray-800 text-white' : 'bg-gray-100 text-gray-700'}`}
             >
               Gross (raw)
             </button>
@@ -487,7 +487,7 @@ function GamePresetsTab({ userId }: { userId: string }) {
           <button
             onClick={() => setCarryovers(v => !v)}
             className={`w-full h-10 rounded-xl font-semibold text-sm border-2 ${
-              carryovers ? 'bg-green-50 border-green-300 text-green-800' : 'bg-gray-50 border-gray-200 text-gray-600'
+              carryovers ? 'bg-amber-50 border-amber-300 text-green-800' : 'bg-gray-50 border-gray-200 text-gray-600'
             }`}
           >
             Carryovers: {carryovers ? 'ON' : 'OFF'}
@@ -501,14 +501,14 @@ function GamePresetsTab({ userId }: { userId: string }) {
             value={description}
             onChange={e => setDescription(e.target.value)}
             placeholder="e.g. Our regular Friday game"
-            className="w-full h-12 px-4 rounded-xl border border-gray-300 text-base focus:outline-none focus:ring-2 focus:ring-green-600"
+            className="w-full h-12 px-4 rounded-xl border border-gray-300 text-base focus:outline-none focus:ring-2 focus:ring-amber-500"
           />
         </div>
 
         <button
           onClick={handleSave}
           disabled={saving || !presetName.trim()}
-          className="w-full h-12 bg-green-700 text-white font-semibold rounded-xl disabled:opacity-50 active:bg-green-800 transition-colors"
+          className="w-full h-12 bg-gray-800 text-white font-semibold rounded-xl disabled:opacity-50 active:bg-gray-900 transition-colors"
         >
           {saving ? 'Saving...' : editingId ? 'Update Preset' : 'Add Preset'}
         </button>
@@ -520,7 +520,7 @@ function GamePresetsTab({ userId }: { userId: string }) {
     <div className="space-y-3">
       <button
         onClick={() => setShowForm(true)}
-        className="w-full h-10 border-2 border-dashed border-green-300 text-green-700 font-semibold rounded-xl text-sm active:bg-green-50"
+        className="w-full h-10 border-2 border-dashed border-amber-300 text-amber-600 font-semibold rounded-xl text-sm active:bg-amber-50"
       >
         + Add Preset
       </button>
@@ -575,14 +575,14 @@ export function AdminDashboard({ userId, onBack }: Props) {
       <header className="app-header text-white px-4 py-4 sticky top-0 z-10 shadow-xl flex items-center gap-3">
         <button
           onClick={onBack}
-          className="w-10 h-10 flex items-center justify-center rounded-full hover:bg-green-700 text-xl"
+          className="w-10 h-10 flex items-center justify-center rounded-full hover:bg-gray-800 text-xl"
           aria-label="Back"
         >
           &#8592;
         </button>
         <div>
           <h1 className="text-xl font-bold">Admin Dashboard</h1>
-          <p className="text-green-400 text-xs">Manage shared data</p>
+          <p className="text-amber-400 text-xs">Manage shared data</p>
         </div>
       </header>
 
@@ -591,7 +591,7 @@ export function AdminDashboard({ userId, onBack }: Props) {
           <button
             onClick={() => setTab('courses')}
             className={`flex-1 h-11 rounded-xl font-semibold text-sm transition-colors ${
-              tab === 'courses' ? 'bg-green-700 text-white' : 'bg-white text-gray-700 border border-gray-200'
+              tab === 'courses' ? 'bg-gray-800 text-white' : 'bg-white text-gray-700 border border-gray-200'
             }`}
           >
             Shared Courses
@@ -599,7 +599,7 @@ export function AdminDashboard({ userId, onBack }: Props) {
           <button
             onClick={() => setTab('presets')}
             className={`flex-1 h-11 rounded-xl font-semibold text-sm transition-colors ${
-              tab === 'presets' ? 'bg-green-700 text-white' : 'bg-white text-gray-700 border border-gray-200'
+              tab === 'presets' ? 'bg-gray-800 text-white' : 'bg-white text-gray-700 border border-gray-200'
             }`}
           >
             Game Presets

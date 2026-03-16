@@ -26,6 +26,11 @@ export default {
           500: '#d97706',
           600: '#b45309',
         },
+        charcoal: {
+          700: '#374151',
+          800: '#1f2937',
+          900: '#111827',
+        },
       },
       fontFamily: {
         display: ['Outfit', 'system-ui', 'sans-serif'],

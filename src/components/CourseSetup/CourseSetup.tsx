@@ -4,15 +4,17 @@ import { supabase, courseToRow } from '../../lib/supabase'
 import type { Course, Hole, Tee } from '../../types'
 
 // Standard stroke index allocation (odd on front, even on back, hardest first)
-const STANDARD_SI = [7, 11, 3, 15, 1, 9, 5, 13, 17, 8, 12, 4, 16, 2, 10, 6, 14, 18]
+const STANDARD_SI_18 = [7, 11, 3, 15, 1, 9, 5, 13, 17, 8, 12, 4, 16, 2, 10, 6, 14, 18]
+const STANDARD_SI_9 = [5, 3, 1, 7, 9, 4, 2, 8, 6]
 
-function defaultHoles(): Hole[] {
-  return Array.from({ length: 18 }, (_, i) => ({
-    number: i + 1, par: 4, strokeIndex: STANDARD_SI[i], yardages: {},
+function defaultHoles(count: 9 | 18 = 18): Hole[] {
+  const si = count === 9 ? STANDARD_SI_9 : STANDARD_SI_18
+  return Array.from({ length: count }, (_, i) => ({
+    number: i + 1, par: 4, strokeIndex: si[i], yardages: {},
   }))
 }
-function sumYards(holes: Hole[], teeName: string, from = 0, to = 18) {
-  return holes.slice(from, to).reduce((s, h) => s + (h.yardages[teeName] ?? 0), 0)
+function sumYards(holes: Hole[], teeName: string, from = 0, to?: number) {
+  return holes.slice(from, to ?? holes.length).reduce((s, h) => s + (h.yardages[teeName] ?? 0), 0)
 }
 
 interface Props { userId: string; course?: Course; onSave: () => void; onCancel: () => void; initialName?: string }
@@ -20,6 +22,7 @@ interface Props { userId: string; course?: Course; onSave: () => void; onCancel:
 export function CourseSetup({ userId, course: editCourse, onSave, onCancel, initialName }: Props) {
   const [name, setName] = useState(editCourse?.name ?? initialName ?? '')
   const [tees, setTees] = useState<Tee[]>(editCourse?.tees ?? [{ name: 'Blue', rating: 72.1, slope: 128 }])
+  const [holeCount, setHoleCount] = useState<9 | 18>(editCourse?.holes.length === 9 ? 9 : 18)
   const [holes, setHoles] = useState<Hole[]>(editCourse?.holes ?? defaultHoles())
   const [saving, setSaving] = useState(false)
   const [errors, setErrors] = useState<Record<string, string>>({})
@@ -67,8 +70,8 @@ export function CourseSetup({ userId, course: editCourse, onSave, onCancel, init
       if (new Set(names).size !== names.length) errs.teeDupe = 'Tee names must be unique'
     }
     const sis = holes.map(h => h.strokeIndex)
-    if (new Set(sis).size !== 18 || sis.some(si => si < 1 || si > 18))
-      errs.si = 'Each stroke index 1–18 must be used exactly once'
+    if (new Set(sis).size !== holes.length || sis.some(si => si < 1 || si > holes.length))
+      errs.si = `Each stroke index 1–${holes.length} must be used exactly once`
     setErrors(errs)
     return Object.keys(errs).length === 0
   }
@@ -96,26 +99,32 @@ export function CourseSetup({ userId, course: editCourse, onSave, onCancel, init
   }
 
   const namedTees = tees.filter(t => t.name.trim())
-  const frontPar = holes.slice(0, 9).reduce((s, h) => s + h.par, 0)
-  const backPar = holes.slice(9).reduce((s, h) => s + h.par, 0)
+  const half = Math.ceil(holes.length / 2)
+  const frontPar = holes.slice(0, half).reduce((s, h) => s + h.par, 0)
+  const backPar = holes.slice(half).reduce((s, h) => s + h.par, 0)
+
+  const switchHoleCount = (count: 9 | 18) => {
+    setHoleCount(count)
+    setHoles(defaultHoles(count))
+  }
 
   return (
     <div className="min-h-screen bg-gray-50 pb-28">
       <header className="app-header text-white px-4 py-4 sticky top-0 z-10 shadow-xl flex items-center gap-3">
-        <button onClick={onCancel} className="w-10 h-10 flex items-center justify-center rounded-full hover:bg-green-700 text-xl" aria-label="Back">←</button>
+        <button onClick={onCancel} className="w-10 h-10 flex items-center justify-center rounded-full hover:bg-gray-600 text-xl" aria-label="Back">←</button>
         <h1 className="text-xl font-bold">{editCourse ? 'Edit Course' : 'New Course'}</h1>
       </header>
       <div className="px-4 py-5 max-w-2xl mx-auto space-y-5">
         <section className="bg-white rounded-2xl shadow-sm p-4">
           <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Course Name</label>
           <input type="text" placeholder="e.g. Pebble Beach Golf Links" value={name} onChange={e => setName(e.target.value)}
-            className={`w-full h-12 px-4 rounded-xl border text-base focus:outline-none focus:ring-2 focus:ring-green-600 ${errors.name ? 'border-red-400 bg-red-50' : 'border-gray-300'}`} />
+            className={`w-full h-12 px-4 rounded-xl border text-base focus:outline-none focus:ring-2 focus:ring-amber-500 ${errors.name ? 'border-red-400 bg-red-50' : 'border-gray-300'}`} />
           {errors.name && <p className="text-red-500 text-sm mt-1">{errors.name}</p>}
         </section>
         <section className="bg-white rounded-2xl shadow-sm p-4">
           <div className="flex items-center justify-between mb-3">
             <h2 className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Tees</h2>
-            <button onClick={addTee} className="bg-green-700 text-white text-sm px-4 h-9 rounded-lg font-semibold active:bg-green-800">+ Add Tee</button>
+            <button onClick={addTee} className="bg-gray-800 text-white text-sm px-4 h-9 rounded-lg font-semibold active:bg-gray-900">+ Add Tee</button>
           </div>
           {errors.tees && <p className="text-red-500 text-sm mb-2">{errors.tees}</p>}
           {errors.teeDupe && <p className="text-red-500 text-sm mb-2">{errors.teeDupe}</p>}
@@ -124,7 +133,7 @@ export function CourseSetup({ userId, course: editCourse, onSave, onCancel, init
               <div key={idx} className="border border-gray-200 rounded-xl p-3 space-y-2">
                 <div className="flex gap-2">
                   <input type="text" placeholder="Color (e.g. Blue)" value={tee.name} onChange={e => updateTee(idx, { name: e.target.value })}
-                    className={`flex-1 h-11 px-3 rounded-lg border text-base focus:outline-none focus:ring-2 focus:ring-green-600 ${errors[`tee${idx}name`] ? 'border-red-400' : 'border-gray-300'}`} />
+                    className={`flex-1 h-11 px-3 rounded-lg border text-base focus:outline-none focus:ring-2 focus:ring-amber-500 ${errors[`tee${idx}name`] ? 'border-red-400' : 'border-gray-300'}`} />
                   {tees.length > 1 && (
                     <button onClick={() => removeTee(idx)} className="w-11 h-11 text-red-500 border border-red-200 rounded-lg flex items-center justify-center text-2xl leading-none" aria-label={`Remove ${tee.name || 'tee'}`}>×</button>
                   )}
@@ -133,13 +142,13 @@ export function CourseSetup({ userId, course: editCourse, onSave, onCancel, init
                   <div>
                     <label className="text-xs text-gray-500 mb-1 block">Course Rating</label>
                     <input type="number" inputMode="decimal" step="0.1" min="60" max="80" value={tee.rating} onChange={e => updateTee(idx, { rating: parseFloat(e.target.value) })}
-                      className={`w-full h-11 px-3 rounded-lg border text-base focus:outline-none focus:ring-2 focus:ring-green-600 ${errors[`tee${idx}rating`] ? 'border-red-400' : 'border-gray-300'}`} />
+                      className={`w-full h-11 px-3 rounded-lg border text-base focus:outline-none focus:ring-2 focus:ring-amber-500 ${errors[`tee${idx}rating`] ? 'border-red-400' : 'border-gray-300'}`} />
                     {errors[`tee${idx}rating`] && <p className="text-red-500 text-xs mt-0.5">{errors[`tee${idx}rating`]}</p>}
                   </div>
                   <div>
                     <label className="text-xs text-gray-500 mb-1 block">Slope</label>
                     <input type="number" inputMode="numeric" min="55" max="155" value={tee.slope} onChange={e => updateTee(idx, { slope: parseInt(e.target.value) })}
-                      className={`w-full h-11 px-3 rounded-lg border text-base focus:outline-none focus:ring-2 focus:ring-green-600 ${errors[`tee${idx}slope`] ? 'border-red-400' : 'border-gray-300'}`} />
+                      className={`w-full h-11 px-3 rounded-lg border text-base focus:outline-none focus:ring-2 focus:ring-amber-500 ${errors[`tee${idx}slope`] ? 'border-red-400' : 'border-gray-300'}`} />
                     {errors[`tee${idx}slope`] && <p className="text-red-500 text-xs mt-0.5">{errors[`tee${idx}slope`]}</p>}
                   </div>
                 </div>
@@ -151,18 +160,28 @@ export function CourseSetup({ userId, course: editCourse, onSave, onCancel, init
           <div className="flex items-center justify-between mb-3">
             <h2 className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Holes</h2>
             <div className="flex gap-1.5">
-              {[
-                { label: 'Par 72', pars: [4,4,4,3,5,4,4,3,5,4,4,4,3,5,4,4,3,5] },
-                { label: 'Par 71', pars: [4,4,4,3,5,4,4,3,4,4,4,4,3,5,4,4,3,5] },
-                { label: 'Par 70', pars: [4,4,4,3,5,4,4,3,4,4,4,4,3,5,4,4,3,4] },
-              ].map(tmpl => (
-                <button key={tmpl.label} onClick={() => {
-                  setHoles(prev => prev.map((h, i) => ({ ...h, par: tmpl.pars[i] })))
-                }}
-                  className="px-2.5 py-1 text-xs font-semibold rounded-lg bg-green-50 text-green-700 border border-green-200 active:bg-green-100"
-                >{tmpl.label}</button>
+              {!editCourse && ([9, 18] as const).map(c => (
+                <button key={c} onClick={() => switchHoleCount(c)}
+                  className={`px-3 py-1 text-xs font-semibold rounded-lg transition-colors ${holeCount === c ? 'bg-gray-800 text-white' : 'bg-gray-100 text-gray-600 active:bg-gray-200'}`}>{c}H</button>
               ))}
             </div>
+          </div>
+          <div className="flex gap-1.5 mb-3">
+            {(holeCount === 18 ? [
+              { label: 'Par 72', pars: [4,4,4,3,5,4,4,3,5,4,4,4,3,5,4,4,3,5] },
+              { label: 'Par 71', pars: [4,4,4,3,5,4,4,3,4,4,4,4,3,5,4,4,3,5] },
+              { label: 'Par 70', pars: [4,4,4,3,5,4,4,3,4,4,4,4,3,5,4,4,3,4] },
+            ] : [
+              { label: 'Par 36', pars: [4,4,4,3,5,4,4,3,5] },
+              { label: 'Par 35', pars: [4,4,4,3,5,4,4,3,4] },
+              { label: 'Par 34', pars: [4,4,3,3,5,4,4,3,4] },
+            ]).map(tmpl => (
+              <button key={tmpl.label} onClick={() => {
+                setHoles(prev => prev.map((h, i) => ({ ...h, par: tmpl.pars[i] ?? 4 })))
+              }}
+                className="px-2.5 py-1 text-xs font-semibold rounded-lg bg-amber-50 text-amber-600 border border-amber-200 active:bg-amber-100"
+              >{tmpl.label}</button>
+            ))}
           </div>
           {errors.si && <div className="bg-red-50 border border-red-200 rounded-xl p-3 mb-3"><p className="text-red-600 text-sm">{errors.si}</p></div>}
           <div className="overflow-x-auto -mx-4 px-4">
@@ -182,9 +201,9 @@ export function CourseSetup({ userId, course: editCourse, onSave, onCancel, init
               <tbody>
                 {holes.map(hole => (
                   <Fragment key={hole.number}>
-                    {hole.number === 10 && (
-                      <tr><td colSpan={3 + namedTees.length} className="pt-3 pb-1 border-t-2 border-green-200">
-                        <span className="text-xs font-bold text-green-700 uppercase tracking-wide">Back 9</span>
+                    {holes.length > 9 && hole.number === half + 1 && (
+                      <tr><td colSpan={3 + namedTees.length} className="pt-3 pb-1 border-t-2 border-amber-200">
+                        <span className="text-xs font-bold text-amber-600 uppercase tracking-wide">Back {holes.length - half}</span>
                       </td></tr>
                     )}
                     <tr className={hole.number % 2 === 0 ? 'bg-gray-50/60' : 'bg-white'}>
@@ -193,20 +212,20 @@ export function CourseSetup({ userId, course: editCourse, onSave, onCancel, init
                         <div className="flex gap-0.5 justify-center">
                           {[3, 4, 5].map(p => (
                             <button key={p} onClick={() => updateHole(hole.number, { par: p })}
-                              className={`w-8 h-9 text-sm font-semibold rounded transition-colors ${hole.par === p ? 'bg-green-700 text-white shadow-sm' : 'bg-gray-100 text-gray-600 active:bg-gray-200'}`}>{p}</button>
+                              className={`w-8 h-9 text-sm font-semibold rounded transition-colors ${hole.par === p ? 'bg-gray-800 text-white shadow-sm' : 'bg-gray-100 text-gray-600 active:bg-gray-200'}`}>{p}</button>
                           ))}
                         </div>
                       </td>
                       <td className="py-1 px-1">
-                        <input type="number" inputMode="numeric" min={1} max={18} value={hole.strokeIndex}
+                        <input type="number" inputMode="numeric" min={1} max={holes.length} value={hole.strokeIndex}
                           onChange={e => { const v = parseInt(e.target.value); if (!isNaN(v)) updateHole(hole.number, { strokeIndex: v }) }}
-                          className="w-12 h-9 text-center rounded-lg border border-gray-300 text-sm focus:outline-none focus:ring-2 focus:ring-green-600" />
+                          className="w-12 h-9 text-center rounded-lg border border-gray-300 text-sm focus:outline-none focus:ring-2 focus:ring-amber-500" />
                       </td>
                       {namedTees.map(tee => (
                         <td key={tee.name} className="py-1 px-1">
                           <input type="number" inputMode="numeric" min={0} max={700} placeholder="—" value={hole.yardages[tee.name] ?? ''}
                             onChange={e => { const v = parseInt(e.target.value); updateYardage(hole.number, tee.name, isNaN(v) ? 0 : v) }}
-                            className="w-16 h-9 text-center rounded-lg border border-gray-300 text-sm focus:outline-none focus:ring-2 focus:ring-green-600" />
+                            className="w-16 h-9 text-center rounded-lg border border-gray-300 text-sm focus:outline-none focus:ring-2 focus:ring-amber-500" />
                         </td>
                       ))}
                     </tr>
@@ -214,18 +233,27 @@ export function CourseSetup({ userId, course: editCourse, onSave, onCancel, init
                 ))}
               </tbody>
               <tfoot className="border-t-2 border-gray-300">
-                <tr className="text-xs font-semibold text-gray-500">
-                  <td className="pt-2 pb-0.5 text-center">Out</td><td className="pt-2 pb-0.5 text-center">{frontPar}</td><td />
-                  {namedTees.map(t => <td key={t.name} className="pt-2 pb-0.5 text-center">{sumYards(holes, t.name, 0, 9) || '—'}</td>)}
-                </tr>
-                <tr className="text-xs font-semibold text-gray-500">
-                  <td className="py-0.5 text-center">In</td><td className="py-0.5 text-center">{backPar}</td><td />
-                  {namedTees.map(t => <td key={t.name} className="py-0.5 text-center">{sumYards(holes, t.name, 9, 18) || '—'}</td>)}
-                </tr>
-                <tr className="border-t border-gray-200 text-sm font-bold text-gray-800">
-                  <td className="pt-2 text-center">Tot</td><td className="pt-2 text-center">{frontPar + backPar}</td><td />
-                  {namedTees.map(t => <td key={t.name} className="pt-2 text-center">{sumYards(holes, t.name) || '—'}</td>)}
-                </tr>
+                {holes.length > 9 ? (
+                  <>
+                    <tr className="text-xs font-semibold text-gray-500">
+                      <td className="pt-2 pb-0.5 text-center">Out</td><td className="pt-2 pb-0.5 text-center">{frontPar}</td><td />
+                      {namedTees.map(t => <td key={t.name} className="pt-2 pb-0.5 text-center">{sumYards(holes, t.name, 0, half) || '—'}</td>)}
+                    </tr>
+                    <tr className="text-xs font-semibold text-gray-500">
+                      <td className="py-0.5 text-center">In</td><td className="py-0.5 text-center">{backPar}</td><td />
+                      {namedTees.map(t => <td key={t.name} className="py-0.5 text-center">{sumYards(holes, t.name, half) || '—'}</td>)}
+                    </tr>
+                    <tr className="border-t border-gray-200 text-sm font-bold text-gray-800">
+                      <td className="pt-2 text-center">Tot</td><td className="pt-2 text-center">{frontPar + backPar}</td><td />
+                      {namedTees.map(t => <td key={t.name} className="pt-2 text-center">{sumYards(holes, t.name) || '—'}</td>)}
+                    </tr>
+                  </>
+                ) : (
+                  <tr className="text-sm font-bold text-gray-800">
+                    <td className="pt-2 text-center">Tot</td><td className="pt-2 text-center">{frontPar}</td><td />
+                    {namedTees.map(t => <td key={t.name} className="pt-2 text-center">{sumYards(holes, t.name) || '—'}</td>)}
+                  </tr>
+                )}
               </tfoot>
             </table>
           </div>
@@ -235,7 +263,7 @@ export function CourseSetup({ userId, course: editCourse, onSave, onCancel, init
       <div className="fixed bottom-0 inset-x-0 p-4 bg-white/95 backdrop-blur-sm border-t border-gray-200">
         <div className="max-w-2xl mx-auto">
           <button onClick={handleSave} disabled={saving}
-            className="w-full h-14 bg-green-700 text-white text-lg font-bold rounded-2xl shadow-lg disabled:opacity-60 active:bg-green-800 transition-colors">
+            className="w-full h-14 bg-gray-800 text-white text-lg font-bold rounded-2xl shadow-lg disabled:opacity-60 active:bg-gray-900 transition-colors">
             {saving ? 'Saving…' : 'Save Course'}
           </button>
         </div>

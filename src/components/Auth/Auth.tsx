@@ -124,7 +124,7 @@ export function Auth() {
           <div className="text-center">
             <div className="text-7xl mb-4">&#9971;</div>
             <h1 className="font-display text-4xl font-800 tracking-tight text-gray-900">Fore Skins</h1>
-            <p className="text-green-700 text-sm font-medium mt-2 tracking-widest uppercase">Golf &middot; Side Games &middot; Money</p>
+            <p className="text-amber-600 text-sm font-medium mt-2 tracking-widest uppercase">Golf &middot; Side Games &middot; Money</p>
           </div>
 
           {/* Inline sign-in form */}
@@ -135,7 +135,7 @@ export function Auth() {
               value={email}
               onChange={e => setEmail(e.target.value)}
               onKeyDown={e => e.key === 'Enter' && (password ? handleSignIn() : undefined)}
-              className="w-full h-12 px-4 rounded-xl border border-gray-300 text-base focus:outline-none focus:ring-2 focus:ring-green-600"
+              className="w-full h-12 px-4 rounded-xl border border-gray-300 text-base focus:outline-none focus:ring-2 focus:ring-amber-500"
               autoFocus
             />
             <input
@@ -144,18 +144,18 @@ export function Auth() {
               value={password}
               onChange={e => setPassword(e.target.value)}
               onKeyDown={e => e.key === 'Enter' && handleSignIn()}
-              className="w-full h-12 px-4 rounded-xl border border-gray-300 text-base focus:outline-none focus:ring-2 focus:ring-green-600"
+              className="w-full h-12 px-4 rounded-xl border border-gray-300 text-base focus:outline-none focus:ring-2 focus:ring-amber-500"
             />
             {error && <p className="text-red-500 text-sm">{error}</p>}
             <button
               onClick={handleSignIn}
               disabled={loading}
-              className="w-full h-14 bg-green-700 text-white text-lg font-bold rounded-2xl shadow-lg disabled:opacity-60 active:bg-green-800 transition-colors"
+              className="w-full h-14 bg-gray-800 text-white text-lg font-bold rounded-2xl shadow-lg disabled:opacity-60 active:bg-gray-900 transition-colors"
             >
               {loading ? 'Loading...' : 'Sign In'}
             </button>
             <div className="flex items-center justify-between text-sm">
-              <button onClick={() => resetState('forgot-password')} className="text-green-600 underline">
+              <button onClick={() => resetState('forgot-password')} className="text-amber-600 underline">
                 Forgot password?
               </button>
               <button onClick={() => resetState('magic-link')} className="text-gray-500 underline">
@@ -167,7 +167,7 @@ export function Auth() {
           <div className="space-y-3">
             <button
               onClick={() => resetState('sign-up')}
-              className="w-full h-14 bg-white text-green-700 text-lg font-bold rounded-2xl shadow-sm border-2 border-green-700 active:bg-green-50 transition-colors"
+              className="w-full h-14 bg-white text-amber-600 text-lg font-bold rounded-2xl shadow-sm border-2 border-gray-800 active:bg-gray-50 transition-colors"
             >
               Create Account
             </button>
@@ -194,16 +194,16 @@ export function Auth() {
         <div className="text-center">
           <div className="text-6xl mb-4">&#9971;</div>
           <h1 className="font-display text-3xl font-800 tracking-tight text-gray-900">Fore Skins</h1>
-          <p className="text-green-700 text-sm font-medium mt-1 tracking-wide">GOLF &middot; SIDE GAMES &middot; MONEY</p>
+          <p className="text-amber-600 text-sm font-medium mt-1 tracking-wide">GOLF &middot; SIDE GAMES &middot; MONEY</p>
         </div>
 
         {message ? (
-          <div className="bg-green-50 border border-green-200 rounded-2xl p-6 text-center space-y-2">
+          <div className="bg-amber-50 border border-amber-200 rounded-2xl p-6 text-center space-y-2">
             <p className="text-3xl">&#128236;</p>
-            <p className="font-semibold text-green-900">{message}</p>
+            <p className="font-semibold text-amber-900">{message}</p>
             <button
               onClick={() => resetState('sign-in')}
-              className="text-green-600 text-sm underline mt-2"
+              className="text-amber-600 text-sm underline mt-2"
             >
               Back to Sign In
             </button>
@@ -231,7 +231,7 @@ export function Auth() {
                 value={email}
                 onChange={e => setEmail(e.target.value)}
                 onKeyDown={e => e.key === 'Enter' && handleSubmit()}
-                className="w-full h-12 px-4 rounded-xl border border-gray-300 text-base focus:outline-none focus:ring-2 focus:ring-green-600"
+                className="w-full h-12 px-4 rounded-xl border border-gray-300 text-base focus:outline-none focus:ring-2 focus:ring-amber-500"
                 autoFocus
               />
             </div>
@@ -247,7 +247,7 @@ export function Auth() {
                   value={password}
                   onChange={e => setPassword(e.target.value)}
                   onKeyDown={e => e.key === 'Enter' && handleSubmit()}
-                  className="w-full h-12 px-4 rounded-xl border border-gray-300 text-base focus:outline-none focus:ring-2 focus:ring-green-600"
+                  className="w-full h-12 px-4 rounded-xl border border-gray-300 text-base focus:outline-none focus:ring-2 focus:ring-amber-500"
                 />
               </div>
             )}
@@ -257,7 +257,7 @@ export function Auth() {
             <button
               onClick={handleSubmit}
               disabled={loading}
-              className="w-full h-14 bg-green-700 text-white text-lg font-bold rounded-2xl shadow-lg disabled:opacity-60 active:bg-green-800 transition-colors"
+              className="w-full h-14 bg-gray-800 text-white text-lg font-bold rounded-2xl shadow-lg disabled:opacity-60 active:bg-gray-900 transition-colors"
             >
               {loading ? 'Loading...' : buttonLabel}
             </button>
@@ -265,7 +265,7 @@ export function Auth() {
             <div className="space-y-2 text-center text-sm">
               {mode === 'sign-in' && (
                 <>
-                  <button onClick={() => resetState('forgot-password')} className="text-green-600 underline block w-full">
+                  <button onClick={() => resetState('forgot-password')} className="text-amber-600 underline block w-full">
                     Forgot password?
                   </button>
                   <button onClick={() => resetState('magic-link')} className="text-gray-500 underline block w-full">
@@ -273,7 +273,7 @@ export function Auth() {
                   </button>
                   <p className="text-gray-400 pt-1">
                     No account?{' '}
-                    <button onClick={() => resetState('sign-up')} className="text-green-600 underline">
+                    <button onClick={() => resetState('sign-up')} className="text-amber-600 underline">
                       Create one
                     </button>
                   </p>
@@ -282,13 +282,13 @@ export function Auth() {
               {mode === 'sign-up' && (
                 <p className="text-gray-400">
                   Already have an account?{' '}
-                  <button onClick={() => resetState('sign-in')} className="text-green-600 underline">
+                  <button onClick={() => resetState('sign-in')} className="text-amber-600 underline">
                     Sign in
                   </button>
                 </p>
               )}
               {(mode === 'forgot-password' || mode === 'magic-link') && (
-                <button onClick={() => resetState('sign-in')} className="text-green-600 underline">
+                <button onClick={() => resetState('sign-in')} className="text-amber-600 underline">
                   Back to Sign In
                 </button>
               )}

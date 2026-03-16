@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { supabase, rowToUserProfile } from '../../lib/supabase'
+import { AvatarPicker, UserAvatar } from '../AvatarPicker'
 import type { UserProfile } from '../../types'
 
 interface Props {
@@ -17,6 +18,13 @@ export function Settings({ userId, email, onBack, onSignOut, isAdmin, onAdmin, i
   const [profile, setProfile] = useState<UserProfile | null>(null)
   const [displayName, setDisplayName] = useState('')
   const [handicapIndex, setHandicapIndex] = useState('')
+  const [venmo, setVenmo] = useState('')
+  const [zelle, setZelle] = useState('')
+  const [cashapp, setCashapp] = useState('')
+  const [paypalAddr, setPaypalAddr] = useState('')
+  const [preferred, setPreferred] = useState('')
+  const [avatarPreset, setAvatarPreset] = useState('')
+  const [showAvatarPicker, setShowAvatarPicker] = useState(false)
   const [profileSaving, setProfileSaving] = useState(false)
   const [profileMessage, setProfileMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null)
 
@@ -36,6 +44,12 @@ export function Settings({ userId, email, onBack, onSignOut, isAdmin, onAdmin, i
         setProfile(p)
         setDisplayName(p.displayName ?? '')
         setHandicapIndex(p.handicapIndex != null ? String(p.handicapIndex) : '')
+        setVenmo(p.venmoUsername ?? '')
+        setZelle(p.zelleIdentifier ?? '')
+        setCashapp(p.cashAppUsername ?? '')
+        setPaypalAddr(p.paypalEmail ?? '')
+        setPreferred(p.preferredPayment ?? '')
+        setAvatarPreset(p.avatarPreset ?? '')
       }
     })
   }, [userId])
@@ -49,6 +63,12 @@ export function Settings({ userId, email, onBack, onSignOut, isAdmin, onAdmin, i
     const { error } = await supabase.from('user_profiles').update({
       display_name: displayName.trim(),
       handicap_index: hcp,
+      venmo_username: venmo.trim() || null,
+      zelle_identifier: zelle.trim() || null,
+      cashapp_username: cashapp.trim() || null,
+      paypal_email: paypalAddr.trim() || null,
+      preferred_payment: preferred || null,
+      avatar_preset: avatarPreset || null,
     }).eq('user_id', userId)
     setProfileSaving(false)
     if (error) {
@@ -102,7 +122,7 @@ export function Settings({ userId, email, onBack, onSignOut, isAdmin, onAdmin, i
   return (
     <div className="min-h-screen bg-gray-50 pb-8">
       <header className="app-header text-white px-4 py-4 sticky top-0 z-10 shadow-xl flex items-center gap-3">
-        <button onClick={onBack} className="w-10 h-10 flex items-center justify-center rounded-full hover:bg-green-700 text-xl" aria-label="Back">←</button>
+        <button onClick={onBack} className="w-10 h-10 flex items-center justify-center rounded-full hover:bg-gray-800 text-xl" aria-label="Back">←</button>
         <h1 className="text-xl font-bold">Settings</h1>
       </header>
 
@@ -117,13 +137,22 @@ export function Settings({ userId, email, onBack, onSignOut, isAdmin, onAdmin, i
         {!isAnonymous && profile && (
           <section className="bg-white rounded-2xl shadow-sm p-4 space-y-3">
             <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Your Profile</p>
+            <div className="flex items-center gap-3">
+              <button onClick={() => setShowAvatarPicker(true)} className="relative group">
+                <UserAvatar preset={avatarPreset || undefined} name={displayName || undefined} size="lg" />
+                <div className="absolute inset-0 rounded-full bg-black/40 flex items-center justify-center opacity-0 group-active:opacity-100 transition-opacity">
+                  <span className="text-white text-xs font-semibold">Edit</span>
+                </div>
+              </button>
+              <p className="text-sm text-gray-500">Tap to change avatar</p>
+            </div>
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Display Name</label>
               <input
                 type="text"
                 value={displayName}
                 onChange={e => setDisplayName(e.target.value)}
-                className="w-full h-12 px-4 rounded-xl border border-gray-300 text-base focus:outline-none focus:ring-2 focus:ring-green-600"
+                className="w-full h-12 px-4 rounded-xl border border-gray-300 text-base focus:outline-none focus:ring-2 focus:ring-amber-500"
               />
             </div>
             <div>
@@ -134,21 +163,69 @@ export function Settings({ userId, email, onBack, onSignOut, isAdmin, onAdmin, i
                 step="0.1"
                 value={handicapIndex}
                 onChange={e => setHandicapIndex(e.target.value)}
-                className="w-full h-12 px-4 rounded-xl border border-gray-300 text-base focus:outline-none focus:ring-2 focus:ring-green-600"
+                className="w-full h-12 px-4 rounded-xl border border-gray-300 text-base focus:outline-none focus:ring-2 focus:ring-amber-500"
               />
             </div>
             {profileMessage && (
-              <p className={`text-sm ${profileMessage.type === 'error' ? 'text-red-500' : 'text-green-600'}`}>
+              <p className={`text-sm ${profileMessage.type === 'error' ? 'text-red-500' : 'text-amber-600'}`}>
                 {profileMessage.text}
               </p>
             )}
             <button
               onClick={handleSaveProfile}
               disabled={profileSaving}
-              className="w-full h-12 bg-green-700 text-white font-semibold rounded-xl disabled:opacity-50 active:bg-green-800 transition-colors"
+              className="w-full h-12 bg-gray-800 text-white font-semibold rounded-xl disabled:opacity-50 active:bg-gray-900 transition-colors"
             >
               {profileSaving ? 'Saving...' : 'Save Profile'}
             </button>
+          </section>
+        )}
+
+        {/* Payment Info */}
+        {!isAnonymous && profile && (
+          <section className="bg-white rounded-2xl shadow-sm p-4 space-y-3">
+            <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Payment Info</p>
+            <p className="text-sm text-gray-500">So your buddies can pay you when you win.</p>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Venmo Username</label>
+              <input type="text" placeholder="@username" value={venmo} onChange={e => setVenmo(e.target.value)}
+                className="w-full h-12 px-4 rounded-xl border border-gray-300 text-base focus:outline-none focus:ring-2 focus:ring-amber-500" />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Zelle Email or Phone</label>
+              <input type="text" placeholder="email or phone" value={zelle} onChange={e => setZelle(e.target.value)}
+                className="w-full h-12 px-4 rounded-xl border border-gray-300 text-base focus:outline-none focus:ring-2 focus:ring-amber-500" />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Cash App</label>
+              <input type="text" placeholder="$cashtag" value={cashapp} onChange={e => setCashapp(e.target.value)}
+                className="w-full h-12 px-4 rounded-xl border border-gray-300 text-base focus:outline-none focus:ring-2 focus:ring-amber-500" />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">PayPal Email</label>
+              <input type="email" placeholder="email@example.com" value={paypalAddr} onChange={e => setPaypalAddr(e.target.value)}
+                className="w-full h-12 px-4 rounded-xl border border-gray-300 text-base focus:outline-none focus:ring-2 focus:ring-amber-500" />
+            </div>
+            {(venmo || zelle || cashapp || paypalAddr) && (
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Preferred Method</label>
+                <div className="flex flex-wrap gap-2">
+                  {[
+                    { key: 'venmo', label: 'Venmo', show: !!venmo },
+                    { key: 'zelle', label: 'Zelle', show: !!zelle },
+                    { key: 'cashapp', label: 'Cash App', show: !!cashapp },
+                    { key: 'paypal', label: 'PayPal', show: !!paypalAddr },
+                  ].filter(m => m.show).map(m => (
+                    <button key={m.key} onClick={() => setPreferred(m.key)}
+                      className={`px-4 py-2 rounded-xl text-sm font-semibold transition-colors ${
+                        preferred === m.key ? 'bg-amber-500 text-white' : 'bg-gray-100 text-gray-700'
+                      }`}>
+                      {m.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
           </section>
         )}
 
@@ -180,7 +257,7 @@ export function Settings({ userId, email, onBack, onSignOut, isAdmin, onAdmin, i
             </p>
             <button
               onClick={onUpgrade}
-              className="w-full h-12 bg-green-700 text-white font-semibold rounded-xl active:bg-green-800 transition-colors"
+              className="w-full h-12 bg-gray-800 text-white font-semibold rounded-xl active:bg-gray-900 transition-colors"
             >
               Create Account
             </button>
@@ -193,24 +270,24 @@ export function Settings({ userId, email, onBack, onSignOut, isAdmin, onAdmin, i
               placeholder="New password"
               value={newPassword}
               onChange={e => setNewPassword(e.target.value)}
-              className="w-full h-12 px-4 rounded-xl border border-gray-300 text-base focus:outline-none focus:ring-2 focus:ring-green-600"
+              className="w-full h-12 px-4 rounded-xl border border-gray-300 text-base focus:outline-none focus:ring-2 focus:ring-amber-500"
             />
             <input
               type="password"
               placeholder="Confirm new password"
               value={confirmPassword}
               onChange={e => setConfirmPassword(e.target.value)}
-              className="w-full h-12 px-4 rounded-xl border border-gray-300 text-base focus:outline-none focus:ring-2 focus:ring-green-600"
+              className="w-full h-12 px-4 rounded-xl border border-gray-300 text-base focus:outline-none focus:ring-2 focus:ring-amber-500"
             />
             {pwMessage && (
-              <p className={`text-sm ${pwMessage.type === 'error' ? 'text-red-500' : 'text-green-600'}`}>
+              <p className={`text-sm ${pwMessage.type === 'error' ? 'text-red-500' : 'text-amber-600'}`}>
                 {pwMessage.text}
               </p>
             )}
             <button
               onClick={handleChangePassword}
               disabled={pwSaving || !newPassword}
-              className="w-full h-12 bg-green-700 text-white font-semibold rounded-xl disabled:opacity-50 active:bg-green-800 transition-colors"
+              className="w-full h-12 bg-gray-800 text-white font-semibold rounded-xl disabled:opacity-50 active:bg-gray-900 transition-colors"
             >
               {pwSaving ? 'Updating...' : 'Update Password'}
             </button>
@@ -241,6 +318,17 @@ export function Settings({ userId, email, onBack, onSignOut, isAdmin, onAdmin, i
           </button>
         </section>
       </div>
+
+      {showAvatarPicker && (
+        <AvatarPicker
+          currentPreset={avatarPreset || undefined}
+          onSelect={(preset) => {
+            setAvatarPreset(preset)
+            supabase.from('user_profiles').update({ avatar_preset: preset }).eq('user_id', userId)
+          }}
+          onClose={() => setShowAvatarPicker(false)}
+        />
+      )}
     </div>
   )
 }

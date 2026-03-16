@@ -75,7 +75,7 @@ export function PlayerSetup({ userId, player, onSave, onCancel, onDelete }: Prop
       <header className="app-header text-white px-4 py-4 sticky top-0 z-10 shadow-xl flex items-center gap-3">
         <button
           onClick={onCancel}
-          className="w-10 h-10 flex items-center justify-center rounded-full hover:bg-green-700 text-xl"
+          className="w-10 h-10 flex items-center justify-center rounded-full hover:bg-gray-600 text-xl"
           aria-label="Back"
         >
           &#8592;
@@ -94,7 +94,7 @@ export function PlayerSetup({ userId, player, onSave, onCancel, onDelete }: Prop
               placeholder="e.g. John Smith"
               value={name}
               onChange={e => setName(e.target.value)}
-              className={`w-full h-12 px-4 rounded-xl border text-base focus:outline-none focus:ring-2 focus:ring-green-600 ${
+              className={`w-full h-12 px-4 rounded-xl border text-base focus:outline-none focus:ring-2 focus:ring-amber-500 ${
                 errors.name ? 'border-red-400 bg-red-50' : 'border-gray-300'
               }`}
             />
@@ -115,7 +115,7 @@ export function PlayerSetup({ userId, player, onSave, onCancel, onDelete }: Prop
                 placeholder="e.g. 12.4"
                 value={handicapIndex}
                 onChange={e => setHandicapIndex(e.target.value)}
-                className={`w-full h-12 px-4 rounded-xl border text-base focus:outline-none focus:ring-2 focus:ring-green-600 ${
+                className={`w-full h-12 px-4 rounded-xl border text-base focus:outline-none focus:ring-2 focus:ring-amber-500 ${
                   errors.handicap ? 'border-red-400 bg-red-50' : 'border-gray-300'
                 }`}
               />
@@ -131,7 +131,7 @@ export function PlayerSetup({ userId, player, onSave, onCancel, onDelete }: Prop
                 placeholder="e.g. White"
                 value={tee}
                 onChange={e => setTee(e.target.value)}
-                className="w-full h-12 px-4 rounded-xl border border-gray-300 text-base focus:outline-none focus:ring-2 focus:ring-green-600"
+                className="w-full h-12 px-4 rounded-xl border border-gray-300 text-base focus:outline-none focus:ring-2 focus:ring-amber-500"
               />
             </div>
           </div>
@@ -146,7 +146,7 @@ export function PlayerSetup({ userId, player, onSave, onCancel, onDelete }: Prop
               placeholder="e.g. 1234567"
               value={ghin}
               onChange={e => setGhin(e.target.value)}
-              className={`w-full h-12 px-4 rounded-xl border text-base focus:outline-none focus:ring-2 focus:ring-green-600 ${
+              className={`w-full h-12 px-4 rounded-xl border text-base focus:outline-none focus:ring-2 focus:ring-amber-500 ${
                 errors.ghin ? 'border-red-400 bg-red-50' : 'border-gray-300'
               }`}
             />
@@ -164,7 +164,7 @@ export function PlayerSetup({ userId, player, onSave, onCancel, onDelete }: Prop
               placeholder="e.g. @username"
               value={venmo}
               onChange={e => setVenmo(e.target.value)}
-              className="w-full h-12 px-4 rounded-xl border border-gray-300 text-base focus:outline-none focus:ring-2 focus:ring-green-600"
+              className="w-full h-12 px-4 rounded-xl border border-gray-300 text-base focus:outline-none focus:ring-2 focus:ring-amber-500"
             />
           </div>
 
@@ -175,7 +175,7 @@ export function PlayerSetup({ userId, player, onSave, onCancel, onDelete }: Prop
               placeholder="e.g. john@email.com or 555-1234"
               value={zelle}
               onChange={e => setZelle(e.target.value)}
-              className="w-full h-12 px-4 rounded-xl border border-gray-300 text-base focus:outline-none focus:ring-2 focus:ring-green-600"
+              className="w-full h-12 px-4 rounded-xl border border-gray-300 text-base focus:outline-none focus:ring-2 focus:ring-amber-500"
             />
           </div>
 
@@ -186,7 +186,7 @@ export function PlayerSetup({ userId, player, onSave, onCancel, onDelete }: Prop
               placeholder="e.g. $username"
               value={cashApp}
               onChange={e => setCashApp(e.target.value)}
-              className="w-full h-12 px-4 rounded-xl border border-gray-300 text-base focus:outline-none focus:ring-2 focus:ring-green-600"
+              className="w-full h-12 px-4 rounded-xl border border-gray-300 text-base focus:outline-none focus:ring-2 focus:ring-amber-500"
             />
           </div>
 
@@ -197,7 +197,7 @@ export function PlayerSetup({ userId, player, onSave, onCancel, onDelete }: Prop
               placeholder="e.g. john@email.com"
               value={paypal}
               onChange={e => setPaypal(e.target.value)}
-              className="w-full h-12 px-4 rounded-xl border border-gray-300 text-base focus:outline-none focus:ring-2 focus:ring-green-600"
+              className="w-full h-12 px-4 rounded-xl border border-gray-300 text-base focus:outline-none focus:ring-2 focus:ring-amber-500"
             />
           </div>
         </section>
@@ -207,7 +207,7 @@ export function PlayerSetup({ userId, player, onSave, onCancel, onDelete }: Prop
           <button
             onClick={() => setIsPublic(v => !v)}
             className={`w-full h-12 rounded-xl font-semibold border-2 flex items-center justify-between px-4 ${
-              isPublic ? 'bg-green-50 border-green-300 text-green-800' : 'bg-gray-50 border-gray-200 text-gray-600'
+              isPublic ? 'bg-amber-50 border-amber-300 text-green-800' : 'bg-gray-50 border-gray-200 text-gray-600'
             }`}
           >
             <span>Make Public</span>
@@ -239,7 +239,7 @@ export function PlayerSetup({ userId, player, onSave, onCancel, onDelete }: Prop
           <button
             onClick={handleSave}
             disabled={saving}
-            className="w-full h-14 bg-green-700 text-white text-lg font-bold rounded-2xl shadow-lg disabled:opacity-60 active:bg-green-800 transition-colors"
+            className="w-full h-14 bg-gray-800 text-white text-lg font-bold rounded-2xl shadow-lg disabled:opacity-60 active:bg-gray-900 transition-colors"
           >
             {saving ? 'Saving...' : 'Save Player'}
           </button>

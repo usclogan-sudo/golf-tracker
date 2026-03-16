@@ -90,7 +90,7 @@ export function NearMeCourses({ onAddCourse }: Props) {
         <h2 className="font-display font-semibold text-gray-800 text-base mb-3">Courses Near You</h2>
         <button onClick={requestLocation}
           className="w-full bg-white border border-gray-200 rounded-2xl px-5 py-4 flex items-center gap-4 shadow-sm active:bg-gray-50">
-          <div className="w-12 h-12 bg-green-50 rounded-xl flex items-center justify-center text-2xl flex-shrink-0">📍</div>
+          <div className="w-12 h-12 bg-amber-50 rounded-xl flex items-center justify-center text-2xl flex-shrink-0">📍</div>
           <div className="text-left">
             <p className="font-semibold text-gray-800">Find courses near me</p>
             <p className="text-sm text-gray-500 mt-0.5">Shows golf courses within 25 miles</p>
@@ -105,7 +105,7 @@ export function NearMeCourses({ onAddCourse }: Props) {
       <section>
         <h2 className="font-display font-semibold text-gray-800 text-base mb-3">Courses Near You</h2>
         <div className="bg-white border border-gray-200 rounded-2xl px-5 py-6 text-center shadow-sm">
-          <div className="w-8 h-8 border-2 border-green-500 border-t-transparent rounded-full animate-spin mx-auto mb-3" />
+          <div className="w-8 h-8 border-2 border-amber-500 border-t-transparent rounded-full animate-spin mx-auto mb-3" />
           <p className="text-gray-600 font-medium">{state === 'requesting' ? 'Getting your location…' : 'Finding nearby courses…'}</p>
         </div>
       </section>
@@ -135,7 +135,7 @@ export function NearMeCourses({ onAddCourse }: Props) {
           <p className="font-semibold text-gray-700">Couldn't load nearby courses</p>
           <p className="text-gray-500 text-sm mt-1">
             <button onClick={() => { hasFetched.current = false; requestLocation() }}
-              className="underline font-semibold text-green-700">Try again</button>
+              className="underline font-semibold text-amber-600">Try again</button>
           </p>
         </div>
       </section>
@@ -148,7 +148,7 @@ export function NearMeCourses({ onAddCourse }: Props) {
         <h2 className="font-display font-semibold text-gray-800 text-base mb-3">Courses Near You</h2>
         <div className="bg-white border border-gray-200 rounded-2xl px-5 py-5 text-center shadow-sm">
           <p className="text-gray-500">No courses found within 25 miles.</p>
-          <button onClick={onAddCourse} className="mt-3 text-green-700 font-semibold text-sm underline">Add a course manually</button>
+          <button onClick={onAddCourse} className="mt-3 text-amber-600 font-semibold text-sm underline">Add a course manually</button>
         </div>
       </section>
     )
@@ -161,7 +161,7 @@ export function NearMeCourses({ onAddCourse }: Props) {
           Courses Near You
           <span className="ml-2 text-xs font-normal text-gray-400 bg-gray-100 rounded-full px-2 py-0.5">{courses.length}</span>
         </h2>
-        <button onClick={() => { hasFetched.current = false; requestLocation() }} className="text-green-700 text-sm font-semibold">Refresh</button>
+        <button onClick={() => { hasFetched.current = false; requestLocation() }} className="text-amber-600 text-sm font-semibold">Refresh</button>
       </div>
       <div className="flex gap-3 overflow-x-auto pb-2 -mx-4 px-4 snap-x snap-mandatory">
         {courses.map(course => (

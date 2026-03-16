@@ -44,12 +44,12 @@ export function UpgradeAccount({ onComplete, onCancel }: Props) {
         </div>
 
         {message ? (
-          <div className="bg-green-50 border border-green-200 rounded-2xl p-6 text-center space-y-2">
+          <div className="bg-amber-50 border border-amber-200 rounded-2xl p-6 text-center space-y-2">
             <p className="text-3xl">&#128236;</p>
             <p className="font-semibold text-green-900">{message}</p>
             <button
               onClick={onComplete}
-              className="text-green-600 text-sm underline mt-2"
+              className="text-amber-600 text-sm underline mt-2"
             >
               Done
             </button>
@@ -65,7 +65,7 @@ export function UpgradeAccount({ onComplete, onCancel }: Props) {
                 placeholder="you@example.com"
                 value={email}
                 onChange={e => setEmail(e.target.value)}
-                className="w-full h-12 px-4 rounded-xl border border-gray-300 text-base focus:outline-none focus:ring-2 focus:ring-green-600"
+                className="w-full h-12 px-4 rounded-xl border border-gray-300 text-base focus:outline-none focus:ring-2 focus:ring-amber-500"
                 autoFocus
               />
             </div>
@@ -79,7 +79,7 @@ export function UpgradeAccount({ onComplete, onCancel }: Props) {
                 placeholder="At least 6 characters"
                 value={password}
                 onChange={e => setPassword(e.target.value)}
-                className="w-full h-12 px-4 rounded-xl border border-gray-300 text-base focus:outline-none focus:ring-2 focus:ring-green-600"
+                className="w-full h-12 px-4 rounded-xl border border-gray-300 text-base focus:outline-none focus:ring-2 focus:ring-amber-500"
               />
             </div>
 
@@ -93,7 +93,7 @@ export function UpgradeAccount({ onComplete, onCancel }: Props) {
                 value={confirmPassword}
                 onChange={e => setConfirmPassword(e.target.value)}
                 onKeyDown={e => e.key === 'Enter' && handleUpgrade()}
-                className="w-full h-12 px-4 rounded-xl border border-gray-300 text-base focus:outline-none focus:ring-2 focus:ring-green-600"
+                className="w-full h-12 px-4 rounded-xl border border-gray-300 text-base focus:outline-none focus:ring-2 focus:ring-amber-500"
               />
             </div>
 
@@ -102,7 +102,7 @@ export function UpgradeAccount({ onComplete, onCancel }: Props) {
             <button
               onClick={handleUpgrade}
               disabled={loading}
-              className="w-full h-14 bg-green-700 text-white text-lg font-bold rounded-2xl shadow-lg disabled:opacity-60 active:bg-green-800 transition-colors"
+              className="w-full h-14 bg-gray-800 text-white text-lg font-bold rounded-2xl shadow-lg disabled:opacity-60 active:bg-gray-900 transition-colors"
             >
               {loading ? 'Loading...' : 'Create Account'}
             </button>

@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { supabase, rowToRound, rowToHoleScore } from '../../lib/supabase'
 import { buildCourseHandicaps, fmtMoney, strokesOnHole } from '../../lib/gameLogic'
+import { ConfirmModal } from '../ConfirmModal'
 import type { Round, HoleScore, RoundPlayer, GameType } from '../../types'
 
 interface Props {
@@ -23,6 +24,7 @@ export function RoundHistory({ userId, onBack }: Props) {
   const [expandedScores, setExpandedScores] = useState<HoleScore[]>([])
   const [expandedRoundPlayers, setExpandedRoundPlayers] = useState<RoundPlayer[]>([])
   const [deleting, setDeleting] = useState<string | null>(null)
+  const [deleteModal, setDeleteModal] = useState<string | null>(null)
 
   useEffect(() => {
     supabase
@@ -74,15 +76,13 @@ export function RoundHistory({ userId, onBack }: Props) {
   }
 
   const confirmDelete = (roundId: string) => {
-    if (window.confirm('Delete this round? This cannot be undone.')) {
-      deleteRound(roundId)
-    }
+    setDeleteModal(roundId)
   }
 
   if (loading) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <div className="w-8 h-8 border-2 border-green-500 border-t-transparent rounded-full animate-spin" />
+        <div className="w-8 h-8 border-2 border-amber-500 border-t-transparent rounded-full animate-spin" />
       </div>
     )
   }
@@ -90,7 +90,7 @@ export function RoundHistory({ userId, onBack }: Props) {
   return (
     <div className="min-h-screen bg-gray-50 pb-8">
       <header className="app-header text-white px-4 py-4 sticky top-0 z-10 shadow-xl flex items-center gap-3">
-        <button onClick={onBack} className="w-10 h-10 flex items-center justify-center rounded-full hover:bg-green-700 text-xl" aria-label="Back">←</button>
+        <button onClick={onBack} className="w-10 h-10 flex items-center justify-center rounded-full hover:bg-gray-600 text-xl" aria-label="Back">←</button>
         <h1 className="text-xl font-bold">Round History</h1>
       </header>
 
@@ -143,36 +143,49 @@ export function RoundHistory({ userId, onBack }: Props) {
                     const courseHcps = buildCourseHandicaps(players, expandedRoundPlayers, snapshot)
                     const totalPar = snapshot.holes.reduce((s, h) => s + h.par, 0)
 
-                    return (
-                      <div className="space-y-2">
-                        {players.map(player => {
-                          const playerScores = expandedScores.filter(s => s.playerId === player.id)
-                          const gross = playerScores.reduce((s, hs) => s + hs.grossScore, 0)
-                          const courseHcp = courseHcps[player.id] ?? 0
-                          const netStrokes = playerScores.reduce((s, hs) => {
-                            const hole = snapshot.holes.find(h => h.number === hs.holeNumber)
-                            return s + (hole ? strokesOnHole(courseHcp, hole.strokeIndex) : 0)
-                          }, 0)
-                          const net = gross - netStrokes
-                          const vsPar = gross - totalPar
-                          const hasScores = playerScores.length > 0
+                    const board = players.map(player => {
+                      const playerScores = expandedScores.filter(s => s.playerId === player.id)
+                      const gross = playerScores.reduce((s, hs) => s + hs.grossScore, 0)
+                      const courseHcp = courseHcps[player.id] ?? 0
+                      const netStrokes = playerScores.reduce((s, hs) => {
+                        const hole = snapshot.holes.find(h => h.number === hs.holeNumber)
+                        return s + (hole ? strokesOnHole(courseHcp, hole.strokeIndex, snapshot.holes.length) : 0)
+                      }, 0)
+                      return { player, gross, net: gross - netStrokes, vsPar: gross - totalPar, hasScores: playerScores.length > 0 }
+                    }).sort((a, b) => a.net - b.net)
 
-                          return (
-                            <div key={player.id} className="flex items-center justify-between py-1.5">
-                              <span className="font-medium text-gray-800 text-sm">{player.name}</span>
-                              {hasScores ? (
-                                <span className="text-sm text-gray-600">
-                                  {gross} gross · {net} net ·{' '}
-                                  <span className={vsPar > 0 ? 'text-red-600' : vsPar < 0 ? 'text-green-600' : 'text-gray-500'}>
-                                    {vsPar > 0 ? '+' : ''}{vsPar}
-                                  </span>
-                                </span>
-                              ) : (
-                                <span className="text-sm text-gray-400">No scores</span>
-                              )}
-                            </div>
-                          )
-                        })}
+                    return (
+                      <div className="overflow-x-auto -mx-2">
+                        <table className="w-full text-sm">
+                          <thead>
+                            <tr className="text-xs text-gray-400 uppercase border-b border-gray-200">
+                              <th className="text-left py-1.5 px-2 font-medium">#</th>
+                              <th className="text-left py-1.5 px-2 font-medium">Player</th>
+                              <th className="text-center py-1.5 px-2 font-medium">Gross</th>
+                              <th className="text-center py-1.5 px-2 font-medium">Net</th>
+                              <th className="text-center py-1.5 px-2 font-medium">vs Par</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {board.map(({ player, gross, net, vsPar, hasScores }, i) => (
+                              <tr key={player.id} className="border-b border-gray-50">
+                                <td className="py-1.5 px-2 text-gray-400 font-semibold">{i + 1}</td>
+                                <td className="py-1.5 px-2 font-semibold text-gray-800">{player.name}</td>
+                                {hasScores ? (
+                                  <>
+                                    <td className="py-1.5 px-2 text-center text-gray-700">{gross}</td>
+                                    <td className="py-1.5 px-2 text-center font-semibold text-gray-700">{net}</td>
+                                    <td className={`py-1.5 px-2 text-center font-semibold ${vsPar > 0 ? 'text-red-600' : vsPar < 0 ? 'text-green-600' : 'text-gray-500'}`}>
+                                      {vsPar > 0 ? '+' : ''}{vsPar}
+                                    </td>
+                                  </>
+                                ) : (
+                                  <td colSpan={3} className="py-1.5 px-2 text-center text-gray-400">No scores</td>
+                                )}
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
                       </div>
                     )
                   })()}
@@ -190,6 +203,15 @@ export function RoundHistory({ userId, onBack }: Props) {
           )
         })}
       </div>
+      <ConfirmModal
+        open={!!deleteModal}
+        title="Delete Round?"
+        message="Delete this round? This cannot be undone."
+        confirmLabel="Delete"
+        destructive
+        onConfirm={() => { if (deleteModal) { deleteRound(deleteModal); setDeleteModal(null) } }}
+        onCancel={() => setDeleteModal(null)}
+      />
     </div>
   )
 }

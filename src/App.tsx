@@ -15,9 +15,12 @@ import { Settings } from './components/Settings/Settings'
 import { Onboarding } from './components/Onboarding/Onboarding'
 import { AdminDashboard } from './components/Admin/AdminDashboard'
 import { Stats } from './components/Stats/Stats'
+import { ConfirmModal } from './components/ConfirmModal'
+import { UserAvatar } from './components/AvatarPicker'
+import { PlayerDirectory } from './components/PlayerDirectory/PlayerDirectory'
 import type { Course, Round, UserProfile, GameType, StakesMode } from './types'
 
-type Screen = 'home' | 'course-catalog' | 'course-setup' | 'new-round' | 'scorecard' | 'settle-up' | 'round-history' | 'stats' | 'settings' | 'onboarding' | 'admin' | 'upgrade-account'
+type Screen = 'home' | 'course-catalog' | 'course-setup' | 'new-round' | 'scorecard' | 'settle-up' | 'round-history' | 'stats' | 'settings' | 'onboarding' | 'admin' | 'upgrade-account' | 'player-directory'
 
 const GAME_EMOJI: Record<GameType, string> = {
   skins: '🎰 Skins',
@@ -55,7 +58,7 @@ function StatChip({ label, value, accent }: { label: string; value: string | num
   return (
     <div className={`flex-1 rounded-2xl py-3 px-2 text-center ${accent ? 'bg-gold-400/20 border border-gold-400/30' : 'bg-white/10'}`}>
       <p className={`text-xl font-bold font-display ${accent ? 'gold-text' : 'text-white'}`}>{value}</p>
-      <p className={`text-xs mt-0.5 ${accent ? 'text-gold-300' : 'text-green-300'}`}>{label}</p>
+      <p className={`text-xs mt-0.5 ${accent ? 'text-gold-300' : 'text-gray-300'}`}>{label}</p>
     </div>
   )
 }
@@ -104,6 +107,7 @@ function Home({
   onDeleteCourse,
   onRoundHistory,
   onStats,
+  onPlayers,
   onSettings,
   onSignOut,
   isAdmin,
@@ -124,6 +128,7 @@ function Home({
   onDeleteCourse: (courseId: string) => void
   onRoundHistory: () => void
   onStats: () => void
+  onPlayers: () => void
   onSettings: () => void
   onSignOut: () => void
   isAdmin: boolean
@@ -138,7 +143,7 @@ function Home({
   const [activeRounds, setActiveRounds] = useState<Round[]>([])
   const [participantRounds, setParticipantRounds] = useState<Round[]>([])
   const [roundCount, setRoundCount] = useState(0)
-  const [recentRounds, setRecentRounds] = useState<Round[]>([])
+
 
   useEffect(() => {
     supabase.from('courses').select('*').eq('user_id', userId).neq('hidden', true).order('name').then(({ data }) => {
@@ -159,10 +164,6 @@ function Home({
     supabase.from('rounds').select('id', { count: 'exact', head: true }).then(({ count }) => {
       setRoundCount(count ?? 0)
     })
-    // Fetch 3 most recent completed rounds for Play Again
-    supabase.from('rounds').select('*').eq('status', 'complete').order('date', { ascending: false }).limit(3).then(({ data }) => {
-      if (data) setRecentRounds(data.map(rowToRound))
-    })
   }, [userId])
 
   return (
@@ -172,31 +173,24 @@ function Home({
           <div className="flex items-center justify-between mb-5">
             <div>
               <h1 className="font-display text-3xl font-800 tracking-tight leading-none">Fore Skins</h1>
-              <p className="text-green-400 text-sm font-medium mt-0.5 tracking-wide">GOLF · SIDE GAMES · MONEY</p>
+              <p className="text-amber-400 text-sm font-medium mt-0.5 tracking-wide">GOLF · SIDE GAMES · MONEY</p>
             </div>
             <div className="flex items-center gap-2">
               {isAdmin && (
                 <button
                   onClick={onAdmin}
-                  className="w-10 h-10 flex items-center justify-center rounded-full hover:bg-green-700 border border-green-600 text-green-300"
+                  className="w-10 h-10 flex items-center justify-center rounded-full hover:bg-gray-600 border border-gray-500 text-gray-300"
                   aria-label="Admin"
                 >
                   <span className="text-lg">🛡️</span>
                 </button>
               )}
-              <button
-                onClick={onSettings}
-                className="w-10 h-10 flex items-center justify-center rounded-full hover:bg-green-700 border border-green-600 text-green-300"
-                aria-label="Settings"
-              >
-                <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.066 2.573c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.573 1.066c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.066-2.573c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.573-1.066z" />
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                </svg>
+              <button onClick={onSettings} aria-label="Settings">
+                <UserAvatar preset={userProfile?.avatarPreset} name={userProfile?.displayName} size="sm" />
               </button>
               <button
                 onClick={onSignOut}
-                className="text-green-300 text-xs font-medium px-3 py-1.5 rounded-lg hover:bg-green-700 border border-green-600"
+                className="text-gray-300 text-xs font-medium px-3 py-1.5 rounded-lg hover:bg-gray-600 border border-gray-500"
               >
                 Sign Out
               </button>
@@ -211,11 +205,14 @@ function Home({
           </div>
           {roundCount > 0 && (
             <div className="mt-3 flex items-center gap-4">
-              <button onClick={onRoundHistory} className="text-green-300 text-sm font-medium flex items-center gap-1.5 hover:text-white transition-colors">
+              <button onClick={onRoundHistory} className="text-gray-300 text-sm font-medium flex items-center gap-1.5 hover:text-white transition-colors">
                 <span>📋</span> Round History
               </button>
-              <button onClick={onStats} className="text-green-300 text-sm font-medium flex items-center gap-1.5 hover:text-white transition-colors">
+              <button onClick={onStats} className="text-gray-300 text-sm font-medium flex items-center gap-1.5 hover:text-white transition-colors">
                 <span>📊</span> Leaderboard
+              </button>
+              <button onClick={onPlayers} className="text-gray-300 text-sm font-medium flex items-center gap-1.5 hover:text-white transition-colors">
+                <span>🏌️</span> Players
               </button>
             </div>
           )}
@@ -303,11 +300,11 @@ function Home({
 
         <button onClick={onNewRound}
           className="w-full rounded-2xl shadow-lg overflow-hidden active:scale-[0.98] transition-transform"
-          style={{ background: 'linear-gradient(135deg, #155c36 0%, #288f52 100%)' }}>
+          style={{ background: 'linear-gradient(135deg, #1f2937 0%, #374151 100%)' }}>
           <div className="px-6 py-5 flex items-center justify-between">
             <div className="text-left">
               <p className="font-display font-bold text-white text-xl">Start New Round</p>
-              <p className="text-green-300 text-sm mt-0.5">Skins · Best Ball · Nassau · Wolf · BBB</p>
+              <p className="text-gray-300 text-sm mt-0.5">Skins · Best Ball · Nassau · Wolf · BBB</p>
             </div>
             <div className="w-14 h-14 bg-white/15 rounded-2xl flex items-center justify-center text-4xl border border-white/20">▶</div>
           </div>
@@ -328,34 +325,6 @@ function Home({
           </div>
         </button>
 
-        {/* Play Again */}
-        {recentRounds.length > 0 && (
-          <section>
-            <h2 className="font-display font-semibold text-gray-800 text-base mb-3">Play Again</h2>
-            <div className="space-y-2">
-              {recentRounds.map(round => (
-                <button
-                  key={round.id}
-                  onClick={() => onPlayAgain(round)}
-                  className="w-full bg-white rounded-2xl shadow-sm border border-gray-100 p-4 text-left active:bg-gray-50 transition-colors"
-                >
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <p className="font-semibold text-gray-900">{round.courseSnapshot?.courseName ?? 'Unknown course'}</p>
-                      <p className="text-sm text-gray-500 mt-0.5">
-                        {round.players?.length ?? 0} players
-                        {round.game?.type && ` · ${GAME_EMOJI[round.game.type] ?? round.game.type}`}
-                        {round.game?.stakesMode === 'high_roller' && ' 💎'}
-                        {round.game?.buyInCents ? ` · $${round.game.buyInCents / 100}` : ''}
-                      </p>
-                    </div>
-                    <span className="text-green-700 text-sm font-semibold">Play Again →</span>
-                  </div>
-                </button>
-              ))}
-            </div>
-          </section>
-        )}
 
         <NearMeCourses onAddCourse={(name) => onAddCourse(name)} />
 
@@ -366,14 +335,12 @@ function Home({
               onClick={onSettings}
               className="w-full bg-white rounded-2xl shadow-sm border border-gray-100 p-4 text-left flex items-center gap-3 active:bg-gray-50 transition-colors"
             >
-              <div className={`w-10 h-10 rounded-full ${avatarColor(userProfile.displayName)} flex items-center justify-center flex-shrink-0`}>
-                <span className="text-sm font-bold text-white font-display">{playerInitials(userProfile.displayName)}</span>
-              </div>
+              <UserAvatar preset={userProfile.avatarPreset} name={userProfile.displayName} size="md" />
               <div className="flex-1 min-w-0">
                 <p className="font-semibold text-gray-900 truncate">{userProfile.displayName}</p>
                 <p className="text-sm text-gray-500">HCP {userProfile.handicapIndex ?? '—'}</p>
               </div>
-              <span className="text-xs text-green-700 font-semibold">Edit</span>
+              <span className="text-xs text-amber-600 font-semibold">Edit</span>
             </button>
           </section>
         )}
@@ -384,7 +351,7 @@ function Home({
               Your Courses
               {courses.length > 0 && <span className="ml-2 text-xs font-normal text-gray-400 bg-gray-100 rounded-full px-2 py-0.5">{courses.length}</span>}
             </h2>
-            <button onClick={onAddCourse} className="text-forest-600 text-sm font-semibold flex items-center gap-1">
+            <button onClick={onAddCourse} className="text-amber-600 text-sm font-semibold flex items-center gap-1">
               <span className="text-lg leading-none">+</span> Add
             </button>
           </div>
@@ -487,7 +454,7 @@ export default function App() {
   if (session === undefined) {
     return (
       <div className="min-h-screen bg-slate-50 flex items-center justify-center">
-        <div className="w-8 h-8 border-2 border-green-500 border-t-transparent rounded-full animate-spin" />
+        <div className="w-8 h-8 border-2 border-amber-500 border-t-transparent rounded-full animate-spin" />
       </div>
     )
   }
@@ -501,7 +468,7 @@ export default function App() {
   if (profileLoading) {
     return (
       <div className="min-h-screen bg-slate-50 flex items-center justify-center">
-        <div className="w-8 h-8 border-2 border-green-500 border-t-transparent rounded-full animate-spin" />
+        <div className="w-8 h-8 border-2 border-amber-500 border-t-transparent rounded-full animate-spin" />
       </div>
     )
   }
@@ -574,6 +541,9 @@ export default function App() {
   if (screen === 'stats') {
     return <Stats userId={userId} onBack={goHome} />
   }
+  if (screen === 'player-directory') {
+    return <PlayerDirectory userId={userId} onBack={goHome} />
+  }
   if (screen === 'upgrade-account') {
     return (
       <UpgradeAccount
@@ -604,10 +574,19 @@ export default function App() {
     return <AdminDashboard userId={userId} onBack={goHome} />
   }
 
-  const handleDeleteCourse = async (courseId: string) => {
-    if (!window.confirm('Remove this course from your list?')) return
-    await supabase.from('courses').update({ hidden: true }).eq('id', courseId)
-    setHomeKey(k => k + 1)
+  const [appConfirmModal, setAppConfirmModal] = useState<{ title: string; message: string; onConfirm: () => void; destructive?: boolean } | null>(null)
+
+  const handleDeleteCourse = (courseId: string) => {
+    setAppConfirmModal({
+      title: 'Remove Course?',
+      message: 'Remove this course from your list?',
+      destructive: true,
+      onConfirm: async () => {
+        setAppConfirmModal(null)
+        await supabase.from('courses').update({ hidden: true }).eq('id', courseId)
+        setHomeKey(k => k + 1)
+      },
+    })
   }
 
   const handlePlayAgain = (round: Round) => {
@@ -617,7 +596,6 @@ export default function App() {
   }
 
   const handleEndRound = async (roundId: string) => {
-    // Fetch hole scores to show context in confirmation
     const [hsRes, roundRes] = await Promise.all([
       supabase.from('hole_scores').select('player_id, hole_number').eq('round_id', roundId),
       supabase.from('rounds').select('players, course_snapshot').eq('id', roundId).single(),
@@ -632,15 +610,22 @@ export default function App() {
       }).length
     const missing = totalHoles - holesComplete
     const msg = missing > 0
-      ? `End round? ${holesComplete} of ${totalHoles} holes scored (${missing} incomplete). You can view results in Settle Up.`
-      : `End round? All ${totalHoles} holes scored. View results in Settle Up.`
-    if (!window.confirm(msg)) return
-    await supabase.from('rounds').update({ status: 'complete' }).eq('id', roundId)
-    setActiveRoundId(roundId)
-    setScreen('settle-up')
+      ? `${holesComplete} of ${totalHoles} holes scored (${missing} incomplete). You can view results in Settle Up.`
+      : `All ${totalHoles} holes scored. View results in Settle Up.`
+    setAppConfirmModal({
+      title: 'End Round?',
+      message: msg,
+      onConfirm: async () => {
+        setAppConfirmModal(null)
+        await supabase.from('rounds').update({ status: 'complete' }).eq('id', roundId)
+        setActiveRoundId(roundId)
+        setScreen('settle-up')
+      },
+    })
   }
 
   return (
+    <>
     <Home
       key={homeKey}
       userId={userId}
@@ -661,6 +646,7 @@ export default function App() {
       onResumeRound={roundId => { setScorecardReadOnly(false); setActiveRoundId(roundId); setScreen('scorecard') }}
       onRoundHistory={() => setScreen('round-history')}
       onStats={() => setScreen('stats')}
+      onPlayers={() => setScreen('player-directory')}
       onSettings={() => setScreen('settings')}
       onSignOut={() => supabase.auth.signOut()}
       isAdmin={userProfile?.isAdmin ?? false}
@@ -671,5 +657,16 @@ export default function App() {
       onEndRound={handleEndRound}
       onViewRound={roundId => { setScorecardReadOnly(true); setActiveRoundId(roundId); setScreen('scorecard') }}
     />
+    {appConfirmModal && (
+      <ConfirmModal
+        open={true}
+        title={appConfirmModal.title}
+        message={appConfirmModal.message}
+        onConfirm={appConfirmModal.onConfirm}
+        onCancel={() => setAppConfirmModal(null)}
+        destructive={appConfirmModal.destructive}
+      />
+    )}
+    </>
   )
 }
