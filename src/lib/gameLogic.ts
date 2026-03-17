@@ -337,6 +337,9 @@ export function calculateNassauPayouts(
   result: NassauResult,
   game: Game,
   players: Player[],
+  holeScores: HoleScore[],
+  snapshot: CourseSnapshot,
+  courseHcps: Record<string, number>,
 ): PlayerPayout[] {
   const presses: Press[] = (game.config as NassauConfig).presses ?? []
   // buyInCents = total per player; divide equally across 3 segments
@@ -378,28 +381,13 @@ export function calculateNassauPayouts(
   for (const press of presses) {
     const inFront = press.holeNumber <= frontEnd
     const endHole = inFront ? frontEnd : backEnd
+    const pressHoleNums = Array.from(
+      { length: endHole - press.holeNumber + 1 },
+      (_, i) => press.holeNumber + i
+    )
     const holeRange = `${press.holeNumber}–${endHole}`
-
-    // Calculate scores for the press sub-segment
-    const pressScores: Record<string, number> = {}
-    let incomplete = false
-    for (const p of players) {
-      for (let h = press.holeNumber; h <= endHole; h++) {
-        const seg = inFront ? result.front : result.back
-        // Use the segment scores as reference for mode consistency
-        if (seg.incomplete) { incomplete = true; break }
-      }
-      if (incomplete) break
-      // Recalculate from the full segment scores proportionally
-      // Use result segment scores — but we need per-hole data which we don't have here
-      // Simple approach: use total segment scores weighted by hole count
-      pressScores[p.id] = 0
-    }
-
-    // Since we don't have per-hole scores in NassauResult, use the segment winner
-    // A press on front 9 means the front 9 winner also wins the press
-    if (incomplete) continue
-    const seg = inFront ? result.front : result.back
+    const config = game.config as NassauConfig
+    const seg = nassauSegment(players, holeScores, snapshot, config, courseHcps, pressHoleNums, holeRange)
     if (seg.incomplete) continue
     const winners = seg.winner ? [seg.winner] : seg.tiedPlayers
     if (winners.length === 0) continue

@@ -192,7 +192,7 @@ export function SettleUp({ roundId, userId, onDone, onContinue }: Props) {
       return calculateBestBallPayouts(bestBallResult, game.config as BestBallConfig, game, players)
     }
     if (game.type === 'nassau' && nassauResult) {
-      return calculateNassauPayouts(nassauResult, game, players)
+      return calculateNassauPayouts(nassauResult, game, players, holeScores, snapshot!, courseHcps)
     }
     if (game.type === 'wolf' && wolfResult) {
       return calculateWolfPayouts(wolfResult, game, players)

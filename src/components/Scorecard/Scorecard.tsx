@@ -80,8 +80,15 @@ function ScoreStepper({
 }
 
 function SkinsStatus({ carry, potCents }: { carry: number; potCents: number }) {
-  if (carry === 0) return null
   const valueCents = potCents * (carry + 1)
+  if (carry === 0) {
+    return (
+      <div className="bg-gray-50 border border-gray-200 rounded-xl px-3 py-2 flex items-center gap-2">
+        <span className="text-gray-500 font-bold text-sm">Skins Pot</span>
+        <span className="text-gray-600 text-sm">{fmtMoney(valueCents)} per hole</span>
+      </div>
+    )
+  }
   return (
     <div className="bg-yellow-50 border border-yellow-200 rounded-xl px-3 py-2 flex items-center gap-2">
       <span className="text-yellow-600 font-bold text-sm">🔥 Carry ×{carry + 1}</span>
@@ -515,9 +522,15 @@ export function Scorecard({ userId, roundId, onEndRound, onHome, readOnly: readO
                     return { player: p, gross, net, vsPar, thru: pScores.length }
                   }).sort((a, b) => a.net - b.net)
 
+                  const positions: number[] = []
+                  board.forEach((entry, idx) => {
+                    if (idx === 0) positions.push(1)
+                    else positions.push(entry.net === board[idx - 1].net ? positions[idx - 1] : idx + 1)
+                  })
+
                   return board.map((entry, idx) => (
-                    <tr key={entry.player.id} className={`border-b border-gray-50 ${idx === 0 ? 'bg-amber-50' : ''}`}>
-                      <td className={`py-2.5 px-1 font-bold ${idx === 0 ? 'text-amber-600' : 'text-gray-500'}`}>{idx + 1}</td>
+                    <tr key={entry.player.id} className={`border-b border-gray-50 ${positions[idx] === 1 ? 'bg-amber-50' : ''}`}>
+                      <td className={`py-2.5 px-1 font-bold ${positions[idx] === 1 ? 'text-amber-600' : 'text-gray-500'}`}>{positions[idx]}</td>
                       <td className="py-2.5 px-1 font-semibold text-gray-800">{entry.player.name}</td>
                       <td className="py-2.5 px-1 text-center text-gray-500">{entry.thru}</td>
                       <td className="py-2.5 px-1 text-center font-semibold text-gray-700">{entry.gross || '—'}</td>

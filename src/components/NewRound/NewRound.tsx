@@ -299,6 +299,8 @@ function PlayerPicker({
   stakesMode,
   preSelectedIds,
   stepIndicator,
+  playerTees,
+  onPlayerTeesChange,
 }: {
   userId: string
   course: Course
@@ -307,10 +309,11 @@ function PlayerPicker({
   stakesMode: StakesMode
   preSelectedIds?: string[]
   stepIndicator?: React.ReactNode
+  playerTees: Record<string, string>
+  onPlayerTeesChange: (tees: Record<string, string>) => void
 }) {
   const [allPlayers, setAllPlayers] = useState<Player[]>([])
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set(preSelectedIds ?? []))
-  const [playerTees, setPlayerTees] = useState<Record<string, string>>({})
   const [query, setQuery] = useState('')
 
   const [showAddForm, setShowAddForm] = useState(false)
@@ -362,11 +365,11 @@ function PlayerPicker({
       const next = new Set(prev)
       if (next.has(id)) {
         next.delete(id)
-        setPlayerTees(pt => {
-          const c = { ...pt }
+        onPlayerTeesChange((() => {
+          const c = { ...playerTees }
           delete c[id]
           return c
-        })
+        })())
       } else if (next.size < MAX_PLAYERS) {
         next.add(id)
       }
@@ -467,7 +470,7 @@ function PlayerPicker({
                         {course.tees.map(t => (
                           <button
                             key={t.name}
-                            onClick={() => setPlayerTees(prev => ({ ...prev, [player.id]: t.name }))}
+                            onClick={() => onPlayerTeesChange({ ...playerTees, [player.id]: t.name })}
                             className={`px-3 py-1 rounded-lg text-sm font-medium transition-colors ${
                               activeTee === t.name
                                 ? 'bg-gray-800 text-white'
@@ -1652,6 +1655,7 @@ export function NewRound({ userId, onStart, onCancel, onAddCourse, initialStakes
   const [groups, setGroups] = useState<Record<string, number> | undefined>(templateRound?.groups)
   const [game, setGame] = useState<Game | null>(null)
   const [junkConfig, setJunkConfig] = useState<JunkConfig | undefined>(templateRound?.junkConfig)
+  const [playerTees, setPlayerTees] = useState<Record<string, string>>({})
 
   const preSelectedPlayerIds = templateRound?.players?.map(p => p.id)
 
@@ -1695,6 +1699,8 @@ export function NewRound({ userId, onStart, onCancel, onAddCourse, initialStakes
         stakesMode={initialStakesMode}
         preSelectedIds={preSelectedPlayerIds}
         stepIndicator={stepBar}
+        playerTees={playerTees}
+        onPlayerTeesChange={setPlayerTees}
       />
     )
   }

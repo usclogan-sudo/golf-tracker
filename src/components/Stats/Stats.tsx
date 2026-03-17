@@ -132,7 +132,7 @@ export function Stats({ userId, onBack }: Props) {
             payouts = calculateBestBallPayouts(result, game.config as BestBallConfig, game, players)
           } else if (game.type === 'nassau') {
             const result = calculateNassau(players, roundScores, snapshot, game.config as NassauConfig, chm)
-            payouts = calculateNassauPayouts(result, game, players)
+            payouts = calculateNassauPayouts(result, game, players, roundScores, snapshot, chm)
           } else if (game.type === 'wolf') {
             const result = calculateWolf(players, roundScores, snapshot, game.config as WolfConfig, chm)
             payouts = calculateWolfPayouts(result, game, players)
