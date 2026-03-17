@@ -101,7 +101,7 @@ function BestBallStatus({ holesWon }: { holesWon: { A: number; B: number; tied: 
   )
 }
 
-export function Scorecard({ userId, roundId, onEndRound, onHome, readOnly = false }: Props) {
+export function Scorecard({ userId, roundId, onEndRound, onHome, readOnly: readOnlyProp = false }: Props) {
   const [round, setRound] = useState<Round | null>(null)
   const [roundPlayers, setRoundPlayers] = useState<RoundPlayer[]>([])
   const [holeScores, setHoleScores] = useState<HoleScore[]>([])
@@ -113,6 +113,7 @@ export function Scorecard({ userId, roundId, onEndRound, onHome, readOnly = fals
   const [activeGroupTab, setActiveGroupTab] = useState<number | 'all'>(1)
   const [celebration, setCelebration] = useState<{ level: 'toast' | 'fullscreen'; title: string; subtitle?: string; emoji: string; playerName: string } | null>(null)
   const [confirmModal, setConfirmModal] = useState<{ title: string; message: string; onConfirm: () => void; destructive?: boolean } | null>(null)
+  const [scoreTab, setScoreTab] = useState<'scores' | 'leaderboard'>('scores')
 
   useEffect(() => {
     Promise.all([
@@ -368,6 +369,11 @@ export function Scorecard({ userId, roundId, onEndRound, onHome, readOnly = fals
     return prevHole.winnerId === null ? prevHole.carry + 1 : 0
   }, [skinsResult, currentHole])
 
+  // Role-based access: only round creator or game master can edit scores
+  const isCreator = userId === round?.createdBy
+  const isGameMaster = userId === round?.gameMasterId
+  const readOnly = readOnlyProp || (!isCreator && !isGameMaster)
+
   const headerClass = game?.stakesMode === 'high_roller' ? 'hr-header' : 'app-header'
 
   if (loading || !round || !snapshot) {
@@ -421,8 +427,30 @@ export function Scorecard({ userId, roundId, onEndRound, onHome, readOnly = fals
         </div>
       </header>
 
+      {/* Score / Leaderboard tab toggle */}
+      <div className="bg-white border-b border-gray-200 px-4 py-2 sticky top-[calc(5.5rem+2rem)] z-[6]">
+        <div className="max-w-2xl mx-auto flex gap-1">
+          <button
+            onClick={() => setScoreTab('scores')}
+            className={`flex-1 py-2 rounded-lg text-sm font-semibold transition-colors ${
+              scoreTab === 'scores' ? 'bg-gray-800 text-white' : 'bg-gray-100 text-gray-600'
+            }`}
+          >
+            Scores
+          </button>
+          <button
+            onClick={() => setScoreTab('leaderboard')}
+            className={`flex-1 py-2 rounded-lg text-sm font-semibold transition-colors ${
+              scoreTab === 'leaderboard' ? 'bg-gray-800 text-white' : 'bg-gray-100 text-gray-600'
+            }`}
+          >
+            Leaderboard
+          </button>
+        </div>
+      </div>
+
       {/* Group tabs */}
-      {round.groups && (() => {
+      {scoreTab === 'scores' && round.groups && (() => {
         const groupNums = [...new Set(Object.values(round.groups))].sort((a, b) => a - b)
         if (groupNums.length <= 1) return null
         return (
@@ -452,6 +480,84 @@ export function Scorecard({ userId, roundId, onEndRound, onHome, readOnly = fals
         )
       })()}
 
+      {/* Leaderboard tab */}
+      {scoreTab === 'leaderboard' && snapshot && (
+        <div className="px-4 py-4 max-w-2xl mx-auto">
+          <div className="bg-white rounded-2xl shadow-sm p-4">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="text-xs text-gray-400 uppercase border-b border-gray-200">
+                  <th className="text-left py-2 px-1 font-medium w-8">Pos</th>
+                  <th className="text-left py-2 px-1 font-medium">Player</th>
+                  <th className="text-center py-2 px-1 font-medium">Thru</th>
+                  <th className="text-center py-2 px-1 font-medium">Gross</th>
+                  <th className="text-center py-2 px-1 font-medium">Net</th>
+                  <th className="text-center py-2 px-1 font-medium">vs Par</th>
+                </tr>
+              </thead>
+              <tbody>
+                {(() => {
+                  const totalPar = snapshot.holes.reduce((s, h) => s + h.par, 0)
+                  const board = players.map(p => {
+                    const pScores = holeScores.filter(s => s.playerId === p.id)
+                    const gross = pScores.reduce((s, hs) => s + hs.grossScore, 0)
+                    const courseHcp = courseHcps[p.id] ?? 0
+                    const netStrokes = pScores.reduce((s, hs) => {
+                      const hole = snapshot.holes.find(h => h.number === hs.holeNumber)
+                      return s + (hole ? strokesOnHole(courseHcp, hole.strokeIndex, snapshot.holes.length) : 0)
+                    }, 0)
+                    const net = gross - netStrokes
+                    const scoredPar = pScores.reduce((s, hs) => {
+                      const hole = snapshot.holes.find(h => h.number === hs.holeNumber)
+                      return s + (hole?.par ?? 0)
+                    }, 0)
+                    const vsPar = gross - scoredPar
+                    return { player: p, gross, net, vsPar, thru: pScores.length }
+                  }).sort((a, b) => a.net - b.net)
+
+                  return board.map((entry, idx) => (
+                    <tr key={entry.player.id} className={`border-b border-gray-50 ${idx === 0 ? 'bg-amber-50' : ''}`}>
+                      <td className={`py-2.5 px-1 font-bold ${idx === 0 ? 'text-amber-600' : 'text-gray-500'}`}>{idx + 1}</td>
+                      <td className="py-2.5 px-1 font-semibold text-gray-800">{entry.player.name}</td>
+                      <td className="py-2.5 px-1 text-center text-gray-500">{entry.thru}</td>
+                      <td className="py-2.5 px-1 text-center font-semibold text-gray-700">{entry.gross || '—'}</td>
+                      <td className="py-2.5 px-1 text-center font-semibold text-gray-700">{entry.net || '—'}</td>
+                      <td className={`py-2.5 px-1 text-center font-semibold ${entry.vsPar > 0 ? 'text-red-600' : entry.vsPar < 0 ? 'text-green-600' : 'text-gray-400'}`}>
+                        {entry.thru > 0 ? `${entry.vsPar > 0 ? '+' : ''}${entry.vsPar}` : '—'}
+                      </td>
+                    </tr>
+                  ))
+                })()}
+              </tbody>
+            </table>
+
+            {/* Game-specific running totals */}
+            {skinsResult && skinsResult.totalSkins > 0 && (
+              <div className="mt-3 pt-3 border-t border-gray-100">
+                <p className="text-xs font-semibold text-gray-500 uppercase mb-2">Skins</p>
+                <div className="flex flex-wrap gap-2">
+                  {players.filter(p => (skinsResult.skinsWon[p.id] ?? 0) > 0).map(p => (
+                    <span key={p.id} className="text-xs bg-amber-50 text-amber-700 font-semibold px-2 py-1 rounded-lg">
+                      {p.name}: {skinsResult.skinsWon[p.id]}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {bestBallResult && (
+              <div className="mt-3 pt-3 border-t border-gray-100">
+                <p className="text-xs font-semibold text-gray-500 uppercase mb-1">Best Ball</p>
+                <p className="text-sm font-semibold text-gray-700">
+                  Team A: {bestBallResult.holesWon.A}W · Team B: {bestBallResult.holesWon.B}W · Tied: {bestBallResult.holesWon.tied}
+                </p>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {scoreTab === 'scores' && (
       <div className="px-4 py-4 max-w-2xl mx-auto space-y-4">
         {saveError && (
           <div className="bg-red-50 border border-red-200 rounded-xl px-4 py-3 flex items-center justify-between">
@@ -751,33 +857,37 @@ export function Scorecard({ userId, roundId, onEndRound, onHome, readOnly = fals
             </div>
           )
         })()}
-      </div>
 
-      <div className="fixed bottom-0 inset-x-0 bg-white/95 backdrop-blur-sm border-t border-gray-200 safe-bottom">
+        {/* Next Hole / End Round — in scrollable content */}
         {!readOnly && (() => {
           const missingPlayers = players.filter(p => !holeScores.some(s => s.playerId === p.id && s.holeNumber === currentHole))
           return missingPlayers.length > 0 ? (
-            <p className="text-amber-600 text-xs font-medium text-center py-1.5 bg-amber-50">
+            <p className="text-amber-600 text-xs font-medium text-center py-1.5 bg-amber-50 rounded-xl">
               Not all players have scores for this hole
             </p>
           ) : null
         })()}
+
+        {currentHole < (snapshot?.holes.length ?? 18) ? (
+          <button onClick={() => goToHole(currentHole + 1)}
+            className="w-full h-14 bg-gray-800 text-white text-lg font-bold rounded-2xl active:bg-gray-900 transition-colors shadow-lg">Next Hole →</button>
+        ) : readOnly ? (
+          <button onClick={onHome}
+            className="w-full h-14 bg-gray-600 text-white text-lg font-bold rounded-2xl active:bg-gray-700 transition-colors shadow-lg">Back to Home</button>
+        ) : (
+          <button onClick={confirmEndRound}
+            className="w-full h-14 bg-yellow-500 text-white text-lg font-bold rounded-2xl active:bg-yellow-600 transition-colors shadow-lg">🏁 End Round & Settle Up</button>
+        )}
+      </div>
+      )} {/* end scoreTab === 'scores' */}
+
+      <div className="fixed bottom-0 inset-x-0 bg-white/95 backdrop-blur-sm border-t border-gray-200 safe-bottom">
         <div className="p-4 max-w-2xl mx-auto flex gap-3">
           <button onClick={() => goToHole(Math.max(1, currentHole - 1))} disabled={currentHole === 1}
-            className="w-16 h-14 bg-gray-100 rounded-2xl font-bold text-xl text-gray-600 disabled:opacity-30 active:bg-gray-200">&larr;</button>
+            className="flex-1 h-14 bg-gray-100 rounded-2xl font-bold text-xl text-gray-600 disabled:opacity-30 active:bg-gray-200">&larr; Prev</button>
           {!readOnly && lastChange && lastChange.holeNumber === currentHole && (
             <button onClick={undoLastChange}
-              className="w-16 h-14 bg-amber-100 rounded-2xl text-amber-700 font-bold text-xs active:bg-amber-200" aria-label="Undo">Undo</button>
-          )}
-          {currentHole < (snapshot?.holes.length ?? 18) ? (
-            <button onClick={() => goToHole(currentHole + 1)}
-              className="flex-1 h-14 bg-gray-800 text-white text-lg font-bold rounded-2xl active:bg-gray-900 transition-colors">Next Hole →</button>
-          ) : readOnly ? (
-            <button onClick={onHome}
-              className="flex-1 h-14 bg-gray-600 text-white text-lg font-bold rounded-2xl active:bg-gray-700 transition-colors">Back to Home</button>
-          ) : (
-            <button onClick={confirmEndRound}
-              className="flex-1 h-14 bg-yellow-500 text-white text-lg font-bold rounded-2xl active:bg-yellow-600 transition-colors">🏁 End Round & Settle Up</button>
+              className="flex-1 h-14 bg-amber-100 rounded-2xl text-amber-700 font-bold text-sm active:bg-amber-200" aria-label="Undo">Undo</button>
           )}
         </div>
       </div>

@@ -44,23 +44,59 @@ function StepIndicator({ current, skipGroups, stakesMode }: { current: string; s
   const steps = STEP_ORDER.filter(s => !(s === 'groups' && skipGroups))
   const currentIdx = steps.indexOf(current as any)
   const isHR = stakesMode === 'high_roller'
+  const goldColor = isHR ? '#fbbf24' : '#f59e0b'
+
   return (
-    <div className="flex items-center justify-center gap-1 py-2 px-4 bg-white/5">
-      {steps.map((s, i) => {
-        const isActive = s === current
-        const isDone = i < currentIdx
-        return (
-          <div key={s} className="flex items-center gap-1">
-            {i > 0 && <div className={`w-4 h-0.5 ${isDone ? (isHR ? 'bg-amber-500' : 'bg-amber-400') : 'bg-white/20'}`} />}
-            <div className={`flex items-center gap-1 px-2 py-1 rounded-full text-xs font-semibold transition-colors ${
-              isActive ? (isHR ? 'bg-amber-500/30 text-amber-300' : 'bg-amber-400/20 text-amber-400') : isDone ? 'text-white/70' : 'text-white/30'
-            }`}>
-              {isDone ? <span>✓</span> : null}
-              <span>{STEP_LABELS[s]}</span>
-            </div>
-          </div>
-        )
-      })}
+    <div className="py-4 px-4 bg-white/5">
+      <div className="max-w-2xl mx-auto">
+        {/* Dots and connecting lines */}
+        <div className="flex items-center justify-between relative">
+          {steps.map((s, i) => {
+            const isActive = s === current
+            const isDone = i < currentIdx
+            return (
+              <div key={s} className="flex items-center flex-1 last:flex-none">
+                {/* Dot */}
+                <div className="relative z-10 flex flex-col items-center">
+                  <div
+                    className={`w-8 h-8 rounded-full flex items-center justify-center border-2 transition-all ${
+                      isDone
+                        ? 'border-transparent'
+                        : isActive
+                        ? 'border-transparent shadow-lg shadow-amber-500/30'
+                        : 'border-gray-500 bg-transparent'
+                    }`}
+                    style={
+                      isDone
+                        ? { background: goldColor }
+                        : isActive
+                        ? { background: goldColor, transform: 'scale(1.15)' }
+                        : undefined
+                    }
+                  >
+                    {isDone ? (
+                      <svg className="w-4 h-4 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                      </svg>
+                    ) : (
+                      <span className={`text-xs font-bold ${isActive ? 'text-white' : 'text-gray-400'}`}>{i + 1}</span>
+                    )}
+                  </div>
+                  <span className={`text-[10px] font-semibold mt-1.5 transition-colors ${
+                    isDone ? 'text-amber-400' : isActive ? 'text-amber-300' : 'text-gray-500'
+                  }`}>
+                    {STEP_LABELS[s]}
+                  </span>
+                </div>
+                {/* Connecting line */}
+                {i < steps.length - 1 && (
+                  <div className="flex-1 h-0.5 mx-1 -mt-5 transition-colors" style={{ background: i < currentIdx ? goldColor : '#4b5563' }} />
+                )}
+              </div>
+            )
+          })}
+        </div>
+      </div>
     </div>
   )
 }
@@ -1367,6 +1403,7 @@ function TreasurerAndBuyIns({
   stepIndicator?: React.ReactNode
 }) {
   const [treasurerId, setTreasurerId] = useState<string | null>(null)
+  const [gameMasterId, setGameMasterId] = useState<string>(userId)
   const [method, setMethod] = useState<PaymentMethod>('venmo')
   const [paid, setPaid] = useState<Record<string, boolean>>(() => {
     const init: Record<string, boolean> = {}
@@ -1404,6 +1441,7 @@ function TreasurerAndBuyIns({
         junkConfig,
         treasurerPlayerId: treasurerId,
         groups,
+        gameMasterId,
       }
 
       const buyIns: BuyIn[] = players.map(p => ({
@@ -1485,6 +1523,32 @@ function TreasurerAndBuyIns({
           {!treasurerId && (
             <p className="text-red-500 text-sm">Choose a treasurer before starting.</p>
           )}
+        </section>
+
+        {/* Game Master */}
+        <section className="bg-white rounded-2xl shadow-sm p-4 space-y-3">
+          <div>
+            <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Game Master (Scorekeeper)</p>
+            <p className="text-sm text-gray-500 mt-1">Who enters the scores? Can be the same as treasurer.</p>
+          </div>
+          <div className="space-y-2">
+            {players.map(p => (
+              <button
+                key={p.id}
+                onClick={() => setGameMasterId(p.id)}
+                className={`w-full p-4 rounded-2xl border-2 text-left font-semibold transition-colors ${
+                  gameMasterId === p.id
+                    ? 'border-amber-500 bg-amber-50 text-gray-900'
+                    : 'border-gray-200 bg-white text-gray-700'
+                }`}
+              >
+                {p.name}
+                {gameMasterId === p.id && (
+                  <span className="ml-2 text-sm font-normal text-amber-600">✓ Game Master</span>
+                )}
+              </button>
+            ))}
+          </div>
         </section>
 
         <section className="bg-white rounded-2xl shadow-sm p-4 space-y-3">

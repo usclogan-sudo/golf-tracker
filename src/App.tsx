@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import type { Session } from '@supabase/supabase-js'
-import { supabase, rowToCourse, rowToRound, fetchOrCreateProfile } from './lib/supabase'
+import { supabase, rowToCourse, rowToRound, rowToHoleScore, fetchOrCreateProfile } from './lib/supabase'
 import { Auth } from './components/Auth/Auth'
 import { UpgradeAccount } from './components/Auth/UpgradeAccount'
 import { GuestBanner } from './components/GuestBanner/GuestBanner'
@@ -18,9 +18,12 @@ import { Stats } from './components/Stats/Stats'
 import { ConfirmModal } from './components/ConfirmModal'
 import { UserAvatar } from './components/AvatarPicker'
 import { PlayerDirectory } from './components/PlayerDirectory/PlayerDirectory'
-import type { Course, Round, UserProfile, GameType, StakesMode } from './types'
+import { RoundsDetail } from './components/RoundsDetail/RoundsDetail'
+import { CoursesDetail } from './components/CoursesDetail/CoursesDetail'
+import { HandicapDetail } from './components/HandicapDetail/HandicapDetail'
+import type { Course, Round, HoleScore, UserProfile, GameType, StakesMode } from './types'
 
-type Screen = 'home' | 'course-catalog' | 'course-setup' | 'new-round' | 'scorecard' | 'settle-up' | 'round-history' | 'stats' | 'settings' | 'onboarding' | 'admin' | 'upgrade-account' | 'player-directory'
+type Screen = 'home' | 'course-catalog' | 'course-setup' | 'new-round' | 'scorecard' | 'settle-up' | 'round-history' | 'stats' | 'settings' | 'onboarding' | 'admin' | 'upgrade-account' | 'player-directory' | 'rounds-detail' | 'courses-detail' | 'handicap-detail'
 
 const GAME_EMOJI: Record<GameType, string> = {
   skins: '🎰 Skins',
@@ -41,13 +44,18 @@ function coursePhotoClass(name: string): string {
 }
 
 
-function StatChip({ label, value, accent }: { label: string; value: string | number; accent?: boolean }) {
-  return (
-    <div className={`flex-1 rounded-2xl py-3 px-2 text-center ${accent ? 'bg-gold-400/20 border border-gold-400/30' : 'bg-white/10'}`}>
+function StatChip({ label, value, accent, onClick }: { label: string; value: string | number; accent?: boolean; onClick?: () => void }) {
+  const cls = `flex-1 rounded-2xl py-3 px-2 text-center ${accent ? 'bg-gold-400/20 border border-gold-400/30' : 'bg-white/10'} ${onClick ? 'active:scale-95 transition-transform cursor-pointer' : ''}`
+  const inner = (
+    <>
       <p className={`text-xl font-bold font-display ${accent ? 'gold-text' : 'text-white'}`}>{value}</p>
       <p className={`text-xs mt-0.5 ${accent ? 'text-gold-300' : 'text-gray-300'}`}>{label}</p>
-    </div>
+    </>
   )
+  if (onClick) {
+    return <button className={cls} onClick={onClick}>{inner}</button>
+  }
+  return <div className={cls}>{inner}</div>
 }
 
 
@@ -103,6 +111,9 @@ function Home({
   onUpgrade,
   onEndRound,
   onViewRound,
+  onRoundsDetail,
+  onCoursesDetail,
+  onHandicapDetail,
 }: {
   userId: string
   userProfile: UserProfile | null
@@ -123,12 +134,20 @@ function Home({
   onUpgrade?: () => void
   onEndRound?: (roundId: string) => void
   onViewRound?: (roundId: string) => void
+  onRoundsDetail: () => void
+  onCoursesDetail: () => void
+  onHandicapDetail: () => void
 }) {
   const [courses, setCourses] = useState<Course[]>([])
   const [activeRounds, setActiveRounds] = useState<Round[]>([])
   const [participantRounds, setParticipantRounds] = useState<Round[]>([])
   const [roundCount, setRoundCount] = useState(0)
-
+  const [personalSummary, setPersonalSummary] = useState<{
+    totalRounds: number
+    lastCourse: string
+    lastDate: string
+    lastScore: number | null
+  } | null>(null)
 
   useEffect(() => {
     supabase.from('courses').select('*').eq('user_id', userId).neq('hidden', true).order('name').then(({ data }) => {
@@ -137,9 +156,7 @@ function Home({
     supabase.from('rounds').select('*').eq('status', 'active').then(({ data }) => {
       if (data) {
         const all = data.map(rowToRound)
-        // Rounds I created (scoremaster)
         setActiveRounds(all.filter(r => r.createdBy === userId))
-        // Rounds I'm a participant in but didn't create
         setParticipantRounds(all.filter(r =>
           r.createdBy !== userId &&
           r.players?.some(p => p.id === userId)
@@ -148,6 +165,34 @@ function Home({
     })
     supabase.from('rounds').select('id', { count: 'exact', head: true }).then(({ count }) => {
       setRoundCount(count ?? 0)
+    })
+
+    // Personal summary
+    Promise.all([
+      supabase.from('rounds').select('*').eq('status', 'complete').order('date', { ascending: false }),
+      supabase.from('hole_scores').select('*'),
+    ]).then(([roundsRes, scoresRes]) => {
+      if (!roundsRes.data || !scoresRes.data) return
+      const completedRounds = roundsRes.data.map(rowToRound)
+      const allScores = scoresRes.data.map(rowToHoleScore)
+
+      // Find rounds where current user played
+      const myRounds = completedRounds.filter(r =>
+        r.players?.some(p => p.id === userId)
+      )
+
+      if (myRounds.length === 0) return
+
+      const lastRound = myRounds[0]
+      const lastScores = allScores.filter(s => s.roundId === lastRound.id && s.playerId === userId)
+      const lastScore = lastScores.length > 0 ? lastScores.reduce((sum, s) => sum + s.grossScore, 0) : null
+
+      setPersonalSummary({
+        totalRounds: myRounds.length,
+        lastCourse: lastRound.courseSnapshot?.courseName ?? 'Unknown',
+        lastDate: lastRound.date.toLocaleDateString(undefined, { month: 'short', day: 'numeric' }),
+        lastScore,
+      })
     })
   }, [userId])
 
@@ -171,7 +216,7 @@ function Home({
                 </button>
               )}
               <button onClick={onSettings} aria-label="Settings">
-                <UserAvatar preset={userProfile?.avatarPreset} name={userProfile?.displayName} size="sm" />
+                <UserAvatar url={userProfile?.avatarUrl} preset={userProfile?.avatarPreset} name={userProfile?.displayName} size="sm" />
               </button>
               <button
                 onClick={onSignOut}
@@ -182,10 +227,10 @@ function Home({
             </div>
           </div>
           <div className="flex gap-2">
-            <StatChip label="Rounds" value={roundCount} />
-            <StatChip label="Courses" value={courses.length} />
+            <StatChip label="Rounds" value={roundCount} onClick={onRoundsDetail} />
+            <StatChip label="Courses" value={courses.length} onClick={onCoursesDetail} />
             {userProfile?.handicapIndex != null && (
-              <StatChip label="Handicap" value={userProfile.handicapIndex} accent />
+              <StatChip label="Handicap" value={userProfile.handicapIndex} accent onClick={onHandicapDetail} />
             )}
           </div>
           {roundCount > 0 && (
@@ -207,6 +252,24 @@ function Home({
       <main className="px-4 pt-5 max-w-2xl mx-auto space-y-6">
         {isAnonymous && onUpgrade && (
           <GuestBanner onUpgrade={onUpgrade} />
+        )}
+
+        {/* Personal Summary */}
+        {personalSummary && (
+          <div className="bg-white rounded-2xl shadow-sm border border-gray-100 px-4 py-3">
+            <div className="flex items-center gap-2 text-sm">
+              <span className="font-bold text-gray-800">{personalSummary.totalRounds} Round{personalSummary.totalRounds !== 1 ? 's' : ''} Played</span>
+            </div>
+            <p className="text-xs text-gray-500 mt-1">
+              Last: {personalSummary.lastCourse}, {personalSummary.lastDate}
+              {personalSummary.lastScore != null && ` — Shot ${personalSummary.lastScore}`}
+            </p>
+          </div>
+        )}
+        {!personalSummary && roundCount === 0 && (
+          <div className="bg-white rounded-2xl shadow-sm border border-gray-100 px-4 py-3 text-center">
+            <p className="text-sm text-gray-500">Time to hit the links!</p>
+          </div>
         )}
 
         {activeRounds.length > 0 && (
@@ -320,7 +383,7 @@ function Home({
               onClick={onSettings}
               className="w-full bg-white rounded-2xl shadow-sm border border-gray-100 p-4 text-left flex items-center gap-3 active:bg-gray-50 transition-colors"
             >
-              <UserAvatar preset={userProfile.avatarPreset} name={userProfile.displayName} size="md" />
+              <UserAvatar url={userProfile.avatarUrl} preset={userProfile.avatarPreset} name={userProfile.displayName} size="md" />
               <div className="flex-1 min-w-0">
                 <p className="font-semibold text-gray-900 truncate">{userProfile.displayName}</p>
                 <p className="text-sm text-gray-500">HCP {userProfile.handicapIndex ?? '—'}</p>
@@ -516,6 +579,7 @@ export default function App() {
     return (
       <SettleUp
         roundId={activeRoundId}
+        userId={userId}
         onDone={() => { setActiveRoundId(null); goHome() }}
         onContinue={() => setScreen('scorecard')}
       />
@@ -529,6 +593,15 @@ export default function App() {
   }
   if (screen === 'player-directory') {
     return <PlayerDirectory userId={userId} onBack={goHome} />
+  }
+  if (screen === 'rounds-detail') {
+    return <RoundsDetail userId={userId} onBack={goHome} />
+  }
+  if (screen === 'courses-detail') {
+    return <CoursesDetail userId={userId} onBack={goHome} />
+  }
+  if (screen === 'handicap-detail') {
+    return <HandicapDetail userId={userId} userProfile={userProfile} onBack={goHome} />
   }
   if (screen === 'upgrade-account') {
     return (
@@ -633,6 +706,9 @@ export default function App() {
       onUpgrade={() => setScreen('upgrade-account')}
       onEndRound={handleEndRound}
       onViewRound={roundId => { setScorecardReadOnly(true); setActiveRoundId(roundId); setScreen('scorecard') }}
+      onRoundsDetail={() => setScreen('rounds-detail')}
+      onCoursesDetail={() => setScreen('courses-detail')}
+      onHandicapDetail={() => setScreen('handicap-detail')}
     />
     {appConfirmModal && (
       <ConfirmModal

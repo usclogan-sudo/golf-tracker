@@ -729,6 +729,12 @@ export function venmoLink(username: string, amountCents: number, note: string): 
   return `venmo://paycharge?txn=pay&recipients=${username.replace('@', '')}&amount=${amount}&note=${encoded}`
 }
 
+export function venmoRequestLink(username: string, amountCents: number, note: string): string {
+  const amount = (amountCents / 100).toFixed(2)
+  const encoded = encodeURIComponent(note)
+  return `venmo://paycharge?txn=charge&recipients=${username.replace('@', '')}&amount=${amount}&note=${encoded}`
+}
+
 export function venmoWebLink(username: string, amountCents: number, note: string): string {
   const amount = (amountCents / 100).toFixed(2)
   const encoded = encodeURIComponent(note)

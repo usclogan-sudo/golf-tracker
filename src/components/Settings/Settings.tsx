@@ -24,6 +24,7 @@ export function Settings({ userId, email, onBack, onSignOut, isAdmin, onAdmin, i
   const [paypalAddr, setPaypalAddr] = useState('')
   const [preferred, setPreferred] = useState('')
   const [avatarPreset, setAvatarPreset] = useState('')
+  const [avatarUrl, setAvatarUrl] = useState('')
   const [showAvatarPicker, setShowAvatarPicker] = useState(false)
   const [profileSaving, setProfileSaving] = useState(false)
   const [profileMessage, setProfileMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null)
@@ -50,6 +51,7 @@ export function Settings({ userId, email, onBack, onSignOut, isAdmin, onAdmin, i
         setPaypalAddr(p.paypalEmail ?? '')
         setPreferred(p.preferredPayment ?? '')
         setAvatarPreset(p.avatarPreset ?? '')
+        setAvatarUrl(p.avatarUrl ?? '')
       }
     })
   }, [userId])
@@ -139,7 +141,7 @@ export function Settings({ userId, email, onBack, onSignOut, isAdmin, onAdmin, i
             <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Your Profile</p>
             <div className="flex items-center gap-3">
               <button onClick={() => setShowAvatarPicker(true)} className="relative group">
-                <UserAvatar preset={avatarPreset || undefined} name={displayName || undefined} size="lg" />
+                <UserAvatar url={avatarUrl || undefined} preset={avatarPreset || undefined} name={displayName || undefined} size="lg" />
                 <div className="absolute inset-0 rounded-full bg-black/40 flex items-center justify-center opacity-0 group-active:opacity-100 transition-opacity">
                   <span className="text-white text-xs font-semibold">Edit</span>
                 </div>
@@ -322,9 +324,17 @@ export function Settings({ userId, email, onBack, onSignOut, isAdmin, onAdmin, i
       {showAvatarPicker && (
         <AvatarPicker
           currentPreset={avatarPreset || undefined}
+          currentUrl={avatarUrl || undefined}
+          userId={userId}
           onSelect={(preset) => {
             setAvatarPreset(preset)
-            supabase.from('user_profiles').update({ avatar_preset: preset }).eq('user_id', userId)
+            setAvatarUrl('')  // Clear photo when selecting preset
+            supabase.from('user_profiles').update({ avatar_preset: preset, avatar_url: null }).eq('user_id', userId)
+          }}
+          onUpload={(url) => {
+            setAvatarUrl(url)
+            setAvatarPreset('')  // Clear preset when uploading photo
+            supabase.from('user_profiles').update({ avatar_url: url, avatar_preset: null }).eq('user_id', userId)
           }}
           onClose={() => setShowAvatarPicker(false)}
         />

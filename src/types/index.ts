@@ -200,6 +200,16 @@ export interface Round {
 
   // Round creator's user ID (for scoremaster vs viewer distinction)
   createdBy?: string
+
+  // Game master (scorekeeper) — can edit scores alongside round creator
+  gameMasterId?: string
+}
+
+// ─── Pinned Friends ─────────────────────────────────────────────────────────
+
+export interface PinnedFriend {
+  userId: string
+  friendUserId: string
 }
 
 // ─── Join / score tables ──────────────────────────────────────────────────────

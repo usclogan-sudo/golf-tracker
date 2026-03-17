@@ -1,5 +1,5 @@
 import { createClient } from '@supabase/supabase-js'
-import type { Course, Player, Round, RoundPlayer, HoleScore, BuyIn, BBBPoint, JunkRecord, JunkType, UserProfile, GamePreset, GameType, StakesMode } from '../types'
+import type { Course, Player, Round, RoundPlayer, HoleScore, BuyIn, BBBPoint, JunkRecord, JunkType, UserProfile, GamePreset, GameType, StakesMode, PinnedFriend } from '../types'
 
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL as string
 const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY as string
@@ -48,6 +48,7 @@ export function rowToRound(row: any): Round {
     players: row.players ?? undefined,
     groups: row.groups ?? undefined,
     createdBy: row.user_id ?? undefined,
+    gameMasterId: row.game_master_id ?? undefined,
   }
 }
 
@@ -139,6 +140,7 @@ export function roundToRow(r: Round, userId: string) {
     treasurer_player_id: r.treasurerPlayerId ?? null,
     players: r.players ?? null,
     groups: r.groups ?? null,
+    game_master_id: r.gameMasterId ?? null,
   }
 }
 
@@ -314,5 +316,14 @@ export function sharedCourseToRow(c: Course, userId: string) {
     name: c.name,
     tees: c.tees,
     holes: c.holes,
+  }
+}
+
+// ─── Pinned Friends mappers ──────────────────────────────────────────────────
+
+export function rowToPinnedFriend(row: any): PinnedFriend {
+  return {
+    userId: row.user_id,
+    friendUserId: row.friend_user_id,
   }
 }

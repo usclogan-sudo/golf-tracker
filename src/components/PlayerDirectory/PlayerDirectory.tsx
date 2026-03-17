@@ -1,7 +1,7 @@
-import { useEffect, useState } from 'react'
-import { supabase, rowToRound } from '../../lib/supabase'
+import { useEffect, useState, useMemo } from 'react'
+import { supabase, rowToRound, rowToUserProfile, rowToPinnedFriend } from '../../lib/supabase'
 import { UserAvatar } from '../AvatarPicker'
-import type { Round, Player } from '../../types'
+import type { Round, Player, UserProfile, PinnedFriend } from '../../types'
 
 interface Props {
   userId: string
@@ -13,56 +13,99 @@ interface PlayerEntry {
   name: string
   handicapIndex: number
   roundsPlayed: number
+  sharedRounds: number  // rounds played WITH the current user
   lastPlayed: Date | null
+  isRegistered: boolean
+  avatarPreset?: string
+  avatarUrl?: string
 }
 
 export function PlayerDirectory({ userId, onBack }: Props) {
   const [players, setPlayers] = useState<PlayerEntry[]>([])
+  const [pinnedIds, setPinnedIds] = useState<Set<string>>(new Set())
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
 
   useEffect(() => {
-    loadPlayers()
+    loadData()
   }, [userId])
 
-  const loadPlayers = async () => {
-    const { data: roundRows } = await supabase
-      .from('rounds')
-      .select('*')
-      .in('status', ['complete', 'active'])
+  const loadData = async () => {
+    const [roundsRes, profilesRes, pinsRes] = await Promise.all([
+      supabase.from('rounds').select('*').in('status', ['complete', 'active']),
+      supabase.from('user_profiles').select('*').not('display_name', 'is', null),
+      supabase.from('pinned_friends').select('*').eq('user_id', userId),
+    ])
 
-    if (!roundRows) { setLoading(false); return }
-    const rounds: Round[] = roundRows.map(rowToRound)
+    const rounds: Round[] = (roundsRes.data ?? []).map(rowToRound)
+    const profiles: UserProfile[] = (profilesRes.data ?? []).map(rowToUserProfile)
+    const pins: PinnedFriend[] = (pinsRes.data ?? []).map(rowToPinnedFriend)
+
+    setPinnedIds(new Set(pins.map(p => p.friendUserId)))
+
+    // Build profile lookup
+    const profileMap = new Map<string, UserProfile>()
+    for (const p of profiles) profileMap.set(p.userId, p)
 
     const playerMap = new Map<string, PlayerEntry>()
 
     for (const round of rounds) {
       const roundPlayers: Player[] = round.players ?? []
+      const userInRound = roundPlayers.some(p => p.id === userId)
+
       for (const p of roundPlayers) {
         const existing = playerMap.get(p.id)
         const roundDate = new Date(round.date)
+        const prof = profileMap.get(p.id)
+
         if (existing) {
           existing.roundsPlayed++
-          if (!existing.lastPlayed || roundDate > existing.lastPlayed) {
-            existing.lastPlayed = roundDate
-          }
-          // Keep latest handicap
+          if (userInRound && p.id !== userId) existing.sharedRounds++
+          if (!existing.lastPlayed || roundDate > existing.lastPlayed) existing.lastPlayed = roundDate
           existing.handicapIndex = p.handicapIndex
+          if (prof) {
+            existing.isRegistered = true
+            existing.avatarPreset = prof.avatarPreset
+            existing.avatarUrl = prof.avatarUrl
+          }
         } else {
           playerMap.set(p.id, {
             id: p.id,
-            name: p.name,
+            name: prof?.displayName ?? p.name,
             handicapIndex: p.handicapIndex,
             roundsPlayed: 1,
+            sharedRounds: userInRound && p.id !== userId ? 1 : 0,
             lastPlayed: roundDate,
+            isRegistered: !!prof,
+            avatarPreset: prof?.avatarPreset,
+            avatarUrl: prof?.avatarUrl,
           })
         }
       }
     }
 
+    // Also add registered profiles not in any round
+    for (const prof of profiles) {
+      if (!playerMap.has(prof.userId) && prof.userId !== userId) {
+        playerMap.set(prof.userId, {
+          id: prof.userId,
+          name: prof.displayName ?? 'Unknown',
+          handicapIndex: prof.handicapIndex ?? 0,
+          roundsPlayed: 0,
+          sharedRounds: 0,
+          lastPlayed: null,
+          isRegistered: true,
+          avatarPreset: prof.avatarPreset,
+          avatarUrl: prof.avatarUrl,
+        })
+      }
+    }
+
+    // Remove current user
+    playerMap.delete(userId)
+
     const arr = Array.from(playerMap.values())
     arr.sort((a, b) => {
-      // Most recently played first
       if (a.lastPlayed && b.lastPlayed) return b.lastPlayed.getTime() - a.lastPlayed.getTime()
       if (a.lastPlayed) return -1
       if (b.lastPlayed) return 1
@@ -72,16 +115,28 @@ export function PlayerDirectory({ userId, onBack }: Props) {
     setLoading(false)
   }
 
+  const togglePin = async (playerId: string) => {
+    const isPinned = pinnedIds.has(playerId)
+    if (isPinned) {
+      setPinnedIds(prev => { const next = new Set(prev); next.delete(playerId); return next })
+      await supabase.from('pinned_friends').delete().eq('user_id', userId).eq('friend_user_id', playerId)
+    } else {
+      setPinnedIds(prev => new Set(prev).add(playerId))
+      await supabase.from('pinned_friends').insert({ user_id: userId, friend_user_id: playerId })
+    }
+  }
+
   const filtered = search.trim()
     ? players.filter(p => p.name.toLowerCase().includes(search.toLowerCase()))
     : players
 
-  const recentPlayers = filtered.filter(p => {
-    if (!p.lastPlayed) return false
-    const daysAgo = (Date.now() - p.lastPlayed.getTime()) / (1000 * 60 * 60 * 24)
-    return daysAgo <= 30
-  })
-  const otherPlayers = filtered.filter(p => !recentPlayers.includes(p))
+  const pinned = filtered.filter(p => pinnedIds.has(p.id))
+  const frequent = filtered
+    .filter(p => !pinnedIds.has(p.id) && p.sharedRounds >= 2)
+    .sort((a, b) => b.sharedRounds - a.sharedRounds)
+    .slice(0, 5)
+  const registered = filtered.filter(p => !pinnedIds.has(p.id) && !frequent.includes(p) && p.isRegistered)
+  const guests = filtered.filter(p => !pinnedIds.has(p.id) && !frequent.includes(p) && !p.isRegistered)
 
   return (
     <div className="min-h-screen bg-gray-50 pb-8">
@@ -112,28 +167,28 @@ export function PlayerDirectory({ userId, onBack }: Props) {
           </div>
         ) : (
           <>
-            {recentPlayers.length > 0 && (
-              <section>
-                <h2 className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Recently Played</h2>
-                <div className="space-y-2">
-                  {recentPlayers.map(p => (
-                    <PlayerCard key={p.id} player={p} />
-                  ))}
-                </div>
-              </section>
+            {pinned.length > 0 && (
+              <Section title="Pinned Friends" icon="⭐">
+                {pinned.map(p => <PlayerCard key={p.id} player={p} isPinned onTogglePin={() => togglePin(p.id)} />)}
+              </Section>
             )}
 
-            {otherPlayers.length > 0 && (
-              <section>
-                <h2 className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">
-                  {recentPlayers.length > 0 ? 'All Players' : 'Players'}
-                </h2>
-                <div className="space-y-2">
-                  {otherPlayers.map(p => (
-                    <PlayerCard key={p.id} player={p} />
-                  ))}
-                </div>
-              </section>
+            {frequent.length > 0 && (
+              <Section title="Frequently Played">
+                {frequent.map(p => <PlayerCard key={p.id} player={p} isPinned={false} onTogglePin={() => togglePin(p.id)} />)}
+              </Section>
+            )}
+
+            {registered.length > 0 && (
+              <Section title="Registered Players">
+                {registered.map(p => <PlayerCard key={p.id} player={p} isPinned={false} onTogglePin={() => togglePin(p.id)} />)}
+              </Section>
+            )}
+
+            {guests.length > 0 && (
+              <Section title="All Players">
+                {guests.map(p => <PlayerCard key={p.id} player={p} isPinned={false} onTogglePin={() => togglePin(p.id)} />)}
+              </Section>
             )}
           </>
         )}
@@ -142,12 +197,28 @@ export function PlayerDirectory({ userId, onBack }: Props) {
   )
 }
 
-function PlayerCard({ player }: { player: PlayerEntry }) {
+function Section({ title, icon, children }: { title: string; icon?: string; children: React.ReactNode }) {
+  return (
+    <section>
+      <h2 className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2 flex items-center gap-1">
+        {icon && <span>{icon}</span>}{title}
+      </h2>
+      <div className="space-y-2">{children}</div>
+    </section>
+  )
+}
+
+function PlayerCard({ player, isPinned, onTogglePin }: { player: PlayerEntry; isPinned: boolean; onTogglePin: () => void }) {
   return (
     <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-4 flex items-center gap-3">
-      <UserAvatar name={player.name} size="md" />
+      <UserAvatar url={player.avatarUrl} preset={player.avatarPreset} name={player.name} size="md" />
       <div className="flex-1 min-w-0">
-        <p className="font-semibold text-gray-900 truncate">{player.name}</p>
+        <div className="flex items-center gap-2">
+          <p className="font-semibold text-gray-900 truncate">{player.name}</p>
+          {player.isRegistered && (
+            <span className="text-[10px] font-bold uppercase px-1.5 py-0.5 rounded-full bg-amber-100 text-amber-700">Registered</span>
+          )}
+        </div>
         <p className="text-sm text-gray-500">
           HCP {player.handicapIndex} · {player.roundsPlayed} round{player.roundsPlayed !== 1 ? 's' : ''}
           {player.lastPlayed && (
@@ -155,6 +226,15 @@ function PlayerCard({ player }: { player: PlayerEntry }) {
           )}
         </p>
       </div>
+      <button
+        onClick={onTogglePin}
+        className={`w-8 h-8 flex items-center justify-center rounded-full transition-colors ${
+          isPinned ? 'text-amber-500' : 'text-gray-300 hover:text-amber-400'
+        }`}
+        aria-label={isPinned ? 'Unpin' : 'Pin'}
+      >
+        {isPinned ? '★' : '☆'}
+      </button>
     </div>
   )
 }

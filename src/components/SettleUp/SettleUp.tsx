@@ -18,6 +18,7 @@ import {
   buildSettlements,
   venmoLink,
   venmoWebLink,
+  venmoRequestLink,
   zelleLink,
   cashAppLink,
   paypalLink,
@@ -41,6 +42,7 @@ import type {
 
 interface Props {
   roundId: string
+  userId?: string
   onDone: () => void
   onContinue: () => void
 }
@@ -112,7 +114,7 @@ function PaymentButtons({ toPlayer, amountCents, note }: { toPlayer: Player; amo
   )
 }
 
-export function SettleUp({ roundId, onDone, onContinue }: Props) {
+export function SettleUp({ roundId, userId, onDone, onContinue }: Props) {
   const [round, setRound] = useState<Round | null>(null)
   const [roundPlayers, setRoundPlayers] = useState<RoundPlayer[]>([])
   const [holeScores, setHoleScores] = useState<HoleScore[]>([])
@@ -210,6 +212,9 @@ export function SettleUp({ roundId, onDone, onContinue }: Props) {
   const unpaidBuyIns = buyIns.filter(b => b.status === 'unpaid')
   const playerById = (id: string) => players.find(p => p.id === id)
 
+  // Treasurer access control
+  const isTreasurer = userId === treasurerId || userId === round?.createdBy
+
   const togglePaid = async (buyIn: BuyIn) => {
     const newStatus = buyIn.status === 'unpaid' ? 'marked_paid' : 'unpaid'
     const newPaidAt = newStatus === 'marked_paid' ? new Date().toISOString() : null
@@ -247,10 +252,18 @@ export function SettleUp({ roundId, onDone, onContinue }: Props) {
       </header>
 
       <div className="px-4 py-5 max-w-2xl mx-auto space-y-4">
+        {/* Non-treasurer banner */}
+        {!isTreasurer && treasurer && (
+          <div className="bg-amber-50 border border-amber-200 rounded-xl px-4 py-3">
+            <p className="text-amber-800 text-sm font-semibold">Only {treasurer.name} can manage payments</p>
+            <p className="text-amber-600 text-xs mt-0.5">You can view results and standings below.</p>
+          </div>
+        )}
+
         {buyIns.length > 0 && (
           <section className="bg-white rounded-2xl shadow-sm p-4 space-y-3">
             <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Buy-In Status</p>
-            {unpaidBuyIns.length > 0 && (
+            {isTreasurer && unpaidBuyIns.length > 0 && (
               <div className="bg-red-50 border border-red-200 rounded-xl p-3">
                 <p className="text-red-700 text-sm font-semibold">
                   {unpaidBuyIns.length} unpaid — collect {fmtMoney(unpaidBuyIns.length * game.buyInCents)} before distributing
@@ -265,18 +278,40 @@ export function SettleUp({ roundId, onDone, onContinue }: Props) {
                   <div key={b.id} className={`flex items-center justify-between p-3 rounded-xl ${isPaid ? 'bg-green-50' : 'bg-red-50'}`}>
                     <div>
                       <p className="font-semibold text-gray-800 text-sm">{p?.name ?? 'Unknown'}</p>
-                      <p className="text-xs text-gray-500">{fmtMoney(b.amountCents)}</p>
+                      <p className="text-xs text-gray-500">
+                        {fmtMoney(b.amountCents)}
+                        {p?.venmoUsername && <span className="ml-1 text-blue-500">Venmo</span>}
+                        {p?.zelleIdentifier && <span className="ml-1 text-purple-500">Zelle</span>}
+                        {p?.cashAppUsername && <span className="ml-1 text-green-500">CashApp</span>}
+                        {p?.paypalEmail && <span className="ml-1 text-yellow-600">PayPal</span>}
+                      </p>
                     </div>
-                    <button
-                      onClick={() => togglePaid(b)}
-                      className={`px-4 py-2 rounded-xl text-sm font-semibold transition-colors ${
-                        isPaid
-                          ? 'bg-green-600 text-white active:bg-gray-800'
-                          : 'bg-red-100 text-red-700 active:bg-red-200'
-                      }`}
-                    >
-                      {isPaid ? 'Paid' : 'Mark Paid'}
-                    </button>
+                    <div className="flex items-center gap-2">
+                      {isTreasurer && !isPaid && p && (
+                        <div className="flex gap-1">
+                          {p.venmoUsername && (
+                            <a href={venmoRequestLink(p.venmoUsername, b.amountCents, `Fore Skins Golf buy-in`)}
+                              className="text-xs text-blue-600 font-semibold underline">Req</a>
+                          )}
+                        </div>
+                      )}
+                      {isTreasurer ? (
+                        <button
+                          onClick={() => togglePaid(b)}
+                          className={`px-4 py-2 rounded-xl text-sm font-semibold transition-colors ${
+                            isPaid
+                              ? 'bg-green-600 text-white active:bg-gray-800'
+                              : 'bg-red-100 text-red-700 active:bg-red-200'
+                          }`}
+                        >
+                          {isPaid ? 'Paid' : 'Mark Paid'}
+                        </button>
+                      ) : (
+                        <span className={`px-3 py-1.5 rounded-xl text-sm font-semibold ${isPaid ? 'text-green-600' : 'text-red-500'}`}>
+                          {isPaid ? 'Paid' : 'Unpaid'}
+                        </span>
+                      )}
+                    </div>
                   </div>
                 )
               })}
@@ -587,6 +622,29 @@ export function SettleUp({ roundId, onDone, onContinue }: Props) {
           <section className="bg-gray-50 rounded-2xl p-4 text-center">
             <p className="text-gray-600 font-semibold">No winners calculated yet</p>
             <p className="text-gray-500 text-sm mt-1">Each player gets {fmtMoney(game.buyInCents)} back from the treasurer.</p>
+          </section>
+        )}
+
+        {/* Payment Directory */}
+        {players.some(p => p.venmoUsername || p.zelleIdentifier || p.cashAppUsername || p.paypalEmail) && (
+          <section className="bg-white rounded-2xl shadow-sm p-4 space-y-3">
+            <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Payment Directory</p>
+            <div className="space-y-2">
+              {players.map(p => {
+                const methods: string[] = []
+                if (p.venmoUsername) methods.push(`Venmo: ${p.venmoUsername}`)
+                if (p.zelleIdentifier) methods.push(`Zelle: ${p.zelleIdentifier}`)
+                if (p.cashAppUsername) methods.push(`CashApp: ${p.cashAppUsername}`)
+                if (p.paypalEmail) methods.push(`PayPal: ${p.paypalEmail}`)
+                if (methods.length === 0) methods.push('Cash only')
+                return (
+                  <div key={p.id} className="p-3 bg-gray-50 rounded-xl">
+                    <p className="font-semibold text-gray-800 text-sm">{p.name}</p>
+                    <p className="text-xs text-gray-500 mt-0.5">{methods.join(' · ')}</p>
+                  </div>
+                )
+              })}
+            </div>
           </section>
         )}
       </div>
