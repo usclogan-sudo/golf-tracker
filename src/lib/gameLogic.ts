@@ -805,6 +805,108 @@ export function calculateJunks(
   return { netCents, tallies }
 }
 
+// ─── Unified Settlements (game + junk through treasurer) ────────────────────
+
+export interface UnifiedSettlement {
+  fromId: string
+  toId: string
+  amountCents: number
+  reason: string
+  source: 'game' | 'junk'
+}
+
+/**
+ * Build unified settlements merging game payouts and junk side bets.
+ * All flows go through the treasurer (hub-and-spoke model).
+ * Bidirectional flows between the same pair are netted out.
+ */
+export function buildUnifiedSettlements(
+  payouts: PlayerPayout[],
+  treasurerId: string,
+  junkResult: JunkResult | null,
+): UnifiedSettlement[] {
+  // Accumulate net flows: key = "fromId→toId", value = { amountCents, reasons }
+  const flows: Record<string, { amountCents: number; reasons: { reason: string; source: 'game' | 'junk' }[] }> = {}
+
+  const addFlow = (fromId: string, toId: string, amountCents: number, reason: string, source: 'game' | 'junk') => {
+    if (amountCents <= 0 || fromId === toId) return
+    const key = `${fromId}→${toId}`
+    if (!flows[key]) flows[key] = { amountCents: 0, reasons: [] }
+    flows[key].amountCents += amountCents
+    flows[key].reasons.push({ reason, source })
+  }
+
+  // Game payouts: treasurer pays each winner (excluding self)
+  for (const p of payouts) {
+    if (p.playerId !== treasurerId) {
+      addFlow(treasurerId, p.playerId, p.amountCents, p.reason, 'game')
+    }
+  }
+
+  // Junk settlements through treasurer
+  if (junkResult) {
+    for (const [playerId, netCents] of Object.entries(junkResult.netCents)) {
+      if (netCents > 0 && playerId !== treasurerId) {
+        // Player won junk money → treasurer pays them
+        addFlow(treasurerId, playerId, netCents, 'Junk winnings', 'junk')
+      } else if (netCents < 0 && playerId !== treasurerId) {
+        // Player lost junk money → they owe treasurer
+        addFlow(playerId, treasurerId, Math.abs(netCents), 'Junk losses', 'junk')
+      }
+    }
+    // Treasurer's own junk net is handled implicitly (kept from/added to pot)
+  }
+
+  // Net out bidirectional flows between same pair
+  const settlements: UnifiedSettlement[] = []
+  const processed = new Set<string>()
+
+  for (const key of Object.keys(flows)) {
+    if (processed.has(key)) continue
+    const [fromId, toId] = key.split('→')
+    const reverseKey = `${toId}→${fromId}`
+    processed.add(key)
+    processed.add(reverseKey)
+
+    const forward = flows[key]?.amountCents ?? 0
+    const reverse = flows[reverseKey]?.amountCents ?? 0
+    const net = forward - reverse
+
+    if (net === 0) continue
+
+    const actualFromId = net > 0 ? fromId : toId
+    const actualToId = net > 0 ? toId : fromId
+    const sourceFlows = net > 0 ? flows[key] : flows[reverseKey]
+    // Use the dominant direction's reasons; if netted, label accordingly
+    const reasons = sourceFlows?.reasons ?? []
+    const hasGame = reasons.some(r => r.source === 'game')
+    const hasJunk = reasons.some(r => r.source === 'junk')
+    const source: 'game' | 'junk' = hasGame ? 'game' : 'junk'
+
+    // Build a combined reason string
+    let reason: string
+    if (hasGame && hasJunk) {
+      const gameReasons = reasons.filter(r => r.source === 'game').map(r => r.reason).join(', ')
+      reason = `${gameReasons} + junk (netted)`
+    } else if (net !== forward && net !== -reverse) {
+      // Partial netting happened
+      reason = reasons.map(r => r.reason).join(', ') + ' (netted)'
+    } else {
+      reason = reasons.map(r => r.reason).join(', ')
+    }
+
+    settlements.push({
+      fromId: actualFromId,
+      toId: actualToId,
+      amountCents: Math.abs(net),
+      reason,
+      source: hasGame && hasJunk ? 'game' : source,
+    })
+  }
+
+  return settlements
+}
+
 // ─── Formatting ───────────────────────────────────────────────────────────────
 
 export function fmtMoney(cents: number): string {

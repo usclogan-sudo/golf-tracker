@@ -1,25 +1,122 @@
-import { useState } from 'react'
+import { useState, useRef, useCallback, useEffect } from 'react'
 import { v4 as uuidv4 } from 'uuid'
 import { supabase, courseToRow } from '../../lib/supabase'
 import { venturaCourses } from '../../data/venturaCourses'
-import type { Course } from '../../types'
+import { searchCourses, getCourseDetails, hasCompleteScorecard } from '../../lib/golfCourseApi'
+import type { SearchResult, ApiCourseDetail } from '../../lib/golfCourseApi'
+import type { Course, Tee, Hole } from '../../types'
 
 interface Props {
   userId: string
   onDone: () => void
   onAddCustom: () => void
+  onPrefillCourse?: (course: Course) => void
 }
 
 function totalPar(holes: { par: number }[]) {
   return holes.reduce((s, h) => s + h.par, 0)
 }
 
-export function CourseCatalog({ userId, onDone, onAddCustom }: Props) {
+// Standard stroke index allocation fallback
+const STANDARD_SI_18 = [7, 11, 3, 15, 1, 9, 5, 13, 17, 8, 12, 4, 16, 2, 10, 6, 14, 18]
+
+/** Convert API course detail to our Course type */
+function apiDetailToCourse(detail: ApiCourseDetail): Course | null {
+  if (!detail.teeboxes?.length) return null
+
+  const tees: Tee[] = detail.teeboxes.map(tb => ({
+    name: tb.tee_name,
+    rating: tb.course_rating || 72.0,
+    slope: tb.slope_rating || 113,
+  }))
+
+  // Try to build holes from the first tee that has hole data
+  const teeWithHoles = detail.teeboxes.find(
+    tb => tb.holes?.length && tb.holes.length >= 9,
+  )
+
+  const holeCount = detail.holes === 9 ? 9 : 18
+  let holes: Hole[]
+
+  if (teeWithHoles?.holes) {
+    holes = teeWithHoles.holes.map((h, i) => {
+      const yardages: Record<string, number> = {}
+      // Collect yardages from all tees for this hole
+      for (const tb of detail.teeboxes!) {
+        const tbHole = tb.holes?.find(bh => bh.hole_number === h.hole_number)
+        if (tbHole?.yardage) yardages[tb.tee_name] = tbHole.yardage
+      }
+      return {
+        number: h.hole_number,
+        par: h.par || 4,
+        strokeIndex: h.handicap || STANDARD_SI_18[i] || (i + 1),
+        yardages,
+      }
+    })
+  } else {
+    // Partial data — build default holes
+    holes = Array.from({ length: holeCount }, (_, i) => ({
+      number: i + 1,
+      par: 4,
+      strokeIndex: STANDARD_SI_18[i] || (i + 1),
+      yardages: {},
+    }))
+  }
+
+  const name = detail.course_name
+    ? (detail.club_name && detail.club_name !== detail.course_name
+      ? `${detail.club_name} - ${detail.course_name}`
+      : detail.course_name)
+    : detail.club_name
+
+  return {
+    id: uuidv4(),
+    name,
+    tees,
+    holes,
+    createdAt: new Date(),
+  }
+}
+
+export function CourseCatalog({ userId, onDone, onAddCustom, onPrefillCourse }: Props) {
   const [query, setQuery] = useState('')
   const [adding, setAdding] = useState<string | null>(null)
   const [added, setAdded] = useState<Set<string>>(new Set())
   const [error, setError] = useState<string | null>(null)
 
+  // API search state
+  const [apiResults, setApiResults] = useState<SearchResult[]>([])
+  const [apiSearching, setApiSearching] = useState(false)
+  const [apiImporting, setApiImporting] = useState<string | null>(null)
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  // Debounced API search
+  const doApiSearch = useCallback((q: string) => {
+    if (debounceRef.current) clearTimeout(debounceRef.current)
+    if (!q.trim() || q.trim().length < 2) {
+      setApiResults([])
+      setApiSearching(false)
+      return
+    }
+    setApiSearching(true)
+    debounceRef.current = setTimeout(async () => {
+      const results = await searchCourses(q.trim())
+      setApiResults(results)
+      setApiSearching(false)
+    }, 500)
+  }, [])
+
+  // Cleanup debounce on unmount
+  useEffect(() => {
+    return () => { if (debounceRef.current) clearTimeout(debounceRef.current) }
+  }, [])
+
+  const handleQueryChange = (q: string) => {
+    setQuery(q)
+    doApiSearch(q)
+  }
+
+  // Filter local ventura courses
   const filtered = query.trim()
     ? venturaCourses.filter(c =>
         c.name.toLowerCase().includes(query.toLowerCase()) ||
@@ -66,6 +163,53 @@ export function CourseCatalog({ userId, onDone, onAddCustom }: Props) {
     }
   }
 
+  const handleApiImport = async (result: SearchResult) => {
+    if (apiImporting) return
+    setApiImporting(result.id)
+    setError(null)
+
+    try {
+      const detail = await getCourseDetails(result.id)
+      if (!detail) {
+        setError('Could not load course details. Try again.')
+        return
+      }
+
+      const course = apiDetailToCourse(detail)
+      if (!course) {
+        setError('No tee data available for this course.')
+        return
+      }
+
+      if (hasCompleteScorecard(detail)) {
+        // Complete data — insert directly into Supabase
+        const { count } = await supabase
+          .from('courses')
+          .select('id', { count: 'exact', head: true })
+          .eq('name', course.name)
+        if (count && count > 0) {
+          setAdded(prev => new Set(prev).add(result.id))
+          return
+        }
+        const { error: err } = await supabase.from('courses').insert(courseToRow(course, userId))
+        if (err) throw err
+        setAdded(prev => new Set(prev).add(result.id))
+        setTimeout(onDone, 600)
+      } else {
+        // Partial data — pre-fill CourseSetup
+        if (onPrefillCourse) {
+          onPrefillCourse(course)
+        }
+      }
+    } catch {
+      setError(`Failed to import course. Please try again.`)
+    } finally {
+      setApiImporting(null)
+    }
+  }
+
+  const hasApiKey = !!(import.meta.env.VITE_GOLF_COURSE_API_KEY as string)
+
   return (
     <div className="min-h-screen bg-gray-50 pb-28">
       <header className="app-header text-white px-4 py-4 sticky top-0 z-10 shadow-xl flex items-center gap-3">
@@ -85,9 +229,9 @@ export function CourseCatalog({ userId, onDone, onAddCustom }: Props) {
           <span className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 text-lg">🔍</span>
           <input
             type="text"
-            placeholder="Search courses or city…"
+            placeholder={hasApiKey ? "Search 30,000+ courses…" : "Search courses or city…"}
             value={query}
-            onChange={e => setQuery(e.target.value)}
+            onChange={e => handleQueryChange(e.target.value)}
             className="w-full h-12 pl-11 pr-4 rounded-2xl border border-gray-200 bg-white text-base focus:outline-none focus:ring-2 focus:ring-amber-500 shadow-sm"
           />
         </div>
@@ -98,61 +242,120 @@ export function CourseCatalog({ userId, onDone, onAddCustom }: Props) {
           </div>
         )}
 
-        {filtered.length === 0 && (
-          <div className="text-center py-12 text-gray-500">
-            <p className="text-3xl mb-2">⛳</p>
-            <p className="font-medium">No courses match "{query}"</p>
-          </div>
-        )}
-
-        {/* Course list grouped by city */}
-        {cities.map(city => (
-          <section key={city}>
-            <h2 className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2 px-1">{city}</h2>
+        {/* API Search Results */}
+        {hasApiKey && query.trim().length >= 2 && (
+          <section>
+            <h2 className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2 px-1 flex items-center gap-2">
+              Search Results
+              {apiSearching && (
+                <span className="w-3 h-3 border border-amber-500 border-t-transparent rounded-full animate-spin inline-block" />
+              )}
+            </h2>
+            {!apiSearching && apiResults.length === 0 && (
+              <p className="text-sm text-gray-400 px-1 mb-3">No courses found</p>
+            )}
             <div className="space-y-2">
-              {filtered.filter(c => c.city === city).map(course => {
-                const par = totalPar(course.holes)
-                const isAdding = adding === course.name
-                const isAdded = added.has(course.name)
-
+              {apiResults.map(result => {
+                const isImporting = apiImporting === result.id
+                const isAdded = added.has(result.id)
                 return (
                   <button
-                    key={course.name}
-                    onClick={() => handleAdd(course.name)}
-                    disabled={isAdding || isAdded}
+                    key={result.id}
+                    onClick={() => handleApiImport(result)}
+                    disabled={isImporting || isAdded}
                     className={`w-full bg-white rounded-2xl shadow-sm border text-left px-4 py-4 flex items-center gap-4 transition-all
-                      ${isAdded
-                        ? 'border-amber-300 bg-amber-50'
-                        : 'border-gray-100 active:bg-gray-50'
-                      }
-                      ${isAdding ? 'opacity-70' : ''}
+                      ${isAdded ? 'border-amber-300 bg-amber-50' : 'border-gray-100 active:bg-gray-50'}
+                      ${isImporting ? 'opacity-70' : ''}
                     `}
                   >
                     <div className={`w-12 h-12 rounded-xl flex items-center justify-center flex-shrink-0 text-xl
-                      ${isAdded ? 'bg-amber-100' : 'bg-gray-100'}`}>
-                      {isAdded ? '✓' : '⛳'}
+                      ${isAdded ? 'bg-amber-100' : 'bg-blue-50'}`}>
+                      {isAdded ? '✓' : '🌐'}
                     </div>
                     <div className="flex-1 min-w-0">
                       <p className={`font-semibold text-sm leading-tight ${isAdded ? 'text-green-800' : 'text-gray-900'}`}>
-                        {course.name}
+                        {result.name}
                       </p>
                       <p className="text-xs text-gray-500 mt-0.5">
-                        Par {par} · {course.tees.length} tees · {course.tees.map(t => t.name).join(', ')}
+                        {[result.city, result.state].filter(Boolean).join(', ')}
+                        {result.teeCount > 0 && ` · ${result.teeCount} tees`}
                       </p>
                     </div>
-                    {isAdding ? (
+                    {isImporting ? (
                       <div className="w-5 h-5 border-2 border-amber-500 border-t-transparent rounded-full animate-spin flex-shrink-0" />
                     ) : isAdded ? (
                       <span className="text-amber-600 font-semibold text-sm flex-shrink-0">Added</span>
                     ) : (
-                      <span className="text-amber-600 font-semibold text-sm flex-shrink-0">+ Add</span>
+                      <span className="text-blue-600 font-semibold text-sm flex-shrink-0">+ Import</span>
                     )}
                   </button>
                 )
               })}
             </div>
           </section>
-        ))}
+        )}
+
+        {/* Featured Courses (local catalog) */}
+        <section>
+          <h2 className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2 px-1">
+            {query.trim() ? 'Local Courses' : 'Featured Courses'}
+          </h2>
+
+          {filtered.length === 0 && (
+            <div className="text-center py-8 text-gray-500">
+              <p className="text-3xl mb-2">⛳</p>
+              <p className="font-medium">No local courses match "{query}"</p>
+            </div>
+          )}
+
+          {cities.map(city => (
+            <div key={city} className="mb-4">
+              <h3 className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-2 px-1">{city}</h3>
+              <div className="space-y-2">
+                {filtered.filter(c => c.city === city).map(course => {
+                  const par = totalPar(course.holes)
+                  const isAdding = adding === course.name
+                  const isAdded = added.has(course.name)
+
+                  return (
+                    <button
+                      key={course.name}
+                      onClick={() => handleAdd(course.name)}
+                      disabled={isAdding || isAdded}
+                      className={`w-full bg-white rounded-2xl shadow-sm border text-left px-4 py-4 flex items-center gap-4 transition-all
+                        ${isAdded
+                          ? 'border-amber-300 bg-amber-50'
+                          : 'border-gray-100 active:bg-gray-50'
+                        }
+                        ${isAdding ? 'opacity-70' : ''}
+                      `}
+                    >
+                      <div className={`w-12 h-12 rounded-xl flex items-center justify-center flex-shrink-0 text-xl
+                        ${isAdded ? 'bg-amber-100' : 'bg-gray-100'}`}>
+                        {isAdded ? '✓' : '⛳'}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className={`font-semibold text-sm leading-tight ${isAdded ? 'text-green-800' : 'text-gray-900'}`}>
+                          {course.name}
+                        </p>
+                        <p className="text-xs text-gray-500 mt-0.5">
+                          Par {par} · {course.tees.length} tees · {course.tees.map(t => t.name).join(', ')}
+                        </p>
+                      </div>
+                      {isAdding ? (
+                        <div className="w-5 h-5 border-2 border-amber-500 border-t-transparent rounded-full animate-spin flex-shrink-0" />
+                      ) : isAdded ? (
+                        <span className="text-amber-600 font-semibold text-sm flex-shrink-0">Added</span>
+                      ) : (
+                        <span className="text-amber-600 font-semibold text-sm flex-shrink-0">+ Add</span>
+                      )}
+                    </button>
+                  )
+                })}
+              </div>
+            </div>
+          ))}
+        </section>
 
         <p className="text-center text-xs text-gray-400 py-2">
           Ratings sourced from USGA/Greenskeeper.org · Verify before posting handicap rounds

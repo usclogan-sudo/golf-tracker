@@ -59,12 +59,12 @@ export function Settings({ userId, email, onBack, onSignOut, isAdmin, onAdmin, i
   const handleSaveProfile = async () => {
     setProfileMessage(null)
     if (!displayName.trim()) { setProfileMessage({ type: 'error', text: 'Name is required' }); return }
-    const hcp = parseFloat(handicapIndex)
-    if (isNaN(hcp) || hcp < -10 || hcp > 54) { setProfileMessage({ type: 'error', text: 'Handicap must be between -10 and 54' }); return }
+    const hcp = handicapIndex.trim() === '' ? null : parseFloat(handicapIndex)
+    if (hcp !== null && (isNaN(hcp) || hcp < -10 || hcp > 54)) { setProfileMessage({ type: 'error', text: 'Handicap must be between -10 and 54' }); return }
     setProfileSaving(true)
     const { error } = await supabase.from('user_profiles').update({
       display_name: displayName.trim(),
-      handicap_index: hcp,
+      handicap_index: hcp ?? null,
       venmo_username: venmo.trim() || null,
       zelle_identifier: zelle.trim() || null,
       cashapp_username: cashapp.trim() || null,
@@ -163,10 +163,12 @@ export function Settings({ userId, email, onBack, onSignOut, isAdmin, onAdmin, i
                 type="number"
                 inputMode="decimal"
                 step="0.1"
+                placeholder="Auto-calculate"
                 value={handicapIndex}
                 onChange={e => setHandicapIndex(e.target.value)}
                 className="w-full h-12 px-4 rounded-xl border border-gray-300 text-base focus:outline-none focus:ring-2 focus:ring-amber-500"
               />
+              <p className="text-xs text-gray-400 mt-1">Leave blank to auto-calculate from your rounds</p>
             </div>
             {profileMessage && (
               <p className={`text-sm ${profileMessage.type === 'error' ? 'text-red-500' : 'text-amber-600'}`}>

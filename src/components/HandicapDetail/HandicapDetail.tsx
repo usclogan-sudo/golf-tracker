@@ -1,6 +1,7 @@
 import { useEffect, useState, useMemo } from 'react'
-import { supabase, rowToRound, rowToHoleScore } from '../../lib/supabase'
-import type { Round, HoleScore, UserProfile } from '../../types'
+import { supabase, rowToRound, rowToHoleScore, rowToRoundPlayer } from '../../lib/supabase'
+import { calcScoreDifferential, calcHandicapIndex } from '../../lib/handicap'
+import type { Round, HoleScore, RoundPlayer, UserProfile } from '../../types'
 
 interface Props {
   userId: string
@@ -13,20 +14,26 @@ interface RoundEntry {
   courseName: string
   gross: number
   par: number
+  differential: number | null // null if no tee rating/slope available
+  courseRating: number | null
+  slopeRating: number | null
 }
 
 export function HandicapDetail({ userId, userProfile, onBack }: Props) {
   const [rounds, setRounds] = useState<Round[]>([])
   const [holeScores, setHoleScores] = useState<HoleScore[]>([])
+  const [roundPlayers, setRoundPlayers] = useState<RoundPlayer[]>([])
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
     Promise.all([
       supabase.from('rounds').select('*').eq('status', 'complete').order('date', { ascending: false }),
       supabase.from('hole_scores').select('*'),
-    ]).then(([roundsRes, scoresRes]) => {
+      supabase.from('round_players').select('*'),
+    ]).then(([roundsRes, scoresRes, rpRes]) => {
       if (roundsRes.data) setRounds(roundsRes.data.map(rowToRound))
       if (scoresRes.data) setHoleScores(scoresRes.data.map(rowToHoleScore))
+      if (rpRes.data) setRoundPlayers(rpRes.data.map(rowToRoundPlayer))
       setLoading(false)
     })
   }, [userId])
@@ -36,19 +43,66 @@ export function HandicapDetail({ userId, userProfile, onBack }: Props) {
     for (const r of rounds) {
       const myScores = holeScores.filter(s => s.roundId === r.id && s.playerId === userId)
       if (myScores.length === 0) continue
+      // Only count 18-hole rounds for handicap calculation
+      const totalHoles = r.courseSnapshot?.holes.length ?? 18
+      if (totalHoles < 18) continue
+
       const gross = myScores.reduce((sum, s) => sum + s.grossScore, 0)
       const par = r.courseSnapshot?.holes.reduce((s, h) => s + h.par, 0) ?? 72
+
+      // Look up the tee played from round_players → get slope/rating from courseSnapshot.tees
+      const rp = roundPlayers.find(p => p.roundId === r.id && p.playerId === userId)
+      const teePlayed = rp?.teePlayed
+      const teeData = teePlayed
+        ? r.courseSnapshot?.tees.find(t => t.name === teePlayed)
+        : null
+
+      let differential: number | null = null
+      let courseRating: number | null = null
+      let slopeRating: number | null = null
+
+      if (teeData && teeData.rating > 0 && teeData.slope > 0) {
+        courseRating = teeData.rating
+        slopeRating = teeData.slope
+        differential = calcScoreDifferential(gross, courseRating, slopeRating)
+      }
+
       entries.push({
         date: r.date,
         courseName: r.courseSnapshot?.courseName ?? 'Unknown',
         gross,
         par,
+        differential,
+        courseRating,
+        slopeRating,
       })
     }
     return entries
-  }, [rounds, holeScores, userId])
+  }, [rounds, holeScores, roundPlayers, userId])
 
-  const last10 = roundEntries.slice(0, 10)
+  // Differentials for handicap calculation (only rounds with valid tee data)
+  const differentials = roundEntries
+    .filter((e): e is RoundEntry & { differential: number } => e.differential !== null)
+    .map(e => e.differential)
+
+  const handicapResult = calcHandicapIndex(differentials)
+
+  // Which round indices in roundEntries were used in the calculation
+  const usedRoundIndices = useMemo(() => {
+    if (!handicapResult) return new Set<number>()
+    // Map: handicapResult.usedIndices are indices into the `differentials` array.
+    // We need to map those back to indices in `roundEntries`.
+    const diffRoundMap: number[] = []
+    roundEntries.forEach((e, i) => {
+      if (e.differential !== null) diffRoundMap.push(i)
+    })
+    return new Set(handicapResult.usedIndices.map(di => diffRoundMap[di]))
+  }, [handicapResult, roundEntries])
+
+  const hasManualOverride = userProfile?.handicapIndex != null
+  const displayIndex = hasManualOverride ? userProfile!.handicapIndex! : handicapResult?.index ?? null
+
+  const last20 = roundEntries.slice(0, 20)
   const bestRound = roundEntries.length > 0 ? roundEntries.reduce((best, e) => e.gross < best.gross ? e : best) : null
   const worstRound = roundEntries.length > 0 ? roundEntries.reduce((worst, e) => e.gross > worst.gross ? e : worst) : null
 
@@ -68,12 +122,39 @@ export function HandicapDetail({ userId, userProfile, onBack }: Props) {
       </header>
 
       <div className="px-4 py-5 max-w-2xl mx-auto space-y-4">
-        {/* Current Handicap */}
+        {/* Current Handicap Index */}
         <section className="bg-white rounded-2xl shadow-sm p-4 text-center">
-          <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Current Handicap Index</p>
-          <p className="text-5xl font-bold gold-text font-display">
-            {userProfile?.handicapIndex != null ? userProfile.handicapIndex : '—'}
+          <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">
+            {hasManualOverride ? 'Manual Handicap Index' : 'Calculated Handicap Index'}
           </p>
+          <p className="text-5xl font-bold gold-text font-display">
+            {displayIndex != null ? displayIndex.toFixed(1) : '—'}
+          </p>
+          {!hasManualOverride && handicapResult && (
+            <p className="text-sm text-gray-500 mt-2">
+              Based on {differentials.length} round{differentials.length !== 1 ? 's' : ''}
+            </p>
+          )}
+          {!hasManualOverride && !handicapResult && differentials.length > 0 && (
+            <p className="text-sm text-gray-400 mt-2">
+              {differentials.length} of 3 rounds needed
+            </p>
+          )}
+          {!hasManualOverride && differentials.length === 0 && roundEntries.length > 0 && (
+            <p className="text-sm text-gray-400 mt-2">
+              No tee rating/slope data available
+            </p>
+          )}
+          {hasManualOverride && handicapResult && (
+            <div className="mt-3 bg-amber-50 rounded-xl px-3 py-2">
+              <p className="text-xs text-amber-700">
+                Auto-calculated: <span className="font-bold">{handicapResult.index.toFixed(1)}</span> (from {differentials.length} rounds)
+              </p>
+              <p className="text-xs text-amber-600 mt-0.5">
+                Clear handicap in Settings to use auto-calculated value
+              </p>
+            </div>
+          )}
         </section>
 
         {/* Best / Worst */}
@@ -98,24 +179,46 @@ export function HandicapDetail({ userId, userProfile, onBack }: Props) {
           </div>
         )}
 
-        {/* Last 10 Rounds */}
-        {last10.length > 0 && (
+        {/* Recent Rounds with Differentials */}
+        {last20.length > 0 && (
           <section className="bg-white rounded-2xl shadow-sm p-4 space-y-3">
-            <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Last {last10.length} Rounds</p>
+            <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">
+              Recent Rounds {handicapResult ? `(${handicapResult.usedIndices.length} used for index)` : ''}
+            </p>
             <div className="space-y-2">
-              {last10.map((entry, i) => {
+              {last20.map((entry, i) => {
                 const vsPar = entry.gross - entry.par
+                const isUsed = usedRoundIndices.has(i)
                 return (
-                  <div key={i} className="flex items-center justify-between p-3 bg-gray-50 rounded-xl">
-                    <div>
-                      <p className="font-semibold text-gray-800 text-sm">{entry.courseName}</p>
+                  <div
+                    key={i}
+                    className={`flex items-center justify-between p-3 rounded-xl ${
+                      isUsed ? 'bg-amber-50 border border-amber-200' : 'bg-gray-50'
+                    }`}
+                  >
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center gap-2">
+                        <p className="font-semibold text-gray-800 text-sm truncate">{entry.courseName}</p>
+                        {isUsed && (
+                          <span className="flex-shrink-0 text-[10px] font-bold text-amber-600 bg-amber-100 px-1.5 py-0.5 rounded-full">
+                            USED
+                          </span>
+                        )}
+                      </div>
                       <p className="text-xs text-gray-400">{entry.date.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}</p>
                     </div>
-                    <div className="text-right">
+                    <div className="text-right flex-shrink-0 ml-3">
                       <p className="font-bold text-gray-800">{entry.gross}</p>
-                      <p className={`text-xs font-semibold ${vsPar > 0 ? 'text-red-500' : vsPar < 0 ? 'text-green-600' : 'text-gray-400'}`}>
-                        {vsPar > 0 ? '+' : ''}{vsPar}
-                      </p>
+                      <div className="flex items-center gap-2 justify-end">
+                        <p className={`text-xs font-semibold ${vsPar > 0 ? 'text-red-500' : vsPar < 0 ? 'text-green-600' : 'text-gray-400'}`}>
+                          {vsPar > 0 ? '+' : ''}{vsPar}
+                        </p>
+                        {entry.differential != null && (
+                          <p className="text-xs text-gray-500 font-mono">
+                            {entry.differential.toFixed(1)}
+                          </p>
+                        )}
+                      </div>
                     </div>
                   </div>
                 )

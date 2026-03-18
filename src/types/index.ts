@@ -244,6 +244,22 @@ export interface HoleScore {
   grossScore: number
 }
 
+// ─── Settlements ─────────────────────────────────────────────────────────────
+
+export type SettlementStatus = 'owed' | 'paid'
+
+export interface SettlementRecord {
+  id: string
+  roundId: string
+  fromPlayerId: string
+  toPlayerId: string
+  amountCents: number
+  reason?: string
+  source: 'game' | 'junk'
+  status: SettlementStatus
+  paidAt?: Date
+}
+
 // ─── Legacy score (kept for migration safety) ─────────────────────────────────
 
 export interface Score {

@@ -1,5 +1,5 @@
 import { createClient } from '@supabase/supabase-js'
-import type { Course, Player, Round, RoundPlayer, HoleScore, BuyIn, BBBPoint, JunkRecord, JunkType, UserProfile, GamePreset, GameType, StakesMode, PinnedFriend, RoundParticipant } from '../types'
+import type { Course, Player, Round, RoundPlayer, HoleScore, BuyIn, BBBPoint, JunkRecord, JunkType, UserProfile, GamePreset, GameType, StakesMode, PinnedFriend, RoundParticipant, SettlementRecord, SettlementStatus } from '../types'
 
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL as string
 const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY as string
@@ -296,6 +296,37 @@ export function gamePresetToRow(gp: GamePreset, userId: string) {
     config: gp.config,
     description: gp.description ?? null,
     sort_order: gp.sortOrder,
+  }
+}
+
+// ─── Settlement Record mappers ──────────────────────────────────────────────
+
+export function rowToSettlementRecord(row: any): SettlementRecord {
+  return {
+    id: row.id,
+    roundId: row.round_id,
+    fromPlayerId: row.from_player_id,
+    toPlayerId: row.to_player_id,
+    amountCents: row.amount_cents,
+    reason: row.reason ?? undefined,
+    source: row.source as 'game' | 'junk',
+    status: row.status as SettlementStatus,
+    paidAt: row.paid_at ? new Date(row.paid_at) : undefined,
+  }
+}
+
+export function settlementRecordToRow(s: SettlementRecord, userId: string) {
+  return {
+    id: s.id,
+    user_id: userId,
+    round_id: s.roundId,
+    from_player_id: s.fromPlayerId,
+    to_player_id: s.toPlayerId,
+    amount_cents: s.amountCents,
+    reason: s.reason ?? null,
+    source: s.source,
+    status: s.status,
+    paid_at: s.paidAt instanceof Date ? s.paidAt.toISOString() : (s.paidAt ?? null),
   }
 }
 

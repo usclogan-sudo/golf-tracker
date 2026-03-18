@@ -17,7 +17,6 @@ import type {
   JunkConfig,
   JunkType,
   BuyIn,
-  PaymentMethod,
   GameType,
   StakesMode,
 } from '../../types'
@@ -1407,7 +1406,6 @@ function TreasurerAndBuyIns({
 }) {
   const [treasurerId, setTreasurerId] = useState<string | null>(null)
   const [gameMasterId, setGameMasterId] = useState<string>(userId)
-  const [method, setMethod] = useState<PaymentMethod>('venmo')
   const [paid, setPaid] = useState<Record<string, boolean>>(() => {
     const init: Record<string, boolean> = {}
     players.forEach(p => (init[p.id] = false))
@@ -1452,7 +1450,6 @@ function TreasurerAndBuyIns({
         roundId,
         playerId: p.id,
         amountCents: game.buyInCents,
-        method,
         status: paid[p.id] ? 'marked_paid' : 'unpaid',
         ...(paid[p.id] ? { paidAt: new Date() } : {}),
       }))
@@ -1555,20 +1552,6 @@ function TreasurerAndBuyIns({
         </section>
 
         <section className="bg-white rounded-2xl shadow-sm p-4 space-y-3">
-          <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Payment Method</p>
-          <div className="grid grid-cols-4 gap-2">
-            {(['venmo', 'cash', 'zelle', 'paypal'] as PaymentMethod[]).map(m => (
-              <button
-                key={m}
-                onClick={() => setMethod(m)}
-                className={`h-11 rounded-xl font-semibold capitalize text-sm ${
-                  method === m ? 'bg-gray-800 text-white' : 'bg-gray-100 text-gray-700'
-                }`}
-              >
-                {m}
-              </button>
-            ))}
-          </div>
           <p className="text-sm text-gray-500">
             {fmtMoney(game.buyInCents)} per player → pay{' '}
             <strong>{treasurer?.name ?? '…'}</strong>
