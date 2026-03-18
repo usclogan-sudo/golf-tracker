@@ -2,11 +2,14 @@
   "name": "Fore Skins Golf",
   "short_name": "Fore Skins",
   "description": "Golf side games, money, and scores — all in one place.",
+  "id": "/golf-tracker/",
   "start_url": "/golf-tracker/",
   "scope": "/golf-tracker/",
   "display": "standalone",
+  "orientation": "portrait",
+  "categories": ["sports", "utilities"],
   "theme_color": "#051a0e",
-  "background_color": "#f8fafc",
+  "background_color": "#051a0e",
   "icons": [
     {
       "src": "icon-192.png",
@@ -17,6 +20,12 @@
       "src": "icon-512.png",
       "sizes": "512x512",
       "type": "image/png"
+    },
+    {
+      "src": "icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
     }
   ]
 }

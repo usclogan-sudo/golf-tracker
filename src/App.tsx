@@ -17,6 +17,7 @@ import { AdminDashboard } from './components/Admin/AdminDashboard'
 import { Stats } from './components/Stats/Stats'
 import { ConfirmModal } from './components/ConfirmModal'
 import { UserAvatar } from './components/AvatarPicker'
+import { InstallBanner } from './components/InstallBanner'
 import { PlayerDirectory } from './components/PlayerDirectory/PlayerDirectory'
 import { RoundsDetail } from './components/RoundsDetail/RoundsDetail'
 import { CoursesDetail } from './components/CoursesDetail/CoursesDetail'
@@ -250,6 +251,8 @@ function Home({
       </header>
 
       <main className="px-4 pt-5 max-w-2xl mx-auto space-y-6">
+        <InstallBanner />
+
         {isAnonymous && onUpgrade && (
           <GuestBanner onUpgrade={onUpgrade} />
         )}
