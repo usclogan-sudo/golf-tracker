@@ -18,13 +18,15 @@ const FORMAT_LABELS: Record<string, string> = {
 export function TournamentList({ userId, onBack, onViewTournament, onNewTournament }: Props) {
   const [tournaments, setTournaments] = useState<Tournament[]>([])
   const [loading, setLoading] = useState(true)
+  const [fetchError, setFetchError] = useState<string | null>(null)
 
   useEffect(() => {
     supabase
       .from('tournaments')
       .select('*')
       .order('created_at', { ascending: false })
-      .then(({ data }) => {
+      .then(({ data, error }) => {
+        if (error) { setFetchError('Failed to load tournaments'); setLoading(false); return }
         if (data) setTournaments(data.map(rowToTournament))
         setLoading(false)
       })
@@ -35,11 +37,14 @@ export function TournamentList({ userId, onBack, onViewTournament, onNewTourname
 
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-900 pb-24">
-      <header className="app-header text-white px-4 py-5 sticky top-0 z-10 shadow-xl">
+      <header className="app-header text-white px-4 py-4 sticky top-0 z-10 shadow-xl">
         <div className="max-w-2xl mx-auto flex items-center justify-between">
-          <div>
-            <h1 className="text-2xl font-bold">Tournaments 🏆</h1>
-            <p className="text-gray-300 text-sm mt-0.5">{tournaments.length} tournament{tournaments.length !== 1 ? 's' : ''}</p>
+          <div className="flex items-center gap-3">
+            <button onClick={onBack} className="min-w-[44px] min-h-[44px] flex items-center justify-center rounded-full hover:bg-gray-600 text-xl" aria-label="Back">←</button>
+            <div>
+              <h1 className="text-xl font-bold">Tournaments</h1>
+              <p className="text-gray-300 text-sm mt-0.5">{tournaments.length} tournament{tournaments.length !== 1 ? 's' : ''}</p>
+            </div>
           </div>
           <button
             onClick={onNewTournament}
@@ -52,6 +57,11 @@ export function TournamentList({ userId, onBack, onViewTournament, onNewTourname
 
       <div className="px-4 py-5 max-w-2xl mx-auto space-y-4">
         {loading && <p className="text-center text-gray-400 py-8">Loading…</p>}
+        {fetchError && (
+          <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-2xl px-4 py-3 text-center">
+            <p className="text-red-700 dark:text-red-400 text-sm font-medium">{fetchError}</p>
+          </div>
+        )}
 
         {!loading && tournaments.length === 0 && (
           <div className="text-center py-12 space-y-3">

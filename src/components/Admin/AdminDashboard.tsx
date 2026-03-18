@@ -575,7 +575,7 @@ export function AdminDashboard({ userId, onBack }: Props) {
       <header className="app-header text-white px-4 py-4 sticky top-0 z-10 shadow-xl flex items-center gap-3">
         <button
           onClick={onBack}
-          className="w-10 h-10 flex items-center justify-center rounded-full hover:bg-gray-800 text-xl"
+          className="min-w-[44px] min-h-[44px] flex items-center justify-center rounded-full hover:bg-gray-800 text-xl"
           aria-label="Back"
         >
           &#8592;

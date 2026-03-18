@@ -41,7 +41,8 @@ export function Settings({ userId, email, onBack, onSignOut, isAdmin, onAdmin, i
   const [deleteError, setDeleteError] = useState('')
 
   useEffect(() => {
-    supabase.from('user_profiles').select('*').eq('user_id', userId).maybeSingle().then(({ data }) => {
+    supabase.from('user_profiles').select('*').eq('user_id', userId).maybeSingle().then(({ data, error }) => {
+      if (error) { setProfileMessage({ type: 'error', text: 'Failed to load profile' }); return }
       if (data) {
         const p = rowToUserProfile(data)
         setProfile(p)
@@ -109,10 +110,10 @@ export function Settings({ userId, email, onBack, onSignOut, isAdmin, onAdmin, i
     setDeleting(true)
     setDeleteError('')
     try {
-      // Delete all user data from all tables
+      // Delete all user data from all tables — explicitly scoped to current user
       const tables = ['hole_scores', 'bbb_points', 'buy_ins', 'round_players', 'rounds', 'players', 'courses']
       for (const table of tables) {
-        const { error } = await supabase.from(table).delete().neq('id', '')
+        const { error } = await supabase.from(table).delete().eq('user_id', userId)
         if (error) console.error(`Failed to delete from ${table}:`, error)
       }
       await supabase.auth.signOut()
@@ -126,7 +127,7 @@ export function Settings({ userId, email, onBack, onSignOut, isAdmin, onAdmin, i
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-900 pb-8">
       <header className="app-header text-white px-4 py-4 sticky top-0 z-10 shadow-xl flex items-center gap-3">
-        <button onClick={onBack} className="w-10 h-10 flex items-center justify-center rounded-full hover:bg-gray-800 text-xl" aria-label="Back">←</button>
+        <button onClick={onBack} className="min-w-[44px] min-h-[44px] flex items-center justify-center rounded-full hover:bg-gray-800 text-xl" aria-label="Back">←</button>
         <h1 className="text-xl font-bold">Settings</h1>
       </header>
 

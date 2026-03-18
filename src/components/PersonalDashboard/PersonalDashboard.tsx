@@ -103,11 +103,14 @@ function MonthlyChart({ data }: { data: { month: string; avg: number }[] }) {
 export function PersonalDashboard({ userId, onBack }: { userId: string; onBack: () => void }) {
   const [loading, setLoading] = useState(true)
   const [data, setData] = useState<DashboardData | null>(null)
+  const [error, setError] = useState<string | null>(null)
 
   useEffect(() => { loadData() }, [userId])
 
   async function loadData() {
-    const { data: roundRows } = await supabase.from('rounds').select('*').eq('status', 'complete')
+    setError(null)
+    const { data: roundRows, error: roundError } = await supabase.from('rounds').select('*').eq('status', 'complete')
+    if (roundError) { setError('Failed to load stats. Tap to retry.'); setLoading(false); return }
     if (!roundRows?.length) { setLoading(false); return }
 
     const rounds: Round[] = roundRows.map(rowToRound)
@@ -275,7 +278,7 @@ export function PersonalDashboard({ userId, onBack }: { userId: string; onBack: 
 
   const header = (
     <header className="app-header text-white px-4 py-4 sticky top-0 z-10 shadow-xl flex items-center gap-3">
-      <button onClick={onBack} className="w-10 h-10 flex items-center justify-center rounded-full hover:bg-gray-600 text-xl" aria-label="Back">←</button>
+      <button onClick={onBack} className="min-w-[44px] min-h-[44px] flex items-center justify-center rounded-full hover:bg-gray-600 text-xl" aria-label="Back">←</button>
       <h1 className="text-xl font-bold font-display">My Stats</h1>
       {data && <span className="text-gray-400 text-sm ml-auto">{data.totalRounds} round{data.totalRounds !== 1 ? 's' : ''}</span>}
     </header>
@@ -290,13 +293,24 @@ export function PersonalDashboard({ userId, onBack }: { userId: string; onBack: 
     </div>
   )
 
+  if (error) return (
+    <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
+      {header}
+      <div className="text-center py-16">
+        <p className="text-4xl mb-3">⚠️</p>
+        <button onClick={() => { setLoading(true); loadData() }} className="text-red-500 font-medium">{error}</button>
+      </div>
+    </div>
+  )
+
   if (!data) return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
       {header}
       <div className="text-center py-16">
         <p className="text-4xl mb-3">📈</p>
         <p className="text-gray-500 dark:text-gray-400 font-medium">No completed rounds yet</p>
-        <p className="text-gray-400 dark:text-gray-500 text-sm mt-1">Your personal stats will appear here</p>
+        <p className="text-gray-400 dark:text-gray-500 text-sm mt-1">Play your first round to see your stats here</p>
+        <button onClick={onBack} className="mt-4 text-amber-600 font-semibold text-sm">← Start a Round</button>
       </div>
     </div>
   )

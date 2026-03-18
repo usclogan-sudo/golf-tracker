@@ -534,13 +534,13 @@ export function Scorecard({ userId, roundId, onEndRound, onHome, readOnly: readO
                   setInviteToast(`Link copied! Code: ${code}`)
                   setTimeout(() => setInviteToast(null), 3000)
                 }}
-                className="text-cyan-300 text-sm font-medium px-3 py-1.5 rounded-lg hover:bg-gray-600"
+                className="text-cyan-300 text-sm font-medium px-3 min-h-[44px] rounded-lg hover:bg-gray-600"
               >
                 Invite
               </button>
             )}
-            {!readOnly && !selfEntryOnly && <button onClick={confirmEndRound} className="text-yellow-300 text-sm font-medium px-3 py-1.5 rounded-lg hover:bg-gray-600">End Round</button>}
-            <button onClick={confirmGoHome} className="text-gray-300 text-sm font-medium px-3 py-1.5 rounded-lg hover:bg-gray-600">Home</button>
+            {!readOnly && !selfEntryOnly && <button onClick={confirmEndRound} className="text-yellow-300 text-sm font-medium px-3 min-h-[44px] rounded-lg hover:bg-gray-600">End Round</button>}
+            <button onClick={confirmGoHome} className="text-gray-300 text-sm font-medium px-3 min-h-[44px] rounded-lg hover:bg-gray-600">← Back</button>
           </div>
         </div>
         <div className="max-w-2xl mx-auto mt-2 flex gap-1.5 overflow-x-auto pb-1">
@@ -548,7 +548,7 @@ export function Scorecard({ userId, roundId, onEndRound, onHome, readOnly: readO
             const hasScore = players.length > 0 && players.every(p => holeScores.some(s => s.playerId === p.id && s.holeNumber === n))
             return (
               <button key={n} onClick={() => goToHole(n)}
-                className={`w-10 h-10 min-w-[2.5rem] rounded-full text-sm font-bold flex-shrink-0 transition-colors flex items-center justify-center ${
+                className={`min-w-[44px] min-h-[44px] w-11 h-11 rounded-full text-sm font-bold flex-shrink-0 transition-colors flex items-center justify-center ${
                   n === currentHole ? 'bg-white text-gray-800 ring-2 ring-amber-400' : hasScore ? 'bg-amber-500 text-white' : 'bg-gray-700/40 text-gray-400 border border-gray-500/30'
                 }`}>{n}</button>
             )

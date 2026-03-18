@@ -161,6 +161,7 @@ function Home({
   const [roundCount, setRoundCount] = useState(0)
   const [joinCode, setJoinCode] = useState('')
   const [unsettledCount, setUnsettledCount] = useState(0)
+  const [fetchError, setFetchError] = useState<string | null>(null)
   const [personalSummary, setPersonalSummary] = useState<{
     totalRounds: number
     lastCourse: string
@@ -169,7 +170,9 @@ function Home({
   } | null>(null)
 
   useEffect(() => {
-    supabase.from('courses').select('*').eq('user_id', userId).neq('hidden', true).order('name').then(({ data }) => {
+    setFetchError(null)
+    supabase.from('courses').select('*').eq('user_id', userId).neq('hidden', true).order('name').then(({ data, error }) => {
+      if (error) { setFetchError('Failed to load data. Pull down to refresh.'); return }
       if (data) setCourses(data.map(rowToCourse))
     })
     // Fetch both owned active rounds and rounds joined as participant
@@ -177,6 +180,7 @@ function Home({
       supabase.from('rounds').select('*').eq('status', 'active'),
       supabase.from('round_participants').select('round_id').eq('user_id', userId),
     ]).then(([roundsRes, partRes]) => {
+      if (roundsRes.error) { setFetchError('Failed to load data. Pull down to refresh.'); return }
       if (roundsRes.data) {
         const all = roundsRes.data.map(rowToRound)
         const joinedRoundIds = new Set((partRes.data ?? []).map((p: any) => p.round_id))
@@ -205,6 +209,7 @@ function Home({
       supabase.from('rounds').select('*').eq('status', 'complete').order('date', { ascending: false }),
       supabase.from('hole_scores').select('*'),
     ]).then(([roundsRes, scoresRes]) => {
+      if (roundsRes.error || scoresRes.error) return
       if (!roundsRes.data || !scoresRes.data) return
       const completedRounds = roundsRes.data.map(rowToRound)
       const allScores = scoresRes.data.map(rowToHoleScore)
@@ -242,7 +247,7 @@ function Home({
               {isAdmin && (
                 <button
                   onClick={onAdmin}
-                  className="w-10 h-10 flex items-center justify-center rounded-full hover:bg-gray-600 border border-gray-500 text-gray-300"
+                  className="min-w-[44px] min-h-[44px] flex items-center justify-center rounded-full hover:bg-gray-600 border border-gray-500 text-gray-300"
                   aria-label="Admin"
                 >
                   <span className="text-lg">🛡️</span>
@@ -266,8 +271,8 @@ function Home({
               <StatChip label="Handicap" value={userProfile.handicapIndex} accent onClick={onHandicapDetail} />
             )}
           </div>
-          <div className="mt-3 flex items-center gap-4">
-            <button onClick={onPersonalDashboard} className="text-gray-300 text-sm font-medium flex items-center gap-1.5 hover:text-white transition-colors">
+          <div className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-1">
+            <button onClick={onPersonalDashboard} className={`text-sm font-medium flex items-center gap-1.5 transition-colors ${roundCount > 0 ? 'text-gray-300 hover:text-white' : 'text-gray-500'}`}>
               <span>📈</span> My Stats
             </button>
             {roundCount > 0 && (
@@ -293,6 +298,13 @@ function Home({
 
       <main className="px-4 pt-5 max-w-2xl mx-auto space-y-6">
         <InstallBanner />
+
+        {fetchError && (
+          <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-2xl px-4 py-3 flex items-center justify-between">
+            <p className="text-red-700 dark:text-red-400 text-sm font-medium">{fetchError}</p>
+            <button onClick={() => setFetchError(null)} className="text-red-400 text-lg leading-none ml-2">&times;</button>
+          </div>
+        )}
 
         {isAnonymous && onUpgrade && (
           <GuestBanner onUpgrade={onUpgrade} />
@@ -331,8 +343,35 @@ function Home({
         )}
 
         {!personalSummary && roundCount === 0 && (
-          <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700 px-4 py-3 text-center">
-            <p className="text-sm text-gray-500 dark:text-gray-400">Time to hit the links!</p>
+          <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700 px-5 py-5 space-y-4">
+            <div className="text-center">
+              <p className="text-3xl mb-1">⛳</p>
+              <p className="font-display font-bold text-gray-800 dark:text-gray-100 text-lg">Welcome to Fore Skins!</p>
+              <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">Get started in 3 easy steps</p>
+            </div>
+            <div className="space-y-2">
+              <button onClick={() => onAddCourse()} className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl bg-gray-50 dark:bg-gray-700 text-left active:bg-gray-100 dark:active:bg-gray-600 transition-colors">
+                <span className="w-7 h-7 rounded-full bg-amber-500 text-white flex items-center justify-center text-sm font-bold flex-shrink-0">1</span>
+                <div>
+                  <p className="text-sm font-semibold text-gray-800 dark:text-gray-100">Add a course</p>
+                  <p className="text-xs text-gray-500 dark:text-gray-400">Set up holes, pars, and tees</p>
+                </div>
+              </button>
+              <button onClick={onSettings} className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl bg-gray-50 dark:bg-gray-700 text-left active:bg-gray-100 dark:active:bg-gray-600 transition-colors">
+                <span className="w-7 h-7 rounded-full bg-amber-500 text-white flex items-center justify-center text-sm font-bold flex-shrink-0">2</span>
+                <div>
+                  <p className="text-sm font-semibold text-gray-800 dark:text-gray-100">Set up your profile</p>
+                  <p className="text-xs text-gray-500 dark:text-gray-400">Name, handicap, and payment info</p>
+                </div>
+              </button>
+              <button onClick={onNewRound} className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl bg-gray-50 dark:bg-gray-700 text-left active:bg-gray-100 dark:active:bg-gray-600 transition-colors">
+                <span className="w-7 h-7 rounded-full bg-amber-500 text-white flex items-center justify-center text-sm font-bold flex-shrink-0">3</span>
+                <div>
+                  <p className="text-sm font-semibold text-gray-800 dark:text-gray-100">Start a round</p>
+                  <p className="text-xs text-gray-500 dark:text-gray-400">Pick a game and hit the links</p>
+                </div>
+              </button>
+            </div>
           </div>
         )}
 

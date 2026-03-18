@@ -213,7 +213,7 @@ function CoursePicker({
       <header className={`${headerClass} text-white px-4 py-4 sticky top-0 z-10 shadow-xl flex items-center gap-3`}>
         <button
           onClick={onCancel}
-          className="w-10 h-10 flex items-center justify-center rounded-full hover:bg-black/20 text-xl"
+          className="min-w-[44px] min-h-[44px] flex items-center justify-center rounded-full hover:bg-black/20 text-xl"
           aria-label="Cancel"
         >
           ←
@@ -404,7 +404,7 @@ function PlayerPicker({
       <header className={`${headerClass} text-white px-4 py-4 sticky top-0 z-10 shadow-xl flex items-center gap-3`}>
         <button
           onClick={onBack}
-          className="w-10 h-10 flex items-center justify-center rounded-full hover:bg-black/20 text-xl"
+          className="min-w-[44px] min-h-[44px] flex items-center justify-center rounded-full hover:bg-black/20 text-xl"
           aria-label="Back"
         >
           ←
@@ -632,7 +632,7 @@ function GroupAssignment({
       <header className={`${headerClass} text-white px-4 py-4 sticky top-0 z-10 shadow-xl flex items-center gap-3`}>
         <button
           onClick={onBack}
-          className="w-10 h-10 flex items-center justify-center rounded-full hover:bg-black/20 text-xl"
+          className="min-w-[44px] min-h-[44px] flex items-center justify-center rounded-full hover:bg-black/20 text-xl"
           aria-label="Back"
         >
           ←
@@ -939,7 +939,7 @@ function GameSetup({
       <header className={`${headerClass} text-white px-4 py-4 sticky top-0 z-10 shadow-xl flex items-center gap-3`}>
         <button
           onClick={onBack}
-          className="w-10 h-10 flex items-center justify-center rounded-full hover:bg-black/20 text-xl"
+          className="min-w-[44px] min-h-[44px] flex items-center justify-center rounded-full hover:bg-black/20 text-xl"
           aria-label="Back"
         >
           ←
@@ -1479,7 +1479,7 @@ function TreasurerAndBuyIns({
       <header className={`${headerClass} text-white px-4 py-4 sticky top-0 z-10 shadow-xl flex items-center gap-3`}>
         <button
           onClick={onBack}
-          className="w-10 h-10 flex items-center justify-center rounded-full hover:bg-black/20 text-xl"
+          className="min-w-[44px] min-h-[44px] flex items-center justify-center rounded-full hover:bg-black/20 text-xl"
           aria-label="Back"
         >
           ←

@@ -40,10 +40,15 @@ export function Stats({ userId, onBack }: Props) {
 
   const loadStats = async () => {
     // Fetch all completed rounds
-    const { data: roundRows } = await supabase
+    const { data: roundRows, error: roundError } = await supabase
       .from('rounds')
       .select('*')
       .eq('status', 'complete')
+
+    if (roundError) {
+      setLoading(false)
+      return
+    }
 
     if (!roundRows || roundRows.length === 0) {
       setLoading(false)
@@ -214,7 +219,7 @@ export function Stats({ userId, onBack }: Props) {
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-900 pb-8">
       <header className="app-header text-white px-4 py-4 sticky top-0 z-10 shadow-xl flex items-center gap-3">
-        <button onClick={onBack} className="w-10 h-10 flex items-center justify-center rounded-full hover:bg-gray-600 text-xl" aria-label="Back">←</button>
+        <button onClick={onBack} className="min-w-[44px] min-h-[44px] flex items-center justify-center rounded-full hover:bg-gray-600 text-xl" aria-label="Back">←</button>
         <h1 className="text-xl font-bold">Leaderboard</h1>
       </header>
 
