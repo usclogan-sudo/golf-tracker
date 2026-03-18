@@ -30,7 +30,7 @@ export function InstallBanner() {
   }
 
   return (
-    <div className="bg-white rounded-2xl shadow-sm border border-gray-100 px-4 py-3 flex items-start gap-3">
+    <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700 px-4 py-3 flex items-start gap-3">
       <span className="text-2xl flex-shrink-0 mt-0.5">📲</span>
       <div className="flex-1 min-w-0">
         <p className="font-semibold text-gray-900 text-sm">Add Fore Skins to Home Screen</p>

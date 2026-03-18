@@ -120,7 +120,7 @@ function SharedCoursesTab({ userId }: { userId: string }) {
             value={name}
             onChange={e => setName(e.target.value)}
             placeholder="e.g. River Oaks GC"
-            className="w-full h-12 px-4 rounded-xl border border-gray-300 text-base focus:outline-none focus:ring-2 focus:ring-amber-500"
+            className="w-full h-12 px-4 rounded-xl border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 text-base focus:outline-none focus:ring-2 focus:ring-amber-500"
           />
         </div>
 
@@ -413,7 +413,7 @@ function GamePresetsTab({ userId }: { userId: string }) {
             value={presetName}
             onChange={e => setPresetName(e.target.value)}
             placeholder="e.g. Friday Skins"
-            className="w-full h-12 px-4 rounded-xl border border-gray-300 text-base focus:outline-none focus:ring-2 focus:ring-amber-500"
+            className="w-full h-12 px-4 rounded-xl border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 text-base focus:outline-none focus:ring-2 focus:ring-amber-500"
           />
         </div>
 
@@ -443,7 +443,7 @@ function GamePresetsTab({ userId }: { userId: string }) {
               min="1"
               value={buyInDollars}
               onChange={e => setBuyInDollars(e.target.value)}
-              className="w-full h-12 px-4 rounded-xl border border-gray-300 text-base focus:outline-none focus:ring-2 focus:ring-amber-500"
+              className="w-full h-12 px-4 rounded-xl border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 text-base focus:outline-none focus:ring-2 focus:ring-amber-500"
             />
           </div>
           <div>
@@ -501,7 +501,7 @@ function GamePresetsTab({ userId }: { userId: string }) {
             value={description}
             onChange={e => setDescription(e.target.value)}
             placeholder="e.g. Our regular Friday game"
-            className="w-full h-12 px-4 rounded-xl border border-gray-300 text-base focus:outline-none focus:ring-2 focus:ring-amber-500"
+            className="w-full h-12 px-4 rounded-xl border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 text-base focus:outline-none focus:ring-2 focus:ring-amber-500"
           />
         </div>
 
@@ -571,7 +571,7 @@ export function AdminDashboard({ userId, onBack }: Props) {
   const [tab, setTab] = useState<'courses' | 'presets'>('courses')
 
   return (
-    <div className="min-h-screen bg-gray-50 pb-8">
+    <div className="min-h-screen bg-gray-50 dark:bg-gray-900 pb-8">
       <header className="app-header text-white px-4 py-4 sticky top-0 z-10 shadow-xl flex items-center gap-3">
         <button
           onClick={onBack}

@@ -13,6 +13,7 @@ import type {
   Game,
   RoundPlayer,
   Press,
+  SideBet,
 } from '../types'
 
 // ─── Handicap math ────────────────────────────────────────────────────────────
@@ -812,7 +813,7 @@ export interface UnifiedSettlement {
   toId: string
   amountCents: number
   reason: string
-  source: 'game' | 'junk'
+  source: 'game' | 'junk' | 'side_bet'
 }
 
 /**
@@ -824,11 +825,12 @@ export function buildUnifiedSettlements(
   payouts: PlayerPayout[],
   treasurerId: string,
   junkResult: JunkResult | null,
+  sideBetSettlements: SideBetSettlement[] = [],
 ): UnifiedSettlement[] {
   // Accumulate net flows: key = "fromId→toId", value = { amountCents, reasons }
-  const flows: Record<string, { amountCents: number; reasons: { reason: string; source: 'game' | 'junk' }[] }> = {}
+  const flows: Record<string, { amountCents: number; reasons: { reason: string; source: 'game' | 'junk' | 'side_bet' }[] }> = {}
 
-  const addFlow = (fromId: string, toId: string, amountCents: number, reason: string, source: 'game' | 'junk') => {
+  const addFlow = (fromId: string, toId: string, amountCents: number, reason: string, source: 'game' | 'junk' | 'side_bet') => {
     if (amountCents <= 0 || fromId === toId) return
     const key = `${fromId}→${toId}`
     if (!flows[key]) flows[key] = { amountCents: 0, reasons: [] }
@@ -857,6 +859,11 @@ export function buildUnifiedSettlements(
     // Treasurer's own junk net is handled implicitly (kept from/added to pot)
   }
 
+  // Side bet settlements: direct player-to-player (not through treasurer)
+  for (const sbs of sideBetSettlements) {
+    addFlow(sbs.fromId, sbs.toId, sbs.amountCents, `Side bet: ${sbs.description}`, 'side_bet')
+  }
+
   // Net out bidirectional flows between same pair
   const settlements: UnifiedSettlement[] = []
   const processed = new Set<string>()
@@ -881,13 +888,16 @@ export function buildUnifiedSettlements(
     const reasons = sourceFlows?.reasons ?? []
     const hasGame = reasons.some(r => r.source === 'game')
     const hasJunk = reasons.some(r => r.source === 'junk')
-    const source: 'game' | 'junk' = hasGame ? 'game' : 'junk'
+    const hasSideBet = reasons.some(r => r.source === 'side_bet')
+    const source: 'game' | 'junk' | 'side_bet' = hasGame ? 'game' : hasJunk ? 'junk' : 'side_bet'
 
     // Build a combined reason string
     let reason: string
-    if (hasGame && hasJunk) {
+    const sourceCount = [hasGame, hasJunk, hasSideBet].filter(Boolean).length
+    if (sourceCount > 1) {
       const gameReasons = reasons.filter(r => r.source === 'game').map(r => r.reason).join(', ')
-      reason = `${gameReasons} + junk (netted)`
+      const parts = [gameReasons, hasJunk ? 'junk' : '', hasSideBet ? 'side bets' : ''].filter(Boolean)
+      reason = `${parts.join(' + ')} (netted)`
     } else if (net !== forward && net !== -reverse) {
       // Partial netting happened
       reason = reasons.map(r => r.reason).join(', ') + ' (netted)'
@@ -900,10 +910,40 @@ export function buildUnifiedSettlements(
       toId: actualToId,
       amountCents: Math.abs(net),
       reason,
-      source: hasGame && hasJunk ? 'game' : source,
+      source: sourceCount > 1 ? 'game' : source,
     })
   }
 
+  return settlements
+}
+
+// ─── Side Bet Settlements ────────────────────────────────────────────────────
+
+export interface SideBetSettlement {
+  fromId: string
+  toId: string
+  amountCents: number
+  description: string
+}
+
+/**
+ * Calculate settlements from resolved side bets.
+ * Each resolved side bet: every non-winner participant pays the winner amountCents.
+ */
+export function calculateSideBetSettlements(sideBets: SideBet[]): SideBetSettlement[] {
+  const settlements: SideBetSettlement[] = []
+  for (const bet of sideBets) {
+    if (bet.status !== 'resolved' || !bet.winnerPlayerId) continue
+    const losers = bet.participants.filter(id => id !== bet.winnerPlayerId)
+    for (const loserId of losers) {
+      settlements.push({
+        fromId: loserId,
+        toId: bet.winnerPlayerId,
+        amountCents: bet.amountCents,
+        description: bet.description,
+      })
+    }
+  }
   return settlements
 }
 

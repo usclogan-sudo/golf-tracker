@@ -255,9 +255,87 @@ export interface SettlementRecord {
   toPlayerId: string
   amountCents: number
   reason?: string
-  source: 'game' | 'junk'
+  source: 'game' | 'junk' | 'side_bet'
   status: SettlementStatus
   paidAt?: Date
+}
+
+// ─── Notifications ──────────────────────────────────────────────────────────
+
+export type NotificationType = 'unsettled_round' | 'score_update' | 'round_invite' | 'round_complete'
+
+export interface AppNotification {
+  id: string
+  userId: string
+  type: NotificationType
+  title: string
+  body?: string
+  roundId?: string
+  read: boolean
+  createdAt: Date
+}
+
+// ─── Side Bets ──────────────────────────────────────────────────────────────
+
+export type SideBetStatus = 'open' | 'resolved' | 'cancelled'
+
+export interface SideBet {
+  id: string
+  roundId: string
+  holeNumber: number
+  description: string
+  amountCents: number
+  participants: string[] // playerIds
+  winnerPlayerId?: string
+  status: SideBetStatus
+  createdAt: Date
+}
+
+// ─── Tournaments ────────────────────────────────────────────────────────────
+
+export type TournamentFormat = 'match_play_single' | 'match_play_double' | 'stroke_play'
+export type TournamentStatus = 'setup' | 'active' | 'complete'
+
+export interface Tournament {
+  id: string
+  name: string
+  format: TournamentFormat
+  status: TournamentStatus
+  courseId?: string
+  courseSnapshot?: CourseSnapshot
+  playerIds: string[]
+  config?: {
+    handicapMode?: 'gross' | 'net'
+    roundsCount?: number
+    buyInCents?: number
+  }
+  createdAt: Date
+}
+
+export interface TournamentRound {
+  id: string
+  tournamentId: string
+  roundId?: string
+  roundNumber: number
+  bracketRound?: number
+  status: 'pending' | 'active' | 'complete'
+  createdAt: Date
+}
+
+export type MatchupStatus = 'pending' | 'active' | 'complete'
+
+export interface TournamentMatchup {
+  id: string
+  tournamentId: string
+  tournamentRoundId?: string
+  bracketRound: number
+  matchNumber: number
+  playerAId?: string
+  playerBId?: string
+  winnerId?: string
+  loserBracket: boolean
+  status: MatchupStatus
+  createdAt: Date
 }
 
 // ─── Legacy score (kept for migration safety) ─────────────────────────────────

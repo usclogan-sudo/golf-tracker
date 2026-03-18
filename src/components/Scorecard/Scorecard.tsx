@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { v4 as uuidv4 } from 'uuid'
-import { supabase, rowToRound, rowToRoundPlayer, rowToHoleScore, rowToBBBPoint, rowToJunkRecord, rowToRoundParticipant, holeScoreToRow, bbbPointToRow, junkRecordToRow, generateInviteCode } from '../../lib/supabase'
+import { supabase, rowToRound, rowToRoundPlayer, rowToHoleScore, rowToBBBPoint, rowToJunkRecord, rowToSideBet, rowToRoundParticipant, holeScoreToRow, bbbPointToRow, junkRecordToRow, sideBetToRow, generateInviteCode } from '../../lib/supabase'
 import { getCelebration, CelebrationToast, CelebrationFullscreen } from '../Celebrations'
 import { ConfirmModal } from '../ConfirmModal'
 import {
@@ -22,6 +22,7 @@ import type {
   BBBPoint,
   JunkRecord,
   JunkType,
+  SideBet,
   RoundParticipant,
   SkinsConfig,
   BestBallConfig,
@@ -117,6 +118,7 @@ export function Scorecard({ userId, roundId, onEndRound, onHome, readOnly: readO
   const [holeScores, setHoleScores] = useState<HoleScore[]>([])
   const [bbbPoints, setBbbPoints] = useState<BBBPoint[]>([])
   const [junkRecords, setJunkRecords] = useState<JunkRecord[]>([])
+  const [sideBets, setSideBets] = useState<SideBet[]>([])
   const [roundParticipants, setRoundParticipants] = useState<RoundParticipant[]>([])
   const [loading, setLoading] = useState(true)
   const [inviteToast, setInviteToast] = useState<string | null>(null)
@@ -126,6 +128,10 @@ export function Scorecard({ userId, roundId, onEndRound, onHome, readOnly: readO
   const [celebration, setCelebration] = useState<{ level: 'toast' | 'fullscreen'; title: string; subtitle?: string; emoji: string; playerName: string } | null>(null)
   const [confirmModal, setConfirmModal] = useState<{ title: string; message: string; onConfirm: () => void; destructive?: boolean } | null>(null)
   const [scoreTab, setScoreTab] = useState<'scores' | 'leaderboard'>('scores')
+  const [showSideBetForm, setShowSideBetForm] = useState(false)
+  const [sideBetDesc, setSideBetDesc] = useState('')
+  const [sideBetAmount, setSideBetAmount] = useState('5')
+  const [sideBetParticipants, setSideBetParticipants] = useState<string[]>([])
 
   useEffect(() => {
     Promise.all([
@@ -134,13 +140,15 @@ export function Scorecard({ userId, roundId, onEndRound, onHome, readOnly: readO
       supabase.from('hole_scores').select('*').eq('round_id', roundId),
       supabase.from('bbb_points').select('*').eq('round_id', roundId),
       supabase.from('junk_records').select('*').eq('round_id', roundId),
+      supabase.from('side_bets').select('*').eq('round_id', roundId),
       supabase.from('round_participants').select('*').eq('round_id', roundId),
-    ]).then(([roundRes, rpRes, hsRes, bbbRes, junkRes, partRes]) => {
+    ]).then(([roundRes, rpRes, hsRes, bbbRes, junkRes, sbRes, partRes]) => {
       if (roundRes.data) setRound(rowToRound(roundRes.data))
       if (rpRes.data) setRoundPlayers(rpRes.data.map(rowToRoundPlayer))
       if (hsRes.data) setHoleScores(hsRes.data.map(rowToHoleScore))
       if (bbbRes.data) setBbbPoints(bbbRes.data.map(rowToBBBPoint))
       if (junkRes.data) setJunkRecords(junkRes.data.map(rowToJunkRecord))
+      if (sbRes.data) setSideBets(sbRes.data.map(rowToSideBet))
       if (partRes.data) setRoundParticipants(partRes.data.map(rowToRoundParticipant))
       setLoading(false)
     })
@@ -187,6 +195,18 @@ export function Scorecard({ userId, roundId, onEndRound, onHome, readOnly: readO
         } else if (payload.eventType === 'DELETE') {
           const row = payload.old as any
           setJunkRecords(prev => prev.filter(jr => jr.id !== row.id))
+        }
+      })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'side_bets', filter: `round_id=eq.${roundId}` }, (payload) => {
+        if (payload.eventType === 'INSERT') {
+          const row = payload.new as any
+          setSideBets(prev => prev.some(sb => sb.id === row.id) ? prev : [...prev, rowToSideBet(row)])
+        } else if (payload.eventType === 'UPDATE') {
+          const row = payload.new as any
+          setSideBets(prev => prev.map(sb => sb.id === row.id ? rowToSideBet(row) : sb))
+        } else if (payload.eventType === 'DELETE') {
+          const row = payload.old as any
+          setSideBets(prev => prev.filter(sb => sb.id !== row.id))
         }
       })
       .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'rounds', filter: `id=eq.${roundId}` }, (payload) => {
@@ -388,6 +408,38 @@ export function Scorecard({ userId, roundId, onEndRound, onHome, readOnly: readO
     }
   }
 
+  // Side bet handlers
+  const createSideBet = async () => {
+    if (!sideBetDesc.trim() || sideBetParticipants.length < 2) return
+    const amountCents = Math.round(parseFloat(sideBetAmount) * 100) || 500
+    const newBet: SideBet = {
+      id: uuidv4(),
+      roundId,
+      holeNumber: currentHole,
+      description: sideBetDesc.trim(),
+      amountCents,
+      participants: sideBetParticipants,
+      status: 'open',
+      createdAt: new Date(),
+    }
+    setSideBets(prev => [...prev, newBet])
+    await supabase.from('side_bets').insert(sideBetToRow(newBet, userId))
+    setSideBetDesc('')
+    setSideBetAmount('5')
+    setSideBetParticipants([])
+    setShowSideBetForm(false)
+  }
+
+  const resolveSideBet = async (betId: string, winnerId: string) => {
+    setSideBets(prev => prev.map(sb => sb.id === betId ? { ...sb, winnerPlayerId: winnerId, status: 'resolved' as const } : sb))
+    await supabase.from('side_bets').update({ winner_player_id: winnerId, status: 'resolved' }).eq('id', betId)
+  }
+
+  const cancelSideBet = async (betId: string) => {
+    setSideBets(prev => prev.map(sb => sb.id === betId ? { ...sb, status: 'cancelled' as const } : sb))
+    await supabase.from('side_bets').update({ status: 'cancelled' }).eq('id', betId)
+  }
+
   const skinsResult = useMemo(() => {
     if (!game || game.type !== 'skins' || !snapshot) return null
     return calculateSkins(players, holeScores, snapshot, game.config as SkinsConfig, courseHcps)
@@ -431,7 +483,7 @@ export function Scorecard({ userId, roundId, onEndRound, onHome, readOnly: readO
   const headerClass = game?.stakesMode === 'high_roller' ? 'hr-header' : 'app-header'
 
   if (loading || !round || !snapshot) {
-    return <div className="min-h-screen bg-gray-50 flex items-center justify-center"><p className="text-gray-400">Loading round…</p></div>
+    return <div className="min-h-screen bg-gray-50 dark:bg-gray-900 flex items-center justify-center"><p className="text-gray-400">Loading round…</p></div>
   }
 
   const junkConfig = round?.junkConfig
@@ -441,7 +493,7 @@ export function Scorecard({ userId, roundId, onEndRound, onHome, readOnly: readO
   const currentBBB = bbbPoints.find(p => p.holeNumber === currentHole)
 
   return (
-    <div className="min-h-screen bg-gray-50 pb-32">
+    <div className="min-h-screen bg-gray-50 dark:bg-gray-900 pb-32">
       <header className={`${headerClass} text-white px-4 py-3 sticky top-0 z-10 shadow-xl`}>
         <div className="max-w-2xl mx-auto flex items-center justify-between">
           <div>
@@ -560,7 +612,7 @@ export function Scorecard({ userId, roundId, onEndRound, onHome, readOnly: readO
       {/* Leaderboard tab */}
       {scoreTab === 'leaderboard' && snapshot && (
         <div className="px-4 py-4 max-w-2xl mx-auto">
-          <div className="bg-white rounded-2xl shadow-sm p-4">
+          <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-sm p-4">
             <table className="w-full text-sm">
               <thead>
                 <tr className="text-xs text-gray-400 uppercase border-b border-gray-200">
@@ -894,6 +946,125 @@ export function Scorecard({ userId, roundId, onEndRound, onHome, readOnly: readO
           )
         })()}
 
+        {/* Side Bets panel */}
+        {!readOnly && (() => {
+          const holeBets = sideBets.filter(sb => sb.holeNumber === currentHole && sb.status !== 'cancelled')
+          return (
+            <div className="bg-amber-50 dark:bg-amber-900/30 border border-amber-200 dark:border-amber-700 rounded-xl p-3 space-y-3">
+              <div className="flex items-center justify-between">
+                <p className="font-bold text-amber-800 dark:text-amber-300 text-sm">💰 Side Bets — Hole {currentHole}</p>
+                <button
+                  onClick={() => setShowSideBetForm(!showSideBetForm)}
+                  className="text-xs font-semibold px-2.5 py-1 rounded-lg bg-amber-500 text-white active:bg-amber-600"
+                >
+                  {showSideBetForm ? 'Cancel' : '+ Side Bet'}
+                </button>
+              </div>
+
+              {showSideBetForm && (
+                <div className="space-y-2 bg-white dark:bg-gray-800 rounded-lg p-3">
+                  <input
+                    type="text"
+                    placeholder="e.g. CTP on #7, longest drive..."
+                    value={sideBetDesc}
+                    onChange={e => setSideBetDesc(e.target.value)}
+                    className="w-full text-sm border border-gray-200 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 rounded-lg px-3 py-2"
+                  />
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm text-gray-600 dark:text-gray-400">$</span>
+                    <input
+                      type="number"
+                      value={sideBetAmount}
+                      onChange={e => setSideBetAmount(e.target.value)}
+                      min="1"
+                      step="1"
+                      className="w-20 text-sm border border-gray-200 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 rounded-lg px-3 py-2"
+                    />
+                    <span className="text-xs text-gray-500 dark:text-gray-400">per loser</span>
+                  </div>
+                  <p className="text-xs text-gray-500 dark:text-gray-400 font-medium">Participants:</p>
+                  <div className="flex flex-wrap gap-1.5">
+                    {players.map(p => {
+                      const active = sideBetParticipants.includes(p.id)
+                      return (
+                        <button
+                          key={p.id}
+                          onClick={() => setSideBetParticipants(prev => active ? prev.filter(id => id !== p.id) : [...prev, p.id])}
+                          className={`px-2.5 py-1 rounded-lg text-xs font-semibold transition-colors ${
+                            active ? 'bg-amber-500 text-white' : 'bg-white dark:bg-gray-700 border border-amber-200 dark:border-amber-600 text-amber-700 dark:text-amber-300'
+                          }`}
+                        >
+                          {p.name}
+                        </button>
+                      )
+                    })}
+                  </div>
+                  <button
+                    onClick={createSideBet}
+                    disabled={!sideBetDesc.trim() || sideBetParticipants.length < 2}
+                    className="w-full py-2 rounded-lg text-sm font-semibold bg-amber-500 text-white active:bg-amber-600 disabled:opacity-40"
+                  >
+                    Create Bet ({sideBetParticipants.length < 2 ? 'need 2+ players' : `$${sideBetAmount} each`})
+                  </button>
+                </div>
+              )}
+
+              {holeBets.length > 0 && (
+                <div className="space-y-2">
+                  {holeBets.map(bet => {
+                    const participantNames = bet.participants.map(id => players.find(p => p.id === id)?.name ?? '?')
+                    const winnerName = bet.winnerPlayerId ? players.find(p => p.id === bet.winnerPlayerId)?.name : null
+                    return (
+                      <div key={bet.id} className={`rounded-lg p-2.5 ${bet.status === 'resolved' ? 'bg-green-50 dark:bg-green-900/30' : 'bg-white dark:bg-gray-800'}`}>
+                        <div className="flex items-center justify-between">
+                          <div>
+                            <p className="text-sm font-semibold text-gray-800 dark:text-gray-100">{bet.description}</p>
+                            <p className="text-xs text-gray-500 dark:text-gray-400">
+                              {fmtMoney(bet.amountCents)} · {participantNames.join(' vs ')}
+                            </p>
+                          </div>
+                          {bet.status === 'resolved' && winnerName && (
+                            <span className="text-xs font-bold text-green-700 dark:text-green-400">🏆 {winnerName}</span>
+                          )}
+                          {bet.status === 'open' && (
+                            <button
+                              onClick={() => cancelSideBet(bet.id)}
+                              className="text-xs text-red-500 font-semibold"
+                            >
+                              ✕
+                            </button>
+                          )}
+                        </div>
+                        {bet.status === 'open' && (
+                          <div className="mt-2 flex flex-wrap gap-1.5">
+                            <span className="text-xs text-gray-500 dark:text-gray-400 self-center">Winner:</span>
+                            {bet.participants.map(pid => {
+                              const pName = players.find(p => p.id === pid)?.name ?? '?'
+                              return (
+                                <button
+                                  key={pid}
+                                  onClick={() => resolveSideBet(bet.id, pid)}
+                                  className="px-2.5 py-1 rounded-lg text-xs font-semibold bg-green-100 dark:bg-green-800 text-green-700 dark:text-green-300 active:bg-green-200"
+                                >
+                                  {pName}
+                                </button>
+                              )
+                            })}
+                          </div>
+                        )}
+                      </div>
+                    )
+                  })}
+                </div>
+              )}
+
+              {holeBets.length === 0 && !showSideBetForm && (
+                <p className="text-xs text-amber-600 dark:text-amber-400">No side bets on this hole</p>
+              )}
+            </div>
+          )
+        })()}
+
         {/* Score cards */}
         {players.map(player => {
           const grossScore = getScore(player.id)
@@ -960,7 +1131,7 @@ export function Scorecard({ userId, roundId, onEndRound, onHome, readOnly: readO
           if (grossScore >= par + 5) warnings.push(`That's +${grossScore - par} over par — verify score`)
 
           return (
-            <div key={player.id} className="bg-white rounded-2xl shadow-sm border border-gray-100 p-4">
+            <div key={player.id} className="bg-white dark:bg-gray-800 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700 p-4">
               <div className="flex items-start justify-between mb-3">
                 <div>
                   <p className="font-bold text-gray-800 text-lg">{player.name}</p>
@@ -1024,7 +1195,7 @@ export function Scorecard({ userId, roundId, onEndRound, onHome, readOnly: readO
       </div>
       )} {/* end scoreTab === 'scores' */}
 
-      <div className="fixed bottom-0 inset-x-0 bg-white/95 backdrop-blur-sm border-t border-gray-200 safe-bottom">
+      <div className="fixed bottom-0 inset-x-0 bg-white/95 dark:bg-gray-800/95 backdrop-blur-sm border-t border-gray-200 dark:border-gray-700 safe-bottom">
         <div className="p-4 max-w-2xl mx-auto flex gap-3">
           <button onClick={() => goToHole(Math.max(1, currentHole - 1))} disabled={currentHole === 1}
             className="flex-1 h-14 bg-gray-100 rounded-2xl font-bold text-xl text-gray-600 disabled:opacity-30 active:bg-gray-200">&larr; Prev</button>

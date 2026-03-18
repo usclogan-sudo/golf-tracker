@@ -45,6 +45,11 @@
   .score-bogey  { background: #fed7aa; color: #92400e; }
   .score-double { background: #fecaca; color: #991b1b; }
   .score-worse  { background: #dc2626; color: #fff; }
+
+  /* Dark mode score badge overrides */
+  :is(.dark .score-par) { background: #4b5563; color: #e5e7eb; }
+  :is(.dark .score-bogey) { background: #92400e; color: #fed7aa; }
+  :is(.dark .score-double) { background: #991b1b; color: #fecaca; }
 }
 
 /* Safe area padding for iPhone notch/home indicator */

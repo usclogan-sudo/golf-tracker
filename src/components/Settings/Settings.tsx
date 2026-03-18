@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { supabase, rowToUserProfile } from '../../lib/supabase'
 import { AvatarPicker, UserAvatar } from '../AvatarPicker'
+import { useDarkMode } from '../../hooks/useDarkMode'
 import type { UserProfile } from '../../types'
 
 interface Props {
@@ -15,6 +16,7 @@ interface Props {
 }
 
 export function Settings({ userId, email, onBack, onSignOut, isAdmin, onAdmin, isAnonymous, onUpgrade }: Props) {
+  const { isDark, toggle: toggleDark } = useDarkMode()
   const [profile, setProfile] = useState<UserProfile | null>(null)
   const [displayName, setDisplayName] = useState('')
   const [handicapIndex, setHandicapIndex] = useState('')
@@ -122,7 +124,7 @@ export function Settings({ userId, email, onBack, onSignOut, isAdmin, onAdmin, i
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 pb-8">
+    <div className="min-h-screen bg-gray-50 dark:bg-gray-900 pb-8">
       <header className="app-header text-white px-4 py-4 sticky top-0 z-10 shadow-xl flex items-center gap-3">
         <button onClick={onBack} className="w-10 h-10 flex items-center justify-center rounded-full hover:bg-gray-800 text-xl" aria-label="Back">←</button>
         <h1 className="text-xl font-bold">Settings</h1>
@@ -130,15 +132,29 @@ export function Settings({ userId, email, onBack, onSignOut, isAdmin, onAdmin, i
 
       <div className="px-4 py-5 max-w-2xl mx-auto space-y-5">
         {/* Account info */}
-        <section className="bg-white rounded-2xl shadow-sm p-4">
-          <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Account</p>
-          <p className="text-gray-800 font-medium">{isAnonymous ? 'Guest (no account)' : email}</p>
+        <section className="bg-white dark:bg-gray-800 rounded-2xl shadow-sm p-4">
+          <p className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-2">Account</p>
+          <p className="text-gray-800 dark:text-gray-100 font-medium">{isAnonymous ? 'Guest (no account)' : email}</p>
+        </section>
+
+        {/* Dark Mode */}
+        <section className="bg-white dark:bg-gray-800 rounded-2xl shadow-sm p-4 flex items-center justify-between">
+          <div>
+            <p className="font-semibold text-gray-800 dark:text-gray-100">Dark Mode</p>
+            <p className="text-sm text-gray-500 dark:text-gray-400">Switch between light and dark theme</p>
+          </div>
+          <button
+            onClick={toggleDark}
+            className={`relative w-14 h-8 rounded-full transition-colors ${isDark ? 'bg-amber-500' : 'bg-gray-300'}`}
+          >
+            <span className={`absolute top-1 w-6 h-6 bg-white rounded-full shadow transition-transform ${isDark ? 'left-7' : 'left-1'}`} />
+          </button>
         </section>
 
         {/* Profile editing */}
         {!isAnonymous && profile && (
-          <section className="bg-white rounded-2xl shadow-sm p-4 space-y-3">
-            <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Your Profile</p>
+          <section className="bg-white dark:bg-gray-800 rounded-2xl shadow-sm p-4 space-y-3">
+            <p className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">Your Profile</p>
             <div className="flex items-center gap-3">
               <button onClick={() => setShowAvatarPicker(true)} className="relative group">
                 <UserAvatar url={avatarUrl || undefined} preset={avatarPreset || undefined} name={displayName || undefined} size="lg" />
@@ -149,16 +165,16 @@ export function Settings({ userId, email, onBack, onSignOut, isAdmin, onAdmin, i
               <p className="text-sm text-gray-500">Tap to change avatar</p>
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Display Name</label>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Display Name</label>
               <input
                 type="text"
                 value={displayName}
                 onChange={e => setDisplayName(e.target.value)}
-                className="w-full h-12 px-4 rounded-xl border border-gray-300 text-base focus:outline-none focus:ring-2 focus:ring-amber-500"
+                className="w-full h-12 px-4 rounded-xl border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 text-base focus:outline-none focus:ring-2 focus:ring-amber-500"
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Handicap Index</label>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Handicap Index</label>
               <input
                 type="number"
                 inputMode="decimal"
@@ -166,7 +182,7 @@ export function Settings({ userId, email, onBack, onSignOut, isAdmin, onAdmin, i
                 placeholder="Auto-calculate"
                 value={handicapIndex}
                 onChange={e => setHandicapIndex(e.target.value)}
-                className="w-full h-12 px-4 rounded-xl border border-gray-300 text-base focus:outline-none focus:ring-2 focus:ring-amber-500"
+                className="w-full h-12 px-4 rounded-xl border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 text-base focus:outline-none focus:ring-2 focus:ring-amber-500"
               />
               <p className="text-xs text-gray-400 mt-1">Leave blank to auto-calculate from your rounds</p>
             </div>
@@ -187,32 +203,32 @@ export function Settings({ userId, email, onBack, onSignOut, isAdmin, onAdmin, i
 
         {/* Payment Info */}
         {!isAnonymous && profile && (
-          <section className="bg-white rounded-2xl shadow-sm p-4 space-y-3">
-            <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Payment Info</p>
+          <section className="bg-white dark:bg-gray-800 rounded-2xl shadow-sm p-4 space-y-3">
+            <p className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">Payment Info</p>
             <p className="text-sm text-gray-500">So your buddies can pay you when you win.</p>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Venmo Username</label>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Venmo Username</label>
               <input type="text" placeholder="@username" value={venmo} onChange={e => setVenmo(e.target.value)}
-                className="w-full h-12 px-4 rounded-xl border border-gray-300 text-base focus:outline-none focus:ring-2 focus:ring-amber-500" />
+                className="w-full h-12 px-4 rounded-xl border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 text-base focus:outline-none focus:ring-2 focus:ring-amber-500" />
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Zelle Email or Phone</label>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Zelle Email or Phone</label>
               <input type="text" placeholder="email or phone" value={zelle} onChange={e => setZelle(e.target.value)}
-                className="w-full h-12 px-4 rounded-xl border border-gray-300 text-base focus:outline-none focus:ring-2 focus:ring-amber-500" />
+                className="w-full h-12 px-4 rounded-xl border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 text-base focus:outline-none focus:ring-2 focus:ring-amber-500" />
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Cash App</label>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Cash App</label>
               <input type="text" placeholder="$cashtag" value={cashapp} onChange={e => setCashapp(e.target.value)}
-                className="w-full h-12 px-4 rounded-xl border border-gray-300 text-base focus:outline-none focus:ring-2 focus:ring-amber-500" />
+                className="w-full h-12 px-4 rounded-xl border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 text-base focus:outline-none focus:ring-2 focus:ring-amber-500" />
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">PayPal Email</label>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">PayPal Email</label>
               <input type="email" placeholder="email@example.com" value={paypalAddr} onChange={e => setPaypalAddr(e.target.value)}
-                className="w-full h-12 px-4 rounded-xl border border-gray-300 text-base focus:outline-none focus:ring-2 focus:ring-amber-500" />
+                className="w-full h-12 px-4 rounded-xl border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 text-base focus:outline-none focus:ring-2 focus:ring-amber-500" />
             </div>
             {(venmo || zelle || cashapp || paypalAddr) && (
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Preferred Method</label>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Preferred Method</label>
                 <div className="flex flex-wrap gap-2">
                   {[
                     { key: 'venmo', label: 'Venmo', show: !!venmo },
@@ -235,15 +251,15 @@ export function Settings({ userId, email, onBack, onSignOut, isAdmin, onAdmin, i
 
         {/* Admin Dashboard */}
         {isAdmin && onAdmin && (
-          <section className="bg-white rounded-2xl shadow-sm p-4">
+          <section className="bg-white dark:bg-gray-800 rounded-2xl shadow-sm p-4">
             <button
               onClick={onAdmin}
               className="w-full flex items-center gap-3 text-left"
             >
               <span className="text-2xl">🛡️</span>
               <div>
-                <p className="font-semibold text-gray-800">Admin Dashboard</p>
-                <p className="text-sm text-gray-500">Manage shared courses & game presets</p>
+                <p className="font-semibold text-gray-800 dark:text-gray-100">Admin Dashboard</p>
+                <p className="text-sm text-gray-500 dark:text-gray-400">Manage shared courses & game presets</p>
               </div>
               <svg className="w-4 h-4 text-gray-300 ml-auto flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
@@ -254,8 +270,8 @@ export function Settings({ userId, email, onBack, onSignOut, isAdmin, onAdmin, i
 
         {/* Create Account (anonymous) or Change Password (authenticated) */}
         {isAnonymous ? (
-          <section className="bg-white rounded-2xl shadow-sm p-4 space-y-3">
-            <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Create Account</p>
+          <section className="bg-white dark:bg-gray-800 rounded-2xl shadow-sm p-4 space-y-3">
+            <p className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">Create Account</p>
             <p className="text-sm text-gray-600">
               Your data isn't backed up. Create an account to keep it safe.
             </p>
@@ -267,21 +283,21 @@ export function Settings({ userId, email, onBack, onSignOut, isAdmin, onAdmin, i
             </button>
           </section>
         ) : (
-          <section className="bg-white rounded-2xl shadow-sm p-4 space-y-3">
-            <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Change Password</p>
+          <section className="bg-white dark:bg-gray-800 rounded-2xl shadow-sm p-4 space-y-3">
+            <p className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">Change Password</p>
             <input
               type="password"
               placeholder="New password"
               value={newPassword}
               onChange={e => setNewPassword(e.target.value)}
-              className="w-full h-12 px-4 rounded-xl border border-gray-300 text-base focus:outline-none focus:ring-2 focus:ring-amber-500"
+              className="w-full h-12 px-4 rounded-xl border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 text-base focus:outline-none focus:ring-2 focus:ring-amber-500"
             />
             <input
               type="password"
               placeholder="Confirm new password"
               value={confirmPassword}
               onChange={e => setConfirmPassword(e.target.value)}
-              className="w-full h-12 px-4 rounded-xl border border-gray-300 text-base focus:outline-none focus:ring-2 focus:ring-amber-500"
+              className="w-full h-12 px-4 rounded-xl border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 text-base focus:outline-none focus:ring-2 focus:ring-amber-500"
             />
             {pwMessage && (
               <p className={`text-sm ${pwMessage.type === 'error' ? 'text-red-500' : 'text-amber-600'}`}>
@@ -299,7 +315,7 @@ export function Settings({ userId, email, onBack, onSignOut, isAdmin, onAdmin, i
         )}
 
         {/* Delete account */}
-        <section className="bg-white rounded-2xl shadow-sm p-4 space-y-3 border border-red-200">
+        <section className="bg-white dark:bg-gray-800 rounded-2xl shadow-sm p-4 space-y-3 border border-red-200">
           <p className="text-xs font-semibold text-red-500 uppercase tracking-wide">Danger Zone</p>
           <p className="text-sm text-gray-600">
             This will permanently delete all your data (courses, players, rounds, scores).

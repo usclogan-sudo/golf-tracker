@@ -123,11 +123,11 @@ export function Auth({ inviteCode }: AuthProps = {}) {
   // Splash screen with inline sign-in
   if (mode === 'splash') {
     return (
-      <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center px-4">
+      <div className="min-h-screen bg-slate-50 dark:bg-gray-900 flex flex-col items-center justify-center px-4">
         <div className="w-full max-w-sm space-y-6">
           <div className="text-center">
             <div className="text-7xl mb-4">&#9971;</div>
-            <h1 className="font-display text-4xl font-800 tracking-tight text-gray-900">Fore Skins</h1>
+            <h1 className="font-display text-4xl font-800 tracking-tight text-gray-900 dark:text-gray-100">Fore Skins</h1>
             <p className="text-amber-600 text-sm font-medium mt-2 tracking-widest uppercase">Golf &middot; Side Games &middot; Money</p>
           </div>
 
@@ -139,14 +139,14 @@ export function Auth({ inviteCode }: AuthProps = {}) {
           )}
 
           {/* Inline sign-in form */}
-          <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-5 space-y-3">
+          <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700 p-5 space-y-3">
             <input
               type="email"
               placeholder="Email address"
               value={email}
               onChange={e => setEmail(e.target.value)}
               onKeyDown={e => e.key === 'Enter' && (password ? handleSignIn() : undefined)}
-              className="w-full h-12 px-4 rounded-xl border border-gray-300 text-base focus:outline-none focus:ring-2 focus:ring-amber-500"
+              className="w-full h-12 px-4 rounded-xl border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 text-base focus:outline-none focus:ring-2 focus:ring-amber-500"
               autoFocus
             />
             <input
@@ -155,7 +155,7 @@ export function Auth({ inviteCode }: AuthProps = {}) {
               value={password}
               onChange={e => setPassword(e.target.value)}
               onKeyDown={e => e.key === 'Enter' && handleSignIn()}
-              className="w-full h-12 px-4 rounded-xl border border-gray-300 text-base focus:outline-none focus:ring-2 focus:ring-amber-500"
+              className="w-full h-12 px-4 rounded-xl border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 text-base focus:outline-none focus:ring-2 focus:ring-amber-500"
             />
             {error && <p className="text-red-500 text-sm">{error}</p>}
             <button
@@ -200,11 +200,11 @@ export function Auth({ inviteCode }: AuthProps = {}) {
 
   // Form screens (sign-in, sign-up, forgot-password, magic-link)
   return (
-    <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center px-4">
+    <div className="min-h-screen bg-slate-50 dark:bg-gray-900 flex flex-col items-center justify-center px-4">
       <div className="w-full max-w-sm space-y-6">
         <div className="text-center">
           <div className="text-6xl mb-4">&#9971;</div>
-          <h1 className="font-display text-3xl font-800 tracking-tight text-gray-900">Fore Skins</h1>
+          <h1 className="font-display text-3xl font-800 tracking-tight text-gray-900 dark:text-gray-100">Fore Skins</h1>
           <p className="text-amber-600 text-sm font-medium mt-1 tracking-wide">GOLF &middot; SIDE GAMES &middot; MONEY</p>
         </div>
 
@@ -220,7 +220,7 @@ export function Auth({ inviteCode }: AuthProps = {}) {
             </button>
           </div>
         ) : (
-          <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6 space-y-4">
+          <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700 p-6 space-y-4">
             <div className="flex items-center gap-3">
               <button
                 onClick={() => resetState('splash')}
@@ -242,7 +242,7 @@ export function Auth({ inviteCode }: AuthProps = {}) {
                 value={email}
                 onChange={e => setEmail(e.target.value)}
                 onKeyDown={e => e.key === 'Enter' && handleSubmit()}
-                className="w-full h-12 px-4 rounded-xl border border-gray-300 text-base focus:outline-none focus:ring-2 focus:ring-amber-500"
+                className="w-full h-12 px-4 rounded-xl border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 text-base focus:outline-none focus:ring-2 focus:ring-amber-500"
                 autoFocus
               />
             </div>
@@ -258,7 +258,7 @@ export function Auth({ inviteCode }: AuthProps = {}) {
                   value={password}
                   onChange={e => setPassword(e.target.value)}
                   onKeyDown={e => e.key === 'Enter' && handleSubmit()}
-                  className="w-full h-12 px-4 rounded-xl border border-gray-300 text-base focus:outline-none focus:ring-2 focus:ring-amber-500"
+                  className="w-full h-12 px-4 rounded-xl border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 text-base focus:outline-none focus:ring-2 focus:ring-amber-500"
                 />
               </div>
             )}

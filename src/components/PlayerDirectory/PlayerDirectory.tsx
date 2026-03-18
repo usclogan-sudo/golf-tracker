@@ -139,7 +139,7 @@ export function PlayerDirectory({ userId, onBack }: Props) {
   const guests = filtered.filter(p => !pinnedIds.has(p.id) && !frequent.includes(p) && !p.isRegistered)
 
   return (
-    <div className="min-h-screen bg-gray-50 pb-8">
+    <div className="min-h-screen bg-gray-50 dark:bg-gray-900 pb-8">
       <header className="app-header text-white px-4 py-4 sticky top-0 z-10 shadow-xl flex items-center gap-3">
         <button onClick={onBack} className="w-10 h-10 flex items-center justify-center rounded-full hover:bg-gray-800 text-xl" aria-label="Back">←</button>
         <h1 className="text-xl font-bold">Players</h1>
@@ -210,7 +210,7 @@ function Section({ title, icon, children }: { title: string; icon?: string; chil
 
 function PlayerCard({ player, isPinned, onTogglePin }: { player: PlayerEntry; isPinned: boolean; onTogglePin: () => void }) {
   return (
-    <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-4 flex items-center gap-3">
+    <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700 p-4 flex items-center gap-3">
       <UserAvatar url={player.avatarUrl} preset={player.avatarPreset} name={player.name} size="md" />
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-2">

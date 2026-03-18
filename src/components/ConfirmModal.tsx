@@ -24,9 +24,9 @@ export function ConfirmModal({
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
       <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={onCancel} />
-      <div className="relative bg-white rounded-2xl shadow-xl max-w-sm w-full p-6 space-y-4 animate-[scale-in_0.15s_ease-out]">
-        <h3 className="font-display text-lg font-bold text-gray-900">{title}</h3>
-        <p className="text-sm text-gray-600">{message}</p>
+      <div className="relative bg-white dark:bg-gray-800 rounded-2xl shadow-xl max-w-sm w-full p-6 space-y-4 animate-[scale-in_0.15s_ease-out]">
+        <h3 className="font-display text-lg font-bold text-gray-900 dark:text-gray-100">{title}</h3>
+        <p className="text-sm text-gray-600 dark:text-gray-300">{message}</p>
         <div className="flex gap-3">
           <button
             onClick={onCancel}

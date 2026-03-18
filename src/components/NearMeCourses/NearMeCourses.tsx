@@ -24,6 +24,12 @@ function distanceMiles(lat1: number, lon1: number, lat2: number, lon2: number): 
   return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a))
 }
 
+function courseHash(name: string): number {
+  let hash = 0
+  for (let i = 0; i < name.length; i++) hash = (hash * 31 + name.charCodeAt(i)) & 0xffffff
+  return Math.abs(hash)
+}
+
 function courseGradient(name: string): string {
   const gradients = [
     'linear-gradient(135deg, #1a4731 0%, #2d7a53 100%)',
@@ -33,9 +39,81 @@ function courseGradient(name: string): string {
     'linear-gradient(135deg, #0a2e1a 0%, #175e38 100%)',
     'linear-gradient(135deg, #1c3a15 0%, #336b28 100%)',
   ]
-  let hash = 0
-  for (let i = 0; i < name.length; i++) hash = (hash * 31 + name.charCodeAt(i)) & 0xffffff
-  return gradients[Math.abs(hash) % gradients.length]
+  return gradients[courseHash(name) % gradients.length]
+}
+
+/** SVG golf scene overlay — varies by course name for visual variety */
+function CourseScene({ name }: { name: string }) {
+  const h = courseHash(name)
+  const variant = h % 4
+  // Vary hill shapes, tree positions, flag position
+  const hillY = 50 + (h % 20)
+  const flagX = 100 + (h % 80)
+  const treeX1 = 20 + (h % 40)
+  const treeX2 = 140 + (h % 50)
+  const hasWater = variant === 2
+  const hasBunker = variant === 1 || variant === 3
+
+  return (
+    <svg viewBox="0 0 208 96" fill="none" className="absolute inset-0 w-full h-full" preserveAspectRatio="xMidYMid slice">
+      {/* Sky gradient overlay */}
+      <defs>
+        <linearGradient id={`sky-${h}`} x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stopColor="#87CEEB" stopOpacity="0.15" />
+          <stop offset="100%" stopColor="#87CEEB" stopOpacity="0" />
+        </linearGradient>
+      </defs>
+      <rect width="208" height="50" fill={`url(#sky-${h})`} />
+
+      {/* Rolling hills / fairway */}
+      <path
+        d={`M0 ${hillY} Q52 ${hillY - 18} 104 ${hillY - 5} Q156 ${hillY + 10} 208 ${hillY - 8} L208 96 L0 96 Z`}
+        fill="#2e8b57" opacity="0.35"
+      />
+      <path
+        d={`M0 ${hillY + 12} Q70 ${hillY - 2} 130 ${hillY + 8} Q180 ${hillY + 18} 208 ${hillY + 5} L208 96 L0 96 Z`}
+        fill="#228b22" opacity="0.3"
+      />
+
+      {/* Water hazard */}
+      {hasWater && (
+        <ellipse cx="160" cy={hillY + 20} rx="35" ry="10" fill="#1e90ff" opacity="0.25" />
+      )}
+
+      {/* Bunker */}
+      {hasBunker && (
+        <ellipse cx={flagX + 20} cy={hillY + 8} rx="12" ry="5" fill="#f4e4a0" opacity="0.4" />
+      )}
+
+      {/* Trees */}
+      <g opacity="0.5">
+        {/* Tree 1 */}
+        <rect x={treeX1} y={hillY - 22} width="2.5" height="14" fill="#3d2b1f" />
+        <ellipse cx={treeX1 + 1} cy={hillY - 25} rx="8" ry="10" fill="#1b5e20" />
+        {/* Tree 2 */}
+        <rect x={treeX2} y={hillY - 18} width="2" height="12" fill="#3d2b1f" />
+        <ellipse cx={treeX2 + 1} cy={hillY - 21} rx="6" ry="8" fill="#2e7d32" />
+        {/* Tree 3 (sometimes) */}
+        {variant !== 0 && (
+          <>
+            <rect x={treeX1 + 60} y={hillY - 15} width="2" height="10" fill="#3d2b1f" />
+            <ellipse cx={treeX1 + 61} cy={hillY - 18} rx="7" ry="9" fill="#1b5e20" />
+          </>
+        )}
+      </g>
+
+      {/* Flag */}
+      <g>
+        <line x1={flagX} y1={hillY - 20} x2={flagX} y2={hillY + 2} stroke="white" strokeWidth="1.5" opacity="0.8" />
+        <polygon points={`${flagX},${hillY - 20} ${flagX + 12},${hillY - 16} ${flagX},${hillY - 12}`} fill="#ef4444" opacity="0.85" />
+        {/* Hole */}
+        <ellipse cx={flagX} cy={hillY + 3} rx="3" ry="1.5" fill="#1a1a1a" opacity="0.4" />
+      </g>
+
+      {/* Subtle sun/moon */}
+      <circle cx="185" cy="18" r="10" fill="#fbbf24" opacity="0.15" />
+    </svg>
+  )
 }
 
 export function NearMeCourses({ onAddCourse }: Props) {
@@ -166,9 +244,10 @@ export function NearMeCourses({ onAddCourse }: Props) {
       <div className="flex gap-3 overflow-x-auto pb-2 -mx-4 px-4 snap-x snap-mandatory">
         {courses.map(course => (
           <button key={course.id} onClick={() => onAddCourse(course.name)}
-            className="flex-none w-52 bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden text-left active:scale-95 transition-transform snap-start">
-            <div className="h-24 flex flex-col justify-end p-3" style={{ background: courseGradient(course.name) }}>
-              <div className="bg-black/30 backdrop-blur-sm rounded-lg px-2 py-1 self-start">
+            className="flex-none w-52 bg-white dark:bg-gray-800 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700 overflow-hidden text-left active:scale-95 transition-transform snap-start">
+            <div className="h-24 flex flex-col justify-end p-3 relative" style={{ background: courseGradient(course.name) }}>
+              <CourseScene name={course.name} />
+              <div className="bg-black/30 backdrop-blur-sm rounded-lg px-2 py-1 self-start relative z-10">
                 <p className="text-white text-xs font-semibold">
                   📍 {course.distanceMiles < 1 ? `${(course.distanceMiles * 5280).toFixed(0)} ft` : `${course.distanceMiles.toFixed(1)} mi`}
                 </p>

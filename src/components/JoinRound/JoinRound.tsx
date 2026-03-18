@@ -99,7 +99,7 @@ export function JoinRound({ userId, initialCode, onJoined, onCancel }: Props) {
   }
 
   return (
-    <div className="min-h-screen bg-slate-50 flex flex-col">
+    <div className="min-h-screen bg-slate-50 dark:bg-gray-900 flex flex-col">
       <header className="app-header text-white px-4 py-3 shadow-xl">
         <div className="max-w-2xl mx-auto flex items-center justify-between">
           <h1 className="text-xl font-bold font-display">Join Round</h1>
@@ -111,7 +111,7 @@ export function JoinRound({ userId, initialCode, onJoined, onCancel }: Props) {
 
       <main className="flex-1 px-4 py-6 max-w-2xl mx-auto w-full space-y-6">
         {step === 'code' && !preview && (
-          <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6 space-y-4">
+          <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700 p-6 space-y-4">
             <div className="text-center">
               <p className="text-4xl mb-2">🔗</p>
               <h2 className="font-display font-bold text-xl text-gray-900">Enter Invite Code</h2>
@@ -144,7 +144,7 @@ export function JoinRound({ userId, initialCode, onJoined, onCancel }: Props) {
         {step === 'pick' && preview && (
           <div className="space-y-4">
             {/* Round preview card */}
-            <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-5">
+            <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700 p-5">
               <p className="text-xs text-gray-400 uppercase tracking-wide font-semibold">Round Found</p>
               <h2 className="font-display font-bold text-xl text-gray-900 mt-1">{preview.courseName}</h2>
               <div className="flex items-center gap-3 mt-2 text-sm text-gray-600">
@@ -157,7 +157,7 @@ export function JoinRound({ userId, initialCode, onJoined, onCancel }: Props) {
             </div>
 
             {/* Player picker */}
-            <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-5 space-y-3">
+            <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700 p-5 space-y-3">
               <h3 className="font-display font-semibold text-gray-800">Which player are you?</h3>
 
               {isAlreadyJoined && (

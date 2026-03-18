@@ -53,7 +53,7 @@ export function Onboarding({ userId, onComplete }: Props) {
   ]
 
   return (
-    <div className="min-h-screen bg-slate-50 flex flex-col">
+    <div className="min-h-screen bg-slate-50 dark:bg-gray-900 flex flex-col">
       <header className="app-header text-white px-4 pt-6 pb-5 shadow-xl">
         <div className="max-w-2xl mx-auto text-center">
           <h1 className="font-display text-3xl font-800 tracking-tight">Fore Skins</h1>
@@ -82,7 +82,7 @@ export function Onboarding({ userId, onComplete }: Props) {
                   placeholder="e.g. John Smith"
                   value={displayName}
                   onChange={e => setDisplayName(e.target.value)}
-                  className="w-full h-12 px-4 rounded-xl border border-gray-300 text-base focus:outline-none focus:ring-2 focus:ring-amber-500"
+                  className="w-full h-12 px-4 rounded-xl border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 text-base focus:outline-none focus:ring-2 focus:ring-amber-500"
                 />
               </div>
               <div>
@@ -94,7 +94,7 @@ export function Onboarding({ userId, onComplete }: Props) {
                   placeholder="e.g. 12.4"
                   value={handicapIndex}
                   onChange={e => setHandicapIndex(e.target.value)}
-                  className="w-full h-12 px-4 rounded-xl border border-gray-300 text-base focus:outline-none focus:ring-2 focus:ring-amber-500"
+                  className="w-full h-12 px-4 rounded-xl border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 text-base focus:outline-none focus:ring-2 focus:ring-amber-500"
                 />
               </div>
             </div>
@@ -118,22 +118,22 @@ export function Onboarding({ userId, onComplete }: Props) {
               <div>
                 <label className="block text-sm font-semibold text-gray-700 mb-1">Venmo Username</label>
                 <input type="text" placeholder="@username" value={venmo} onChange={e => setVenmo(e.target.value)}
-                  className="w-full h-12 px-4 rounded-xl border border-gray-300 text-base focus:outline-none focus:ring-2 focus:ring-amber-500" />
+                  className="w-full h-12 px-4 rounded-xl border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 text-base focus:outline-none focus:ring-2 focus:ring-amber-500" />
               </div>
               <div>
                 <label className="block text-sm font-semibold text-gray-700 mb-1">Zelle Email or Phone</label>
                 <input type="text" placeholder="email or phone" value={zelle} onChange={e => setZelle(e.target.value)}
-                  className="w-full h-12 px-4 rounded-xl border border-gray-300 text-base focus:outline-none focus:ring-2 focus:ring-amber-500" />
+                  className="w-full h-12 px-4 rounded-xl border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 text-base focus:outline-none focus:ring-2 focus:ring-amber-500" />
               </div>
               <div>
                 <label className="block text-sm font-semibold text-gray-700 mb-1">Cash App</label>
                 <input type="text" placeholder="$cashtag" value={cashapp} onChange={e => setCashapp(e.target.value)}
-                  className="w-full h-12 px-4 rounded-xl border border-gray-300 text-base focus:outline-none focus:ring-2 focus:ring-amber-500" />
+                  className="w-full h-12 px-4 rounded-xl border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 text-base focus:outline-none focus:ring-2 focus:ring-amber-500" />
               </div>
               <div>
                 <label className="block text-sm font-semibold text-gray-700 mb-1">PayPal Email</label>
                 <input type="email" placeholder="email@example.com" value={paypal} onChange={e => setPaypal(e.target.value)}
-                  className="w-full h-12 px-4 rounded-xl border border-gray-300 text-base focus:outline-none focus:ring-2 focus:ring-amber-500" />
+                  className="w-full h-12 px-4 rounded-xl border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 text-base focus:outline-none focus:ring-2 focus:ring-amber-500" />
               </div>
 
               {(venmo || zelle || cashapp || paypal) && (

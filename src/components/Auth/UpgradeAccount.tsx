@@ -35,7 +35,7 @@ export function UpgradeAccount({ onComplete, onCancel }: Props) {
   }
 
   return (
-    <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center px-4">
+    <div className="min-h-screen bg-slate-50 dark:bg-gray-900 flex flex-col items-center justify-center px-4">
       <div className="w-full max-w-sm space-y-6">
         <div className="text-center">
           <div className="text-5xl mb-3">&#128274;</div>
@@ -55,7 +55,7 @@ export function UpgradeAccount({ onComplete, onCancel }: Props) {
             </button>
           </div>
         ) : (
-          <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6 space-y-4">
+          <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700 p-6 space-y-4">
             <div>
               <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">
                 Email Address
@@ -65,7 +65,7 @@ export function UpgradeAccount({ onComplete, onCancel }: Props) {
                 placeholder="you@example.com"
                 value={email}
                 onChange={e => setEmail(e.target.value)}
-                className="w-full h-12 px-4 rounded-xl border border-gray-300 text-base focus:outline-none focus:ring-2 focus:ring-amber-500"
+                className="w-full h-12 px-4 rounded-xl border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 text-base focus:outline-none focus:ring-2 focus:ring-amber-500"
                 autoFocus
               />
             </div>
@@ -79,7 +79,7 @@ export function UpgradeAccount({ onComplete, onCancel }: Props) {
                 placeholder="At least 6 characters"
                 value={password}
                 onChange={e => setPassword(e.target.value)}
-                className="w-full h-12 px-4 rounded-xl border border-gray-300 text-base focus:outline-none focus:ring-2 focus:ring-amber-500"
+                className="w-full h-12 px-4 rounded-xl border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 text-base focus:outline-none focus:ring-2 focus:ring-amber-500"
               />
             </div>
 
@@ -93,7 +93,7 @@ export function UpgradeAccount({ onComplete, onCancel }: Props) {
                 value={confirmPassword}
                 onChange={e => setConfirmPassword(e.target.value)}
                 onKeyDown={e => e.key === 'Enter' && handleUpgrade()}
-                className="w-full h-12 px-4 rounded-xl border border-gray-300 text-base focus:outline-none focus:ring-2 focus:ring-amber-500"
+                className="w-full h-12 px-4 rounded-xl border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 text-base focus:outline-none focus:ring-2 focus:ring-amber-500"
               />
             </div>
 

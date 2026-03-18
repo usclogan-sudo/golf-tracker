@@ -58,14 +58,14 @@ export function RoundsDetail({ userId, onBack }: Props) {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+      <div className="min-h-screen bg-gray-50 dark:bg-gray-900 flex items-center justify-center">
         <div className="w-8 h-8 border-2 border-amber-500 border-t-transparent rounded-full animate-spin" />
       </div>
     )
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 pb-8">
+    <div className="min-h-screen bg-gray-50 dark:bg-gray-900 pb-8">
       <header className="app-header text-white px-4 py-4 sticky top-0 z-10 shadow-xl flex items-center gap-3">
         <button onClick={onBack} className="w-10 h-10 flex items-center justify-center rounded-full hover:bg-gray-800 text-xl" aria-label="Back">←</button>
         <h1 className="text-xl font-bold">Rounds</h1>
@@ -73,7 +73,7 @@ export function RoundsDetail({ userId, onBack }: Props) {
 
       <div className="px-4 py-5 max-w-2xl mx-auto space-y-4">
         {/* Overview */}
-        <section className="bg-white rounded-2xl shadow-sm p-4 space-y-3">
+        <section className="bg-white dark:bg-gray-800 rounded-2xl shadow-sm p-4 space-y-3">
           <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Overview</p>
           <div className="grid grid-cols-2 gap-3">
             <div className="bg-gray-50 rounded-xl p-3 text-center">
@@ -89,7 +89,7 @@ export function RoundsDetail({ userId, onBack }: Props) {
 
         {/* By Game Type */}
         {Object.keys(stats.byType).length > 0 && (
-          <section className="bg-white rounded-2xl shadow-sm p-4 space-y-3">
+          <section className="bg-white dark:bg-gray-800 rounded-2xl shadow-sm p-4 space-y-3">
             <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">By Game Type</p>
             <div className="space-y-2">
               {Object.entries(stats.byType).sort((a, b) => b[1] - a[1]).map(([type, count]) => (
@@ -104,7 +104,7 @@ export function RoundsDetail({ userId, onBack }: Props) {
 
         {/* Monthly Activity */}
         {Object.keys(stats.monthly).length > 0 && (
-          <section className="bg-white rounded-2xl shadow-sm p-4 space-y-3">
+          <section className="bg-white dark:bg-gray-800 rounded-2xl shadow-sm p-4 space-y-3">
             <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Monthly Activity</p>
             <div className="space-y-2">
               {Object.entries(stats.monthly).map(([month, data]) => (
@@ -119,7 +119,7 @@ export function RoundsDetail({ userId, onBack }: Props) {
 
         {/* Most Recent */}
         {stats.mostRecent && (
-          <section className="bg-white rounded-2xl shadow-sm p-4 space-y-2">
+          <section className="bg-white dark:bg-gray-800 rounded-2xl shadow-sm p-4 space-y-2">
             <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Most Recent</p>
             <div className="bg-amber-50 rounded-xl p-4">
               <p className="font-bold text-gray-800">{stats.mostRecent.courseSnapshot?.courseName ?? 'Unknown'}</p>

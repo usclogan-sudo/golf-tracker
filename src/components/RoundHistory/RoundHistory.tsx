@@ -102,14 +102,14 @@ export function RoundHistory({ userId, onBack, onViewSettlements }: Props) {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+      <div className="min-h-screen bg-gray-50 dark:bg-gray-900 flex items-center justify-center">
         <div className="w-8 h-8 border-2 border-amber-500 border-t-transparent rounded-full animate-spin" />
       </div>
     )
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 pb-8">
+    <div className="min-h-screen bg-gray-50 dark:bg-gray-900 pb-8">
       <header className="app-header text-white px-4 py-4 sticky top-0 z-10 shadow-xl flex items-center gap-3">
         <button onClick={onBack} className="w-10 h-10 flex items-center justify-center rounded-full hover:bg-gray-600 text-xl" aria-label="Back">←</button>
         <h1 className="text-xl font-bold">Round History</h1>
@@ -133,7 +133,7 @@ export function RoundHistory({ userId, onBack, onViewSettlements }: Props) {
           const sStatus = settlementStatus.get(round.id)
 
           return (
-            <div key={round.id} className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+            <div key={round.id} className="bg-white dark:bg-gray-800 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700 overflow-hidden">
               <button
                 onClick={() => toggleExpand(round.id)}
                 className="w-full text-left px-4 py-3 active:bg-gray-50 transition-colors"

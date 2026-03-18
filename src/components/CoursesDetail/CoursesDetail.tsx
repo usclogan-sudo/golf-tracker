@@ -67,7 +67,7 @@ export function CoursesDetail({ userId, onBack }: Props) {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+      <div className="min-h-screen bg-gray-50 dark:bg-gray-900 flex items-center justify-center">
         <div className="w-8 h-8 border-2 border-amber-500 border-t-transparent rounded-full animate-spin" />
       </div>
     )
@@ -76,7 +76,7 @@ export function CoursesDetail({ userId, onBack }: Props) {
   const CourseStatCard = ({ stat }: { stat: CourseStats }) => {
     const avgGross = stat.roundsWithScores > 0 ? Math.round(stat.totalGross / stat.roundsWithScores) : null
     return (
-      <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-4">
+      <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700 p-4">
         <p className="font-bold text-gray-800">{stat.courseName}</p>
         <div className="flex items-center gap-4 mt-2 text-sm">
           <span className="text-gray-600">{stat.timesPlayed} round{stat.timesPlayed !== 1 ? 's' : ''}</span>
@@ -92,7 +92,7 @@ export function CoursesDetail({ userId, onBack }: Props) {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 pb-8">
+    <div className="min-h-screen bg-gray-50 dark:bg-gray-900 pb-8">
       <header className="app-header text-white px-4 py-4 sticky top-0 z-10 shadow-xl flex items-center gap-3">
         <button onClick={onBack} className="w-10 h-10 flex items-center justify-center rounded-full hover:bg-gray-800 text-xl" aria-label="Back">←</button>
         <h1 className="text-xl font-bold">Courses</h1>

@@ -209,7 +209,7 @@ function CoursePicker({
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 pb-8">
+    <div className="min-h-screen bg-gray-50 dark:bg-gray-900 pb-8">
       <header className={`${headerClass} text-white px-4 py-4 sticky top-0 z-10 shadow-xl flex items-center gap-3`}>
         <button
           onClick={onCancel}
@@ -236,7 +236,7 @@ function CoursePicker({
           value={query}
           onChange={e => setQuery(e.target.value)}
           autoFocus
-          className="w-full h-12 px-4 rounded-xl border border-gray-300 text-base focus:outline-none focus:ring-2 focus:ring-amber-500"
+          className="w-full h-12 px-4 rounded-xl border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 text-base focus:outline-none focus:ring-2 focus:ring-amber-500"
         />
 
         <div className="space-y-2">
@@ -400,7 +400,7 @@ function PlayerPicker({
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 pb-28">
+    <div className="min-h-screen bg-gray-50 dark:bg-gray-900 pb-28">
       <header className={`${headerClass} text-white px-4 py-4 sticky top-0 z-10 shadow-xl flex items-center gap-3`}>
         <button
           onClick={onBack}
@@ -422,7 +422,7 @@ function PlayerPicker({
           placeholder="Search players…"
           value={query}
           onChange={e => setQuery(e.target.value)}
-          className="w-full h-12 px-4 rounded-xl border border-gray-300 text-base focus:outline-none focus:ring-2 focus:ring-amber-500"
+          className="w-full h-12 px-4 rounded-xl border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 text-base focus:outline-none focus:ring-2 focus:ring-amber-500"
         />
 
         <p className="text-xs text-gray-500 px-1">
@@ -493,14 +493,14 @@ function PlayerPicker({
         )}
 
         {showAddForm ? (
-          <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-4 space-y-3">
+          <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700 p-4 space-y-3">
             <p className="font-semibold text-gray-700 text-sm">Quick Add Guest Player</p>
             <input
               type="text"
               placeholder="Name"
               value={newName}
               onChange={e => setNewName(e.target.value)}
-              className="w-full h-11 px-3 rounded-xl border border-gray-300 text-base focus:outline-none focus:ring-2 focus:ring-amber-500"
+              className="w-full h-11 px-3 rounded-xl border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 text-base focus:outline-none focus:ring-2 focus:ring-amber-500"
             />
             <input
               type="number"
@@ -508,12 +508,12 @@ function PlayerPicker({
               placeholder="Handicap Index"
               value={newHcp}
               onChange={e => setNewHcp(e.target.value)}
-              className="w-full h-11 px-3 rounded-xl border border-gray-300 text-base focus:outline-none focus:ring-2 focus:ring-amber-500"
+              className="w-full h-11 px-3 rounded-xl border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 text-base focus:outline-none focus:ring-2 focus:ring-amber-500"
             />
             <select
               value={newTee}
               onChange={e => setNewTee(e.target.value)}
-              className="w-full h-11 px-3 rounded-xl border border-gray-300 text-base focus:outline-none focus:ring-2 focus:ring-amber-500"
+              className="w-full h-11 px-3 rounded-xl border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 text-base focus:outline-none focus:ring-2 focus:ring-amber-500"
             >
               {course.tees.map(t => (
                 <option key={t.name} value={t.name}>{t.name}</option>
@@ -547,7 +547,7 @@ function PlayerPicker({
         )}
       </div>
 
-      <div className="fixed bottom-0 inset-x-0 p-4 bg-white/95 backdrop-blur-sm border-t border-gray-200">
+      <div className="fixed bottom-0 inset-x-0 p-4 bg-white/95 dark:bg-gray-800/95 backdrop-blur-sm border-t border-gray-200 dark:border-gray-700">
         <div className="max-w-2xl mx-auto">
           <button
             onClick={handleNext}
@@ -628,7 +628,7 @@ function GroupAssignment({
   const headerClass = stakesMode === 'high_roller' ? 'hr-header' : 'app-header'
 
   return (
-    <div className="min-h-screen bg-gray-50 pb-28">
+    <div className="min-h-screen bg-gray-50 dark:bg-gray-900 pb-28">
       <header className={`${headerClass} text-white px-4 py-4 sticky top-0 z-10 shadow-xl flex items-center gap-3`}>
         <button
           onClick={onBack}
@@ -665,7 +665,7 @@ function GroupAssignment({
         {groupNumbers.map(gn => {
           const groupPlayers = players.filter(p => groups[p.id] === gn)
           return (
-            <div key={gn} className="bg-white rounded-2xl shadow-sm border border-gray-100 p-4 space-y-2">
+            <div key={gn} className="bg-white dark:bg-gray-800 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700 p-4 space-y-2">
               <div className="flex items-center justify-between">
                 <p className="font-bold text-gray-800">Group {gn}</p>
                 <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${
@@ -707,7 +707,7 @@ function GroupAssignment({
         })}
       </div>
 
-      <div className="fixed bottom-0 inset-x-0 p-4 bg-white/95 backdrop-blur-sm border-t border-gray-200">
+      <div className="fixed bottom-0 inset-x-0 p-4 bg-white/95 dark:bg-gray-800/95 backdrop-blur-sm border-t border-gray-200 dark:border-gray-700">
         <div className="max-w-2xl mx-auto">
           <button
             onClick={() => onNext(groups)}
@@ -935,7 +935,7 @@ function GameSetup({
   )
 
   return (
-    <div className="min-h-screen bg-gray-50 pb-28">
+    <div className="min-h-screen bg-gray-50 dark:bg-gray-900 pb-28">
       <header className={`${headerClass} text-white px-4 py-4 sticky top-0 z-10 shadow-xl flex items-center gap-3`}>
         <button
           onClick={onBack}
@@ -960,7 +960,7 @@ function GameSetup({
 
         {/* Quick Pick Presets */}
         {gamePresets.length > 0 && (
-          <section className="bg-white rounded-2xl shadow-sm p-4 space-y-2">
+          <section className="bg-white dark:bg-gray-800 rounded-2xl shadow-sm p-4 space-y-2">
             <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Quick Pick</p>
             <div className="flex gap-2 overflow-x-auto pb-1 -mx-1 px-1">
               {gamePresets.map(preset => (
@@ -977,7 +977,7 @@ function GameSetup({
         )}
 
         {/* Stakes Mode */}
-        <section className="bg-white rounded-2xl shadow-sm p-4 space-y-3">
+        <section className="bg-white dark:bg-gray-800 rounded-2xl shadow-sm p-4 space-y-3">
           <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Stakes</p>
           <div className="grid grid-cols-2 gap-2">
             <button
@@ -1003,7 +1003,7 @@ function GameSetup({
         </section>
 
         {/* Game Type */}
-        <section className="bg-white rounded-2xl shadow-sm p-4 space-y-3">
+        <section className="bg-white dark:bg-gray-800 rounded-2xl shadow-sm p-4 space-y-3">
           <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Game Type</p>
           <div className="grid grid-cols-2 gap-2">
             <GameButton gameType="skins" label="🎰 Skins" />
@@ -1021,7 +1021,7 @@ function GameSetup({
         </section>
 
         {/* Buy-in */}
-        <section className="bg-white rounded-2xl shadow-sm p-4 space-y-3">
+        <section className="bg-white dark:bg-gray-800 rounded-2xl shadow-sm p-4 space-y-3">
           <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">
             Buy-in Per Player{type === 'nassau' ? ' (covers all 3 bets)' : ''}
           </p>
@@ -1068,7 +1068,7 @@ function GameSetup({
                 autoFocus
                 value={buyInDollars}
                 onChange={e => setBuyInDollars(e.target.value)}
-                className="flex-1 h-12 px-4 rounded-xl border border-gray-300 text-base focus:outline-none focus:ring-2 focus:ring-amber-500"
+                className="flex-1 h-12 px-4 rounded-xl border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 text-base focus:outline-none focus:ring-2 focus:ring-amber-500"
               />
             </div>
           )}
@@ -1087,7 +1087,7 @@ function GameSetup({
 
         {/* Skins Options */}
         {type === 'skins' && (
-          <section className="bg-white rounded-2xl shadow-sm p-4 space-y-3">
+          <section className="bg-white dark:bg-gray-800 rounded-2xl shadow-sm p-4 space-y-3">
             <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Skins Options</p>
             <div>
               <p className="text-sm text-gray-600 mb-2">Scoring</p>
@@ -1119,7 +1119,7 @@ function GameSetup({
 
         {/* Best Ball Options */}
         {type === 'best_ball' && (
-          <section className="bg-white rounded-2xl shadow-sm p-4 space-y-4">
+          <section className="bg-white dark:bg-gray-800 rounded-2xl shadow-sm p-4 space-y-4">
             <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Best Ball Options</p>
             <div>
               <p className="text-sm text-gray-600 mb-2">Format</p>
@@ -1181,7 +1181,7 @@ function GameSetup({
 
         {/* Nassau Options */}
         {type === 'nassau' && (
-          <section className="bg-white rounded-2xl shadow-sm p-4 space-y-3">
+          <section className="bg-white dark:bg-gray-800 rounded-2xl shadow-sm p-4 space-y-3">
             <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Nassau Options</p>
             <div>
               <p className="text-sm text-gray-600 mb-2">Scoring</p>
@@ -1207,7 +1207,7 @@ function GameSetup({
 
         {/* Wolf Options */}
         {type === 'wolf' && (
-          <section className="bg-white rounded-2xl shadow-sm p-4 space-y-4">
+          <section className="bg-white dark:bg-gray-800 rounded-2xl shadow-sm p-4 space-y-4">
             <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Wolf Options</p>
             <div>
               <p className="text-sm text-gray-600 mb-2">Scoring</p>
@@ -1266,7 +1266,7 @@ function GameSetup({
 
         {/* BBB Options */}
         {type === 'bingo_bango_bongo' && (
-          <section className="bg-white rounded-2xl shadow-sm p-4 space-y-3">
+          <section className="bg-white dark:bg-gray-800 rounded-2xl shadow-sm p-4 space-y-3">
             <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Bingo Bango Bongo Options</p>
             <div>
               <p className="text-sm text-gray-600 mb-2">Scoring</p>
@@ -1291,7 +1291,7 @@ function GameSetup({
         )}
 
         {/* Junk Side Bets */}
-        <section className="bg-white rounded-2xl shadow-sm p-4 space-y-3">
+        <section className="bg-white dark:bg-gray-800 rounded-2xl shadow-sm p-4 space-y-3">
           <div className="flex items-center justify-between">
             <div>
               <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Junk Side Bets</p>
@@ -1361,7 +1361,7 @@ function GameSetup({
         </section>
       </div>
 
-      <div className="fixed bottom-0 inset-x-0 p-4 bg-white/95 backdrop-blur-sm border-t border-gray-200">
+      <div className="fixed bottom-0 inset-x-0 p-4 bg-white/95 dark:bg-gray-800/95 backdrop-blur-sm border-t border-gray-200 dark:border-gray-700">
         <div className="max-w-2xl mx-auto">
           <button
             onClick={() => {
@@ -1475,7 +1475,7 @@ function TreasurerAndBuyIns({
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 pb-36">
+    <div className="min-h-screen bg-gray-50 dark:bg-gray-900 pb-36">
       <header className={`${headerClass} text-white px-4 py-4 sticky top-0 z-10 shadow-xl flex items-center gap-3`}>
         <button
           onClick={onBack}
@@ -1497,7 +1497,7 @@ function TreasurerAndBuyIns({
       {stepIndicator}
 
       <div className="px-4 py-5 max-w-2xl mx-auto space-y-4">
-        <section className="bg-white rounded-2xl shadow-sm p-4 space-y-3">
+        <section className="bg-white dark:bg-gray-800 rounded-2xl shadow-sm p-4 space-y-3">
           <div>
             <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Treasurer</p>
             <p className="text-sm text-gray-500 mt-1">Who is holding the pot?</p>
@@ -1526,7 +1526,7 @@ function TreasurerAndBuyIns({
         </section>
 
         {/* Game Master */}
-        <section className="bg-white rounded-2xl shadow-sm p-4 space-y-3">
+        <section className="bg-white dark:bg-gray-800 rounded-2xl shadow-sm p-4 space-y-3">
           <div>
             <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Game Master (Scorekeeper)</p>
             <p className="text-sm text-gray-500 mt-1">Who enters the scores? Can be the same as treasurer.</p>
@@ -1551,14 +1551,14 @@ function TreasurerAndBuyIns({
           </div>
         </section>
 
-        <section className="bg-white rounded-2xl shadow-sm p-4 space-y-3">
+        <section className="bg-white dark:bg-gray-800 rounded-2xl shadow-sm p-4 space-y-3">
           <p className="text-sm text-gray-500">
             {fmtMoney(game.buyInCents)} per player → pay{' '}
             <strong>{treasurer?.name ?? '…'}</strong>
           </p>
         </section>
 
-        <section className="bg-white rounded-2xl shadow-sm p-4 space-y-3">
+        <section className="bg-white dark:bg-gray-800 rounded-2xl shadow-sm p-4 space-y-3">
           <div>
             <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Confirm Payments</p>
             <p className="text-sm text-gray-500 mt-1">Tap each player once they've paid the treasurer.</p>
@@ -1597,7 +1597,7 @@ function TreasurerAndBuyIns({
         </section>
       </div>
 
-      <div className="fixed bottom-0 inset-x-0 p-4 bg-white/95 backdrop-blur-sm border-t border-gray-200">
+      <div className="fixed bottom-0 inset-x-0 p-4 bg-white/95 dark:bg-gray-800/95 backdrop-blur-sm border-t border-gray-200 dark:border-gray-700">
         <div className="max-w-2xl mx-auto space-y-2">
           <button
             onClick={startRound}

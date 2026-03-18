@@ -212,7 +212,7 @@ export function Stats({ userId, onBack }: Props) {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 pb-8">
+    <div className="min-h-screen bg-gray-50 dark:bg-gray-900 pb-8">
       <header className="app-header text-white px-4 py-4 sticky top-0 z-10 shadow-xl flex items-center gap-3">
         <button onClick={onBack} className="w-10 h-10 flex items-center justify-center rounded-full hover:bg-gray-600 text-xl" aria-label="Back">←</button>
         <h1 className="text-xl font-bold">Leaderboard</h1>
@@ -231,7 +231,7 @@ export function Stats({ userId, onBack }: Props) {
           </div>
         ) : (
           <>
-            <div className="bg-white rounded-2xl shadow-sm p-4 flex gap-3">
+            <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-sm p-4 flex gap-3">
               <div className="flex-1 text-center">
                 <p className="text-2xl font-bold text-gray-900 font-display">{totalRounds}</p>
                 <p className="text-xs text-gray-500">Rounds</p>
@@ -250,7 +250,7 @@ export function Stats({ userId, onBack }: Props) {
 
             {/* Scoring Distribution */}
             {(scoreDist.eagles + scoreDist.birdies + scoreDist.pars + scoreDist.bogeys + scoreDist.doubles + scoreDist.worse) > 0 && (
-              <section className="bg-white rounded-2xl shadow-sm p-4">
+              <section className="bg-white dark:bg-gray-800 rounded-2xl shadow-sm p-4">
                 <h2 className="font-display font-semibold text-gray-800 text-base mb-3">Scoring Distribution</h2>
                 <div className="grid grid-cols-3 gap-2 text-center">
                   {[
@@ -274,7 +274,7 @@ export function Stats({ userId, onBack }: Props) {
               <h2 className="font-display font-semibold text-gray-800 text-base mb-3">Lifetime Standings</h2>
               <div className="space-y-2">
                 {stats.map((player, i) => (
-                  <div key={player.id} className="bg-white rounded-2xl shadow-sm border border-gray-100 p-4">
+                  <div key={player.id} className="bg-white dark:bg-gray-800 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700 p-4">
                     <div className="flex items-center gap-3">
                       <div className={`w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 font-bold text-sm font-display ${
                         i === 0 ? 'bg-yellow-400 text-yellow-900' :

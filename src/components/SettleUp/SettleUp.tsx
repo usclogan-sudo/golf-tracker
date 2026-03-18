@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState, useCallback } from 'react'
 import { v4 as uuidv4 } from 'uuid'
-import { supabase, rowToRound, rowToRoundPlayer, rowToHoleScore, rowToBuyIn, rowToBBBPoint, rowToJunkRecord, rowToSettlementRecord, settlementRecordToRow, rowToUserProfile } from '../../lib/supabase'
+import { supabase, rowToRound, rowToRoundPlayer, rowToHoleScore, rowToBuyIn, rowToBBBPoint, rowToJunkRecord, rowToSideBet, rowToSettlementRecord, settlementRecordToRow, rowToUserProfile } from '../../lib/supabase'
 import {
   buildCourseHandicaps,
   strokesOnHole,
@@ -15,6 +15,7 @@ import {
   calculateWolfPayouts,
   calculateBBBPayouts,
   calculateJunks,
+  calculateSideBetSettlements,
   buildUnifiedSettlements,
   JUNK_LABELS,
   venmoWebLink,
@@ -23,7 +24,7 @@ import {
   paypalLink,
   fmtMoney,
 } from '../../lib/gameLogic'
-import type { PlayerPayout, JunkResult } from '../../lib/gameLogic'
+import type { PlayerPayout, JunkResult, SideBetSettlement } from '../../lib/gameLogic'
 import type {
   Round,
   RoundPlayer,
@@ -37,6 +38,7 @@ import type {
   NassauConfig,
   WolfConfig,
   GameType,
+  SideBet,
   SettlementRecord,
   UserProfile,
 } from '../../types'
@@ -156,6 +158,7 @@ export function SettleUp({ roundId, userId, onDone, onContinue }: Props) {
   const [buyIns, setBuyIns] = useState<BuyIn[]>([])
   const [bbbPoints, setBbbPoints] = useState<BBBPoint[]>([])
   const [junkRecords, setJunkRecords] = useState<JunkRecord[]>([])
+  const [sideBets, setSideBets] = useState<SideBet[]>([])
   const [settlementRecords, setSettlementRecords] = useState<SettlementRecord[]>([])
   const [profileMap, setProfileMap] = useState<Map<string, UserProfile>>(new Map())
   const [participantMap, setParticipantMap] = useState<Map<string, string>>(new Map()) // playerId → userId
@@ -170,15 +173,17 @@ export function SettleUp({ roundId, userId, onDone, onContinue }: Props) {
       supabase.from('buy_ins').select('*').eq('round_id', roundId),
       supabase.from('bbb_points').select('*').eq('round_id', roundId),
       supabase.from('junk_records').select('*').eq('round_id', roundId),
+      supabase.from('side_bets').select('*').eq('round_id', roundId),
       supabase.from('settlements').select('*').eq('round_id', roundId),
       supabase.from('round_participants').select('*').eq('round_id', roundId),
-    ]).then(([roundRes, rpRes, hsRes, biRes, bbbRes, junkRes, settlRes, partRes]) => {
+    ]).then(([roundRes, rpRes, hsRes, biRes, bbbRes, junkRes, sbRes, settlRes, partRes]) => {
       if (roundRes.data) setRound(rowToRound(roundRes.data))
       if (rpRes.data) setRoundPlayers(rpRes.data.map(rowToRoundPlayer))
       if (hsRes.data) setHoleScores(hsRes.data.map(rowToHoleScore))
       if (biRes.data) setBuyIns(biRes.data.map(rowToBuyIn))
       if (bbbRes.data) setBbbPoints(bbbRes.data.map(rowToBBBPoint))
       if (junkRes.data) setJunkRecords(junkRes.data.map(rowToJunkRecord))
+      if (sbRes.data) setSideBets(sbRes.data.map(rowToSideBet))
       if (settlRes.data) setSettlementRecords(settlRes.data.map(rowToSettlementRecord))
 
       // Build participant map: playerId → userId
@@ -254,6 +259,10 @@ export function SettleUp({ roundId, userId, onDone, onContinue }: Props) {
     return calculateJunks(players, junkRecords, round.junkConfig)
   }, [round?.junkConfig, players, junkRecords])
 
+  const sideBetSettlements = useMemo((): SideBetSettlement[] => {
+    return calculateSideBetSettlements(sideBets)
+  }, [sideBets])
+
   const payouts = useMemo((): PlayerPayout[] => {
     if (!game || !snapshot) return []
     if (game.type === 'skins' && skinsResult) {
@@ -282,10 +291,10 @@ export function SettleUp({ roundId, userId, onDone, onContinue }: Props) {
     // If DB already has settlements for this round, use those
     if (settlementRecords.length > 0) return
 
-    // No payouts and no junk → nothing to settle
-    if (payouts.length === 0 && !junkResult) return
+    // No payouts and no junk and no side bets → nothing to settle
+    if (payouts.length === 0 && !junkResult && sideBetSettlements.length === 0) return
 
-    const unified = buildUnifiedSettlements(payouts, treasurerId, junkResult)
+    const unified = buildUnifiedSettlements(payouts, treasurerId, junkResult, sideBetSettlements)
     if (unified.length === 0) return
 
     const records: SettlementRecord[] = unified.map(s => ({
@@ -301,7 +310,7 @@ export function SettleUp({ roundId, userId, onDone, onContinue }: Props) {
 
     setSettlementRecords(records)
     await supabase.from('settlements').insert(records.map(r => settlementRecordToRow(r, userId)))
-  }, [treasurerId, userId, settlementsInitialized, settlementRecords.length, payouts, junkResult, roundId])
+  }, [treasurerId, userId, settlementsInitialized, settlementRecords.length, payouts, junkResult, sideBetSettlements, roundId])
 
   useEffect(() => {
     if (!loading && round && game && snapshot) {
@@ -339,7 +348,7 @@ export function SettleUp({ roundId, userId, onDone, onContinue }: Props) {
   }
 
   if (loading || !round || !game || !snapshot) {
-    return <div className="min-h-screen bg-gray-50 flex items-center justify-center"><p className="text-gray-400">Loading…</p></div>
+    return <div className="min-h-screen bg-gray-50 dark:bg-gray-900 flex items-center justify-center"><p className="text-gray-400">Loading…</p></div>
   }
 
   const gameLabel = GAME_LABELS[game.type] ?? game.type
@@ -351,7 +360,7 @@ export function SettleUp({ roundId, userId, onDone, onContinue }: Props) {
   const allSettled = settlementRecords.length > 0 && owedSettlements.length === 0
 
   return (
-    <div className="min-h-screen bg-gray-50 pb-32">
+    <div className="min-h-screen bg-gray-50 dark:bg-gray-900 pb-32">
       <header className={`${headerClass} text-white px-4 py-5 sticky top-0 z-10 shadow-xl`}>
         <div className="max-w-2xl mx-auto">
           <h1 className="text-2xl font-bold flex items-center gap-2">
@@ -377,7 +386,7 @@ export function SettleUp({ roundId, userId, onDone, onContinue }: Props) {
         )}
 
         {buyIns.length > 0 && (
-          <section className="bg-white rounded-2xl shadow-sm p-4 space-y-3">
+          <section className="bg-white dark:bg-gray-800 rounded-2xl shadow-sm p-4 space-y-3">
             <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Buy-In Status</p>
             {isTreasurer && unpaidBuyIns.length > 0 && (
               <div className="bg-red-50 border border-red-200 rounded-xl p-3">
@@ -473,7 +482,7 @@ export function SettleUp({ roundId, userId, onDone, onContinue }: Props) {
           const bestNet = Math.min(...board.map(b => b.net))
 
           return (
-            <section className="bg-white rounded-2xl shadow-sm p-4 space-y-3">
+            <section className="bg-white dark:bg-gray-800 rounded-2xl shadow-sm p-4 space-y-3">
               <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Scoreboard</p>
               <div className="overflow-x-auto -mx-2">
                 <table className="w-full text-sm">
@@ -510,7 +519,7 @@ export function SettleUp({ roundId, userId, onDone, onContinue }: Props) {
 
         {/* ── Skins Results ── */}
         {skinsResult && (
-          <section className="bg-white rounded-2xl shadow-sm p-4 space-y-3">
+          <section className="bg-white dark:bg-gray-800 rounded-2xl shadow-sm p-4 space-y-3">
             <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">
               Skins Results · {skinsResult.totalSkins} skin{skinsResult.totalSkins !== 1 ? 's' : ''} won
             </p>
@@ -534,7 +543,7 @@ export function SettleUp({ roundId, userId, onDone, onContinue }: Props) {
 
         {/* ── Best Ball Results ── */}
         {bestBallResult && (
-          <section className="bg-white rounded-2xl shadow-sm p-4 space-y-3">
+          <section className="bg-white dark:bg-gray-800 rounded-2xl shadow-sm p-4 space-y-3">
             <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Best Ball Results</p>
             <div className="grid grid-cols-3 gap-2 text-center">
               <div className="bg-blue-50 rounded-xl p-3"><p className="text-xs text-blue-600 font-medium">Team A</p><p className="text-2xl font-bold text-blue-800">{bestBallResult.holesWon.A}</p><p className="text-xs text-blue-500">holes</p></div>
@@ -562,7 +571,7 @@ export function SettleUp({ roundId, userId, onDone, onContinue }: Props) {
 
         {/* ── Nassau Results ── */}
         {nassauResult && (
-          <section className="bg-white rounded-2xl shadow-sm p-4 space-y-3">
+          <section className="bg-white dark:bg-gray-800 rounded-2xl shadow-sm p-4 space-y-3">
             <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Nassau Results</p>
             {[
               { label: `Front (${nassauResult.front.holeRange})`, seg: nassauResult.front },
@@ -596,7 +605,7 @@ export function SettleUp({ roundId, userId, onDone, onContinue }: Props) {
 
         {/* ── Wolf Results ── */}
         {wolfResult && (
-          <section className="bg-white rounded-2xl shadow-sm p-4 space-y-3">
+          <section className="bg-white dark:bg-gray-800 rounded-2xl shadow-sm p-4 space-y-3">
             <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Wolf Results — Net Units</p>
             <div className="space-y-2">
               {players
@@ -619,7 +628,7 @@ export function SettleUp({ roundId, userId, onDone, onContinue }: Props) {
 
         {/* ── BBB Results ── */}
         {bbbResult && (
-          <section className="bg-white rounded-2xl shadow-sm p-4 space-y-3">
+          <section className="bg-white dark:bg-gray-800 rounded-2xl shadow-sm p-4 space-y-3">
             <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">
               Bingo Bango Bongo — {bbbResult.totalPoints} total points
             </p>
@@ -644,7 +653,7 @@ export function SettleUp({ roundId, userId, onDone, onContinue }: Props) {
 
         {/* ── Junk Details (informational tallies) ── */}
         {junkResult && round?.junkConfig && (
-          <section className="bg-white rounded-2xl shadow-sm p-4 space-y-3">
+          <section className="bg-white dark:bg-gray-800 rounded-2xl shadow-sm p-4 space-y-3">
             <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">
               Junk Side Bets — {fmtMoney(round.junkConfig.valueCents)}/junk
             </p>
@@ -678,9 +687,38 @@ export function SettleUp({ roundId, userId, onDone, onContinue }: Props) {
           </section>
         )}
 
+        {/* ── Side Bets Summary ── */}
+        {sideBets.filter(sb => sb.status === 'resolved').length > 0 && (
+          <section className="bg-white dark:bg-gray-800 rounded-2xl shadow-sm p-4 space-y-3">
+            <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">
+              Side Bets — {sideBets.filter(sb => sb.status === 'resolved').length} resolved
+            </p>
+            <div className="space-y-2">
+              {sideBets.filter(sb => sb.status === 'resolved').map(bet => {
+                const winnerName = bet.winnerPlayerId ? playerById(bet.winnerPlayerId)?.name : '?'
+                const losers = bet.participants.filter(id => id !== bet.winnerPlayerId)
+                return (
+                  <div key={bet.id} className="bg-amber-50 rounded-xl p-3">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <p className="font-semibold text-gray-800 text-sm">{bet.description}</p>
+                        <p className="text-xs text-gray-500">Hole {bet.holeNumber} · {fmtMoney(bet.amountCents)}/loser</p>
+                      </div>
+                      <span className="text-sm font-bold text-amber-700">🏆 {winnerName}</span>
+                    </div>
+                    <p className="text-xs text-gray-500 mt-1">
+                      {losers.map(id => playerById(id)?.name).join(', ')} → {winnerName}
+                    </p>
+                  </div>
+                )
+              })}
+            </div>
+          </section>
+        )}
+
         {/* ── Winners / Payouts ── */}
         {payouts.length > 0 && (
-          <section className="bg-white rounded-2xl shadow-sm p-4 space-y-3">
+          <section className="bg-white dark:bg-gray-800 rounded-2xl shadow-sm p-4 space-y-3">
             <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Winners</p>
             <div className="space-y-2">
               {payouts.map(payout => {
@@ -698,7 +736,7 @@ export function SettleUp({ roundId, userId, onDone, onContinue }: Props) {
 
         {/* ── Unified Settlements (game + junk) with Mark Paid ── */}
         {settlementRecords.length > 0 && (
-          <section className="bg-white rounded-2xl shadow-sm p-4 space-y-4">
+          <section className="bg-white dark:bg-gray-800 rounded-2xl shadow-sm p-4 space-y-4">
             <div>
               <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Settlements</p>
               <p className="text-sm text-gray-500 mt-1">
@@ -721,9 +759,9 @@ export function SettleUp({ roundId, userId, onDone, onContinue }: Props) {
                       <div className="flex items-center gap-2 mt-0.5">
                         {s.reason && <p className="text-xs text-gray-500">{s.reason}</p>}
                         <span className={`text-xs font-semibold px-1.5 py-0.5 rounded ${
-                          s.source === 'junk' ? 'bg-indigo-100 text-indigo-700' : 'bg-blue-100 text-blue-700'
+                          s.source === 'side_bet' ? 'bg-amber-100 text-amber-700' : s.source === 'junk' ? 'bg-indigo-100 text-indigo-700' : 'bg-blue-100 text-blue-700'
                         }`}>
-                          {s.source === 'junk' ? 'Junk' : 'Game'}
+                          {s.source === 'side_bet' ? 'Side Bet' : s.source === 'junk' ? 'Junk' : 'Game'}
                         </span>
                       </div>
                     </div>
@@ -778,7 +816,7 @@ export function SettleUp({ roundId, userId, onDone, onContinue }: Props) {
 
         {/* Payment Directory */}
         {enrichedPlayers.some(p => p.venmoUsername || p.zelleIdentifier || p.cashAppUsername || p.paypalEmail) && (
-          <section className="bg-white rounded-2xl shadow-sm p-4 space-y-3">
+          <section className="bg-white dark:bg-gray-800 rounded-2xl shadow-sm p-4 space-y-3">
             <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Payment Directory</p>
             <div className="space-y-2">
               {enrichedPlayers.map(p => {
@@ -800,7 +838,7 @@ export function SettleUp({ roundId, userId, onDone, onContinue }: Props) {
         )}
       </div>
 
-      <div className="fixed bottom-0 inset-x-0 p-4 bg-white/95 backdrop-blur-sm border-t border-gray-200 safe-bottom">
+      <div className="fixed bottom-0 inset-x-0 p-4 bg-white/95 dark:bg-gray-800/95 backdrop-blur-sm border-t border-gray-200 dark:border-gray-700 safe-bottom">
         <div className="max-w-2xl mx-auto flex gap-3">
           <button onClick={onContinue} className="flex-1 h-14 border-2 border-gray-200 text-gray-600 font-semibold rounded-2xl active:bg-gray-50">← Back to Scores</button>
           <button onClick={onDone} className="flex-1 h-14 bg-gray-800 text-white text-lg font-bold rounded-2xl active:bg-gray-900 transition-colors">✓ Done</button>

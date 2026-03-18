@@ -90,7 +90,14 @@ export function CourseCatalog({ userId, onDone, onAddCustom, onPrefillCourse }: 
   const [apiImporting, setApiImporting] = useState<string | null>(null)
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
-  // Debounced API search
+  const searchRef = useRef<HTMLInputElement>(null)
+
+  // Auto-focus search on mount
+  useEffect(() => {
+    searchRef.current?.focus()
+  }, [])
+
+  // Debounced API search (reduced to 300ms)
   const doApiSearch = useCallback((q: string) => {
     if (debounceRef.current) clearTimeout(debounceRef.current)
     if (!q.trim() || q.trim().length < 2) {
@@ -103,7 +110,7 @@ export function CourseCatalog({ userId, onDone, onAddCustom, onPrefillCourse }: 
       const results = await searchCourses(q.trim())
       setApiResults(results)
       setApiSearching(false)
-    }, 500)
+    }, 300)
   }, [])
 
   // Cleanup debounce on unmount
@@ -211,7 +218,7 @@ export function CourseCatalog({ userId, onDone, onAddCustom, onPrefillCourse }: 
   const hasApiKey = !!(import.meta.env.VITE_GOLF_COURSE_API_KEY as string)
 
   return (
-    <div className="min-h-screen bg-gray-50 pb-28">
+    <div className="min-h-screen bg-gray-50 dark:bg-gray-900 pb-28">
       <header className="app-header text-white px-4 py-4 sticky top-0 z-10 shadow-xl flex items-center gap-3">
         <button
           onClick={onDone}
@@ -228,11 +235,12 @@ export function CourseCatalog({ userId, onDone, onAddCustom, onPrefillCourse }: 
         <div className="relative">
           <span className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 text-lg">🔍</span>
           <input
+            ref={searchRef}
             type="text"
             placeholder={hasApiKey ? "Search 30,000+ courses…" : "Search courses or city…"}
             value={query}
             onChange={e => handleQueryChange(e.target.value)}
-            className="w-full h-12 pl-11 pr-4 rounded-2xl border border-gray-200 bg-white text-base focus:outline-none focus:ring-2 focus:ring-amber-500 shadow-sm"
+            className="w-full h-12 pl-11 pr-4 rounded-2xl border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-700 dark:text-gray-100 text-base focus:outline-none focus:ring-2 focus:ring-amber-500 shadow-sm"
           />
         </div>
 
@@ -242,17 +250,31 @@ export function CourseCatalog({ userId, onDone, onAddCustom, onPrefillCourse }: 
           </div>
         )}
 
-        {/* API Search Results */}
+        {/* Search-first empty state */}
+        {hasApiKey && !query.trim() && (
+          <div className="text-center py-8">
+            <p className="text-4xl mb-3">🌐</p>
+            <p className="text-gray-600 dark:text-gray-300 font-semibold">Search 30,000+ courses</p>
+            <p className="text-gray-400 dark:text-gray-500 text-sm mt-1">Type a course name, city, or state to search</p>
+          </div>
+        )}
+
+        {/* API Search Results (shown first when searching) */}
         {hasApiKey && query.trim().length >= 2 && (
           <section>
-            <h2 className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2 px-1 flex items-center gap-2">
+            <h2 className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-2 px-1 flex items-center gap-2">
               Search Results
               {apiSearching && (
                 <span className="w-3 h-3 border border-amber-500 border-t-transparent rounded-full animate-spin inline-block" />
               )}
             </h2>
             {!apiSearching && apiResults.length === 0 && (
-              <p className="text-sm text-gray-400 px-1 mb-3">No courses found</p>
+              <div className="text-center py-6">
+                <p className="text-sm text-gray-400 dark:text-gray-500 mb-2">No courses found for "{query}"</p>
+                <button onClick={onAddCustom} className="text-sm text-amber-600 font-semibold underline">
+                  Don't see your course? Create it manually
+                </button>
+              </div>
             )}
             <div className="space-y-2">
               {apiResults.map(result => {
@@ -263,20 +285,20 @@ export function CourseCatalog({ userId, onDone, onAddCustom, onPrefillCourse }: 
                     key={result.id}
                     onClick={() => handleApiImport(result)}
                     disabled={isImporting || isAdded}
-                    className={`w-full bg-white rounded-2xl shadow-sm border text-left px-4 py-4 flex items-center gap-4 transition-all
-                      ${isAdded ? 'border-amber-300 bg-amber-50' : 'border-gray-100 active:bg-gray-50'}
+                    className={`w-full bg-white dark:bg-gray-800 rounded-2xl shadow-sm border text-left px-4 py-4 flex items-center gap-4 transition-all
+                      ${isAdded ? 'border-amber-300 bg-amber-50 dark:bg-amber-900/30' : 'border-gray-100 dark:border-gray-700 active:bg-gray-50 dark:active:bg-gray-700'}
                       ${isImporting ? 'opacity-70' : ''}
                     `}
                   >
                     <div className={`w-12 h-12 rounded-xl flex items-center justify-center flex-shrink-0 text-xl
-                      ${isAdded ? 'bg-amber-100' : 'bg-blue-50'}`}>
+                      ${isAdded ? 'bg-amber-100' : 'bg-blue-50 dark:bg-blue-900/30'}`}>
                       {isAdded ? '✓' : '🌐'}
                     </div>
                     <div className="flex-1 min-w-0">
-                      <p className={`font-semibold text-sm leading-tight ${isAdded ? 'text-green-800' : 'text-gray-900'}`}>
+                      <p className={`font-semibold text-sm leading-tight ${isAdded ? 'text-green-800' : 'text-gray-900 dark:text-gray-100'}`}>
                         {result.name}
                       </p>
-                      <p className="text-xs text-gray-500 mt-0.5">
+                      <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
                         {[result.city, result.state].filter(Boolean).join(', ')}
                         {result.teeCount > 0 && ` · ${result.teeCount} tees`}
                       </p>
@@ -295,14 +317,15 @@ export function CourseCatalog({ userId, onDone, onAddCustom, onPrefillCourse }: 
           </section>
         )}
 
-        {/* Featured Courses (local catalog) */}
+        {/* Local Courses (shown as subsection when API key present, primary when not) */}
+        {(!hasApiKey || query.trim()) && (
         <section>
-          <h2 className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2 px-1">
-            {query.trim() ? 'Local Courses' : 'Featured Courses'}
+          <h2 className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-2 px-1">
+            {hasApiKey ? 'Local Courses' : query.trim() ? 'Matching Courses' : 'Featured Courses'}
           </h2>
 
           {filtered.length === 0 && (
-            <div className="text-center py-8 text-gray-500">
+            <div className="text-center py-8 text-gray-500 dark:text-gray-400">
               <p className="text-3xl mb-2">⛳</p>
               <p className="font-medium">No local courses match "{query}"</p>
             </div>
@@ -356,14 +379,22 @@ export function CourseCatalog({ userId, onDone, onAddCustom, onPrefillCourse }: 
             </div>
           ))}
         </section>
+        )}
 
-        <p className="text-center text-xs text-gray-400 py-2">
+        {!hasApiKey && (
+          <div className="bg-blue-50 dark:bg-blue-900/20 rounded-2xl px-4 py-3 text-center">
+            <p className="text-blue-700 dark:text-blue-300 text-sm font-medium">Want access to 30,000+ courses?</p>
+            <p className="text-blue-500 dark:text-blue-400 text-xs mt-0.5">Set up a Golf Course API key for full search</p>
+          </div>
+        )}
+
+        <p className="text-center text-xs text-gray-400 dark:text-gray-500 py-2">
           Ratings sourced from USGA/Greenskeeper.org · Verify before posting handicap rounds
         </p>
       </div>
 
       {/* Add Custom Course button */}
-      <div className="fixed bottom-0 inset-x-0 p-4 bg-white/95 backdrop-blur-sm border-t border-gray-200">
+      <div className="fixed bottom-0 inset-x-0 p-4 bg-white/95 dark:bg-gray-800/95 backdrop-blur-sm border-t border-gray-200 dark:border-gray-700">
         <div className="max-w-2xl mx-auto">
           <button
             onClick={onAddCustom}

@@ -109,19 +109,19 @@ export function CourseSetup({ userId, course: editCourse, onSave, onCancel, init
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 pb-28">
+    <div className="min-h-screen bg-gray-50 dark:bg-gray-900 pb-28">
       <header className="app-header text-white px-4 py-4 sticky top-0 z-10 shadow-xl flex items-center gap-3">
         <button onClick={onCancel} className="w-10 h-10 flex items-center justify-center rounded-full hover:bg-gray-600 text-xl" aria-label="Back">←</button>
         <h1 className="text-xl font-bold">{editCourse ? 'Edit Course' : 'New Course'}</h1>
       </header>
       <div className="px-4 py-5 max-w-2xl mx-auto space-y-5">
-        <section className="bg-white rounded-2xl shadow-sm p-4">
+        <section className="bg-white dark:bg-gray-800 rounded-2xl shadow-sm p-4">
           <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Course Name</label>
           <input type="text" placeholder="e.g. Pebble Beach Golf Links" value={name} onChange={e => setName(e.target.value)}
             className={`w-full h-12 px-4 rounded-xl border text-base focus:outline-none focus:ring-2 focus:ring-amber-500 ${errors.name ? 'border-red-400 bg-red-50' : 'border-gray-300'}`} />
           {errors.name && <p className="text-red-500 text-sm mt-1">{errors.name}</p>}
         </section>
-        <section className="bg-white rounded-2xl shadow-sm p-4">
+        <section className="bg-white dark:bg-gray-800 rounded-2xl shadow-sm p-4">
           <div className="flex items-center justify-between mb-3">
             <h2 className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Tees</h2>
             <button onClick={addTee} className="bg-gray-800 text-white text-sm px-4 h-9 rounded-lg font-semibold active:bg-gray-900">+ Add Tee</button>
@@ -156,7 +156,7 @@ export function CourseSetup({ userId, course: editCourse, onSave, onCancel, init
             ))}
           </div>
         </section>
-        <section className="bg-white rounded-2xl shadow-sm p-4">
+        <section className="bg-white dark:bg-gray-800 rounded-2xl shadow-sm p-4">
           <div className="flex items-center justify-between mb-3">
             <h2 className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Holes</h2>
             <div className="flex gap-1.5">
@@ -260,7 +260,7 @@ export function CourseSetup({ userId, course: editCourse, onSave, onCancel, init
         </section>
         {errors.save && <p className="text-red-500 text-sm text-center">{errors.save}</p>}
       </div>
-      <div className="fixed bottom-0 inset-x-0 p-4 bg-white/95 backdrop-blur-sm border-t border-gray-200">
+      <div className="fixed bottom-0 inset-x-0 p-4 bg-white/95 dark:bg-gray-800/95 backdrop-blur-sm border-t border-gray-200 dark:border-gray-700">
         <div className="max-w-2xl mx-auto">
           <button onClick={handleSave} disabled={saving}
             className="w-full h-14 bg-gray-800 text-white text-lg font-bold rounded-2xl shadow-lg disabled:opacity-60 active:bg-gray-900 transition-colors">

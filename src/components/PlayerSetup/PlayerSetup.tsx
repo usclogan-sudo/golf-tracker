@@ -71,7 +71,7 @@ export function PlayerSetup({ userId, player, onSave, onCancel, onDelete }: Prop
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 pb-28">
+    <div className="min-h-screen bg-gray-50 dark:bg-gray-900 pb-28">
       <header className="app-header text-white px-4 py-4 sticky top-0 z-10 shadow-xl flex items-center gap-3">
         <button
           onClick={onCancel}
@@ -84,7 +84,7 @@ export function PlayerSetup({ userId, player, onSave, onCancel, onDelete }: Prop
       </header>
 
       <div className="px-4 py-5 max-w-2xl mx-auto space-y-4">
-        <section className="bg-white rounded-2xl shadow-sm p-4 space-y-4">
+        <section className="bg-white dark:bg-gray-800 rounded-2xl shadow-sm p-4 space-y-4">
           <div>
             <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">
               Name
@@ -131,7 +131,7 @@ export function PlayerSetup({ userId, player, onSave, onCancel, onDelete }: Prop
                 placeholder="e.g. White"
                 value={tee}
                 onChange={e => setTee(e.target.value)}
-                className="w-full h-12 px-4 rounded-xl border border-gray-300 text-base focus:outline-none focus:ring-2 focus:ring-amber-500"
+                className="w-full h-12 px-4 rounded-xl border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 text-base focus:outline-none focus:ring-2 focus:ring-amber-500"
               />
             </div>
           </div>
@@ -154,7 +154,7 @@ export function PlayerSetup({ userId, player, onSave, onCancel, onDelete }: Prop
           </div>
         </section>
 
-        <section className="bg-white rounded-2xl shadow-sm p-4 space-y-4">
+        <section className="bg-white dark:bg-gray-800 rounded-2xl shadow-sm p-4 space-y-4">
           <h2 className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Payment Methods</h2>
 
           <div>
@@ -164,7 +164,7 @@ export function PlayerSetup({ userId, player, onSave, onCancel, onDelete }: Prop
               placeholder="e.g. @username"
               value={venmo}
               onChange={e => setVenmo(e.target.value)}
-              className="w-full h-12 px-4 rounded-xl border border-gray-300 text-base focus:outline-none focus:ring-2 focus:ring-amber-500"
+              className="w-full h-12 px-4 rounded-xl border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 text-base focus:outline-none focus:ring-2 focus:ring-amber-500"
             />
           </div>
 
@@ -175,7 +175,7 @@ export function PlayerSetup({ userId, player, onSave, onCancel, onDelete }: Prop
               placeholder="e.g. john@email.com or 555-1234"
               value={zelle}
               onChange={e => setZelle(e.target.value)}
-              className="w-full h-12 px-4 rounded-xl border border-gray-300 text-base focus:outline-none focus:ring-2 focus:ring-amber-500"
+              className="w-full h-12 px-4 rounded-xl border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 text-base focus:outline-none focus:ring-2 focus:ring-amber-500"
             />
           </div>
 
@@ -186,7 +186,7 @@ export function PlayerSetup({ userId, player, onSave, onCancel, onDelete }: Prop
               placeholder="e.g. $username"
               value={cashApp}
               onChange={e => setCashApp(e.target.value)}
-              className="w-full h-12 px-4 rounded-xl border border-gray-300 text-base focus:outline-none focus:ring-2 focus:ring-amber-500"
+              className="w-full h-12 px-4 rounded-xl border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 text-base focus:outline-none focus:ring-2 focus:ring-amber-500"
             />
           </div>
 
@@ -197,12 +197,12 @@ export function PlayerSetup({ userId, player, onSave, onCancel, onDelete }: Prop
               placeholder="e.g. john@email.com"
               value={paypal}
               onChange={e => setPaypal(e.target.value)}
-              className="w-full h-12 px-4 rounded-xl border border-gray-300 text-base focus:outline-none focus:ring-2 focus:ring-amber-500"
+              className="w-full h-12 px-4 rounded-xl border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 text-base focus:outline-none focus:ring-2 focus:ring-amber-500"
             />
           </div>
         </section>
 
-        <section className="bg-white rounded-2xl shadow-sm p-4 space-y-3">
+        <section className="bg-white dark:bg-gray-800 rounded-2xl shadow-sm p-4 space-y-3">
           <h2 className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Visibility</h2>
           <button
             onClick={() => setIsPublic(v => !v)}
@@ -221,7 +221,7 @@ export function PlayerSetup({ userId, player, onSave, onCancel, onDelete }: Prop
         {errors.save && <p className="text-red-500 text-sm text-center">{errors.save}</p>}
 
         {player && onDelete && (
-          <section className="bg-white rounded-2xl shadow-sm p-4 border border-red-200">
+          <section className="bg-white dark:bg-gray-800 rounded-2xl shadow-sm p-4 border border-red-200">
             <button
               onClick={() => {
                 if (window.confirm(`Delete ${player.name}? This cannot be undone.`)) onDelete()
@@ -234,7 +234,7 @@ export function PlayerSetup({ userId, player, onSave, onCancel, onDelete }: Prop
         )}
       </div>
 
-      <div className="fixed bottom-0 inset-x-0 p-4 bg-white/95 backdrop-blur-sm border-t border-gray-200">
+      <div className="fixed bottom-0 inset-x-0 p-4 bg-white/95 dark:bg-gray-800/95 backdrop-blur-sm border-t border-gray-200 dark:border-gray-700">
         <div className="max-w-2xl mx-auto">
           <button
             onClick={handleSave}

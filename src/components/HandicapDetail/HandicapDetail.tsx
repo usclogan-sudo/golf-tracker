@@ -1,6 +1,7 @@
 import { useEffect, useState, useMemo } from 'react'
 import { supabase, rowToRound, rowToHoleScore, rowToRoundPlayer } from '../../lib/supabase'
 import { calcScoreDifferential, calcHandicapIndex } from '../../lib/handicap'
+import { HandicapChart } from '../HandicapChart'
 import type { Round, HoleScore, RoundPlayer, UserProfile } from '../../types'
 
 interface Props {
@@ -102,20 +103,49 @@ export function HandicapDetail({ userId, userProfile, onBack }: Props) {
   const hasManualOverride = userProfile?.handicapIndex != null
   const displayIndex = hasManualOverride ? userProfile!.handicapIndex! : handicapResult?.index ?? null
 
+  // Historical handicap indices for chart (compute at each step oldest→newest)
+  const historicalIndices = useMemo(() => {
+    const withDiff = roundEntries
+      .filter(e => e.differential !== null)
+      .slice()
+      .reverse() // oldest first
+    const points: { date: Date; index: number }[] = []
+    for (let i = 2; i < withDiff.length; i++) {
+      const diffs = withDiff.slice(0, i + 1).reverse().map(e => e.differential!)
+      const result = calcHandicapIndex(diffs)
+      if (result) {
+        points.push({ date: withDiff[i].date, index: result.index })
+      }
+    }
+    return points
+  }, [roundEntries])
+
+  // Trend indicator
+  const trend = useMemo(() => {
+    if (historicalIndices.length < 2) return null
+    const current = historicalIndices[historicalIndices.length - 1].index
+    const compareIdx = Math.max(0, historicalIndices.length - 6) // ~5 rounds ago
+    const previous = historicalIndices[compareIdx].index
+    const diff = current - previous
+    if (Math.abs(diff) < 0.2) return { label: 'Steady', arrow: '→', color: 'text-gray-500' }
+    if (diff < 0) return { label: 'Improving', arrow: '↓', color: 'text-green-600' }
+    return { label: 'Trending up', arrow: '↑', color: 'text-red-500' }
+  }, [historicalIndices])
+
   const last20 = roundEntries.slice(0, 20)
   const bestRound = roundEntries.length > 0 ? roundEntries.reduce((best, e) => e.gross < best.gross ? e : best) : null
   const worstRound = roundEntries.length > 0 ? roundEntries.reduce((worst, e) => e.gross > worst.gross ? e : worst) : null
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+      <div className="min-h-screen bg-gray-50 dark:bg-gray-900 flex items-center justify-center">
         <div className="w-8 h-8 border-2 border-amber-500 border-t-transparent rounded-full animate-spin" />
       </div>
     )
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 pb-8">
+    <div className="min-h-screen bg-gray-50 dark:bg-gray-900 pb-8">
       <header className="app-header text-white px-4 py-4 sticky top-0 z-10 shadow-xl flex items-center gap-3">
         <button onClick={onBack} className="w-10 h-10 flex items-center justify-center rounded-full hover:bg-gray-800 text-xl" aria-label="Back">←</button>
         <h1 className="text-xl font-bold">Handicap</h1>
@@ -123,8 +153,8 @@ export function HandicapDetail({ userId, userProfile, onBack }: Props) {
 
       <div className="px-4 py-5 max-w-2xl mx-auto space-y-4">
         {/* Current Handicap Index */}
-        <section className="bg-white rounded-2xl shadow-sm p-4 text-center">
-          <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">
+        <section className="bg-white dark:bg-gray-800 rounded-2xl shadow-sm p-4 text-center">
+          <p className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-2">
             {hasManualOverride ? 'Manual Handicap Index' : 'Calculated Handicap Index'}
           </p>
           <p className="text-5xl font-bold gold-text font-display">
@@ -157,22 +187,36 @@ export function HandicapDetail({ userId, userProfile, onBack }: Props) {
           )}
         </section>
 
+        {/* Handicap Trend Chart */}
+        {historicalIndices.length >= 2 && (
+          <section className="bg-white dark:bg-gray-800 rounded-2xl shadow-sm p-4 space-y-2">
+            <p className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">Handicap Trend</p>
+            <HandicapChart data={historicalIndices} />
+            {trend && (
+              <div className="flex items-center justify-center gap-2 pt-1">
+                <span className={`text-lg ${trend.color}`}>{trend.arrow}</span>
+                <span className={`text-sm font-semibold ${trend.color}`}>{trend.label}</span>
+              </div>
+            )}
+          </section>
+        )}
+
         {/* Best / Worst */}
         {(bestRound || worstRound) && (
           <div className="grid grid-cols-2 gap-3">
             {bestRound && (
-              <section className="bg-white rounded-2xl shadow-sm p-4">
+              <section className="bg-white dark:bg-gray-800 rounded-2xl shadow-sm p-4">
                 <p className="text-xs font-semibold text-green-600 uppercase tracking-wide mb-1">Best Round</p>
-                <p className="text-2xl font-bold text-gray-800">{bestRound.gross}</p>
-                <p className="text-xs text-gray-500 mt-1">{bestRound.courseName}</p>
+                <p className="text-2xl font-bold text-gray-800 dark:text-gray-100">{bestRound.gross}</p>
+                <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">{bestRound.courseName}</p>
                 <p className="text-xs text-gray-400">{bestRound.date.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}</p>
               </section>
             )}
             {worstRound && (
-              <section className="bg-white rounded-2xl shadow-sm p-4">
+              <section className="bg-white dark:bg-gray-800 rounded-2xl shadow-sm p-4">
                 <p className="text-xs font-semibold text-red-500 uppercase tracking-wide mb-1">Worst Round</p>
-                <p className="text-2xl font-bold text-gray-800">{worstRound.gross}</p>
-                <p className="text-xs text-gray-500 mt-1">{worstRound.courseName}</p>
+                <p className="text-2xl font-bold text-gray-800 dark:text-gray-100">{worstRound.gross}</p>
+                <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">{worstRound.courseName}</p>
                 <p className="text-xs text-gray-400">{worstRound.date.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}</p>
               </section>
             )}
@@ -181,8 +225,8 @@ export function HandicapDetail({ userId, userProfile, onBack }: Props) {
 
         {/* Recent Rounds with Differentials */}
         {last20.length > 0 && (
-          <section className="bg-white rounded-2xl shadow-sm p-4 space-y-3">
-            <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">
+          <section className="bg-white dark:bg-gray-800 rounded-2xl shadow-sm p-4 space-y-3">
+            <p className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">
               Recent Rounds {handicapResult ? `(${handicapResult.usedIndices.length} used for index)` : ''}
             </p>
             <div className="space-y-2">
@@ -193,12 +237,12 @@ export function HandicapDetail({ userId, userProfile, onBack }: Props) {
                   <div
                     key={i}
                     className={`flex items-center justify-between p-3 rounded-xl ${
-                      isUsed ? 'bg-amber-50 border border-amber-200' : 'bg-gray-50'
+                      isUsed ? 'bg-amber-50 dark:bg-amber-900/30 border border-amber-200 dark:border-amber-700' : 'bg-gray-50 dark:bg-gray-700'
                     }`}
                   >
                     <div className="min-w-0 flex-1">
                       <div className="flex items-center gap-2">
-                        <p className="font-semibold text-gray-800 text-sm truncate">{entry.courseName}</p>
+                        <p className="font-semibold text-gray-800 dark:text-gray-100 text-sm truncate">{entry.courseName}</p>
                         {isUsed && (
                           <span className="flex-shrink-0 text-[10px] font-bold text-amber-600 bg-amber-100 px-1.5 py-0.5 rounded-full">
                             USED

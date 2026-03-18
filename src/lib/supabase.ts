@@ -1,5 +1,5 @@
 import { createClient } from '@supabase/supabase-js'
-import type { Course, Player, Round, RoundPlayer, HoleScore, BuyIn, BBBPoint, JunkRecord, JunkType, UserProfile, GamePreset, GameType, StakesMode, PinnedFriend, RoundParticipant, SettlementRecord, SettlementStatus } from '../types'
+import type { Course, Player, Round, RoundPlayer, HoleScore, BuyIn, BBBPoint, JunkRecord, JunkType, UserProfile, GamePreset, GameType, StakesMode, PinnedFriend, RoundParticipant, SettlementRecord, SettlementStatus, AppNotification, NotificationType, SideBet, SideBetStatus, Tournament, TournamentFormat, TournamentStatus, TournamentRound, TournamentMatchup, MatchupStatus } from '../types'
 
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL as string
 const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY as string
@@ -382,5 +382,148 @@ export function rowToPinnedFriend(row: any): PinnedFriend {
   return {
     userId: row.user_id,
     friendUserId: row.friend_user_id,
+  }
+}
+
+// ─── Notification mappers ──────────────────────────────────────────────────
+
+export function rowToNotification(row: any): AppNotification {
+  return {
+    id: row.id,
+    userId: row.user_id,
+    type: row.type as NotificationType,
+    title: row.title,
+    body: row.body ?? undefined,
+    roundId: row.round_id ?? undefined,
+    read: row.read,
+    createdAt: new Date(row.created_at),
+  }
+}
+
+export function notificationToRow(n: AppNotification, userId: string) {
+  return {
+    id: n.id,
+    user_id: userId,
+    type: n.type,
+    title: n.title,
+    body: n.body ?? null,
+    round_id: n.roundId ?? null,
+    read: n.read,
+  }
+}
+
+// ─── Side Bet mappers ──────────────────────────────────────────────────────
+
+export function rowToSideBet(row: any): SideBet {
+  return {
+    id: row.id,
+    roundId: row.round_id,
+    holeNumber: row.hole_number,
+    description: row.description,
+    amountCents: row.amount_cents,
+    participants: row.participants,
+    winnerPlayerId: row.winner_player_id ?? undefined,
+    status: row.status as SideBetStatus,
+    createdAt: new Date(row.created_at),
+  }
+}
+
+export function sideBetToRow(sb: SideBet, userId: string) {
+  return {
+    id: sb.id,
+    user_id: userId,
+    round_id: sb.roundId,
+    hole_number: sb.holeNumber,
+    description: sb.description,
+    amount_cents: sb.amountCents,
+    participants: sb.participants,
+    winner_player_id: sb.winnerPlayerId ?? null,
+    status: sb.status,
+  }
+}
+
+// ─── Tournament mappers ────────────────────────────────────────────────────
+
+export function rowToTournament(row: any): Tournament {
+  return {
+    id: row.id,
+    name: row.name,
+    format: row.format as TournamentFormat,
+    status: row.status as TournamentStatus,
+    courseId: row.course_id ?? undefined,
+    courseSnapshot: row.course_snapshot ?? undefined,
+    playerIds: row.player_ids,
+    config: row.config ?? undefined,
+    createdAt: new Date(row.created_at),
+  }
+}
+
+export function tournamentToRow(t: Tournament, userId: string) {
+  return {
+    id: t.id,
+    user_id: userId,
+    name: t.name,
+    format: t.format,
+    status: t.status,
+    course_id: t.courseId ?? null,
+    course_snapshot: t.courseSnapshot ?? null,
+    player_ids: t.playerIds,
+    config: t.config ?? null,
+  }
+}
+
+export function rowToTournamentRound(row: any): TournamentRound {
+  return {
+    id: row.id,
+    tournamentId: row.tournament_id,
+    roundId: row.round_id ?? undefined,
+    roundNumber: row.round_number,
+    bracketRound: row.bracket_round ?? undefined,
+    status: row.status,
+    createdAt: new Date(row.created_at),
+  }
+}
+
+export function tournamentRoundToRow(tr: TournamentRound, userId: string) {
+  return {
+    id: tr.id,
+    user_id: userId,
+    tournament_id: tr.tournamentId,
+    round_id: tr.roundId ?? null,
+    round_number: tr.roundNumber,
+    bracket_round: tr.bracketRound ?? null,
+    status: tr.status,
+  }
+}
+
+export function rowToTournamentMatchup(row: any): TournamentMatchup {
+  return {
+    id: row.id,
+    tournamentId: row.tournament_id,
+    tournamentRoundId: row.tournament_round_id ?? undefined,
+    bracketRound: row.bracket_round,
+    matchNumber: row.match_number,
+    playerAId: row.player_a_id ?? undefined,
+    playerBId: row.player_b_id ?? undefined,
+    winnerId: row.winner_id ?? undefined,
+    loserBracket: row.loser_bracket,
+    status: row.status as MatchupStatus,
+    createdAt: new Date(row.created_at),
+  }
+}
+
+export function tournamentMatchupToRow(m: TournamentMatchup, userId: string) {
+  return {
+    id: m.id,
+    user_id: userId,
+    tournament_id: m.tournamentId,
+    tournament_round_id: m.tournamentRoundId ?? null,
+    bracket_round: m.bracketRound,
+    match_number: m.matchNumber,
+    player_a_id: m.playerAId ?? null,
+    player_b_id: m.playerBId ?? null,
+    winner_id: m.winnerId ?? null,
+    loser_bracket: m.loserBracket,
+    status: m.status,
   }
 }
