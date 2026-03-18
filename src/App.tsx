@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import type { Session } from '@supabase/supabase-js'
 import { supabase, rowToCourse, rowToRound, rowToHoleScore, fetchOrCreateProfile } from './lib/supabase'
 import { Auth } from './components/Auth/Auth'
+import { JoinRound } from './components/JoinRound/JoinRound'
 import { UpgradeAccount } from './components/Auth/UpgradeAccount'
 import { GuestBanner } from './components/GuestBanner/GuestBanner'
 import { CourseCatalog } from './components/CourseCatalog/CourseCatalog'
@@ -24,7 +25,7 @@ import { CoursesDetail } from './components/CoursesDetail/CoursesDetail'
 import { HandicapDetail } from './components/HandicapDetail/HandicapDetail'
 import type { Course, Round, HoleScore, UserProfile, GameType, StakesMode } from './types'
 
-type Screen = 'home' | 'course-catalog' | 'course-setup' | 'new-round' | 'scorecard' | 'settle-up' | 'round-history' | 'stats' | 'settings' | 'onboarding' | 'admin' | 'upgrade-account' | 'player-directory' | 'rounds-detail' | 'courses-detail' | 'handicap-detail'
+type Screen = 'home' | 'course-catalog' | 'course-setup' | 'new-round' | 'scorecard' | 'settle-up' | 'round-history' | 'stats' | 'settings' | 'onboarding' | 'admin' | 'upgrade-account' | 'player-directory' | 'rounds-detail' | 'courses-detail' | 'handicap-detail' | 'join-round'
 
 const GAME_EMOJI: Record<GameType, string> = {
   skins: '🎰 Skins',
@@ -115,6 +116,7 @@ function Home({
   onRoundsDetail,
   onCoursesDetail,
   onHandicapDetail,
+  onJoinRound,
 }: {
   userId: string
   userProfile: UserProfile | null
@@ -138,11 +140,13 @@ function Home({
   onRoundsDetail: () => void
   onCoursesDetail: () => void
   onHandicapDetail: () => void
+  onJoinRound: (code?: string) => void
 }) {
   const [courses, setCourses] = useState<Course[]>([])
   const [activeRounds, setActiveRounds] = useState<Round[]>([])
   const [participantRounds, setParticipantRounds] = useState<Round[]>([])
   const [roundCount, setRoundCount] = useState(0)
+  const [joinCode, setJoinCode] = useState('')
   const [personalSummary, setPersonalSummary] = useState<{
     totalRounds: number
     lastCourse: string
@@ -154,13 +158,19 @@ function Home({
     supabase.from('courses').select('*').eq('user_id', userId).neq('hidden', true).order('name').then(({ data }) => {
       if (data) setCourses(data.map(rowToCourse))
     })
-    supabase.from('rounds').select('*').eq('status', 'active').then(({ data }) => {
-      if (data) {
-        const all = data.map(rowToRound)
+    // Fetch both owned active rounds and rounds joined as participant
+    Promise.all([
+      supabase.from('rounds').select('*').eq('status', 'active'),
+      supabase.from('round_participants').select('round_id').eq('user_id', userId),
+    ]).then(([roundsRes, partRes]) => {
+      if (roundsRes.data) {
+        const all = roundsRes.data.map(rowToRound)
+        const joinedRoundIds = new Set((partRes.data ?? []).map((p: any) => p.round_id))
         setActiveRounds(all.filter(r => r.createdBy === userId))
         setParticipantRounds(all.filter(r =>
-          r.createdBy !== userId &&
-          r.players?.some(p => p.id === userId)
+          r.createdBy !== userId && (
+            r.players?.some(p => p.id === userId) || joinedRoundIds.has(r.id)
+          )
         ))
       }
     })
@@ -377,6 +387,29 @@ function Home({
         </button>
 
 
+        {/* Join Round */}
+        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-4">
+          <p className="font-display font-semibold text-gray-800 text-sm mb-2">Join a Round</p>
+          <div className="flex gap-2">
+            <input
+              type="text"
+              maxLength={6}
+              placeholder="Enter code"
+              value={joinCode}
+              onChange={e => setJoinCode(e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, ''))}
+              onKeyDown={e => e.key === 'Enter' && joinCode.length === 6 && onJoinRound(joinCode)}
+              className="flex-1 h-11 px-3 text-center font-mono font-bold tracking-widest rounded-xl border border-gray-300 text-sm focus:outline-none focus:ring-2 focus:ring-amber-500 uppercase"
+            />
+            <button
+              onClick={() => onJoinRound(joinCode)}
+              disabled={joinCode.length !== 6}
+              className="h-11 px-5 bg-gray-800 text-white font-bold rounded-xl text-sm disabled:opacity-40 active:bg-gray-900 transition-colors"
+            >
+              Join
+            </button>
+          </div>
+        </div>
+
         <NearMeCourses onAddCourse={(name) => onAddCourse(name)} />
 
         {userProfile?.displayName && (
@@ -447,6 +480,20 @@ export default function App() {
   const [newCourseName, setNewCourseName] = useState('')
   const [scorecardReadOnly, setScorecardReadOnly] = useState(false)
   const [appConfirmModal, setAppConfirmModal] = useState<{ title: string; message: string; onConfirm: () => void; destructive?: boolean } | null>(null)
+  const [pendingJoinCode, setPendingJoinCode] = useState<string | null>(() => {
+    // Check sessionStorage first (survives auth redirect)
+    const stored = sessionStorage.getItem('pendingJoinCode')
+    if (stored) return stored
+    // Check URL param
+    const params = new URLSearchParams(window.location.search)
+    const joinCode = params.get('join')
+    if (joinCode) {
+      sessionStorage.setItem('pendingJoinCode', joinCode)
+      window.history.replaceState({}, '', window.location.pathname)
+      return joinCode
+    }
+    return null
+  })
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => setSession(session))
@@ -474,6 +521,13 @@ export default function App() {
       setProfileLoading(false)
     })
   }, [session])
+
+  // Auto-navigate to join-round when pending invite code exists
+  useEffect(() => {
+    if (pendingJoinCode && userProfile?.onboardingComplete && screen === 'home') {
+      setScreen('join-round')
+    }
+  }, [pendingJoinCode, userProfile?.onboardingComplete])
 
   // Browser back button support: push state on screen change, listen for popstate
   useEffect(() => {
@@ -513,7 +567,7 @@ export default function App() {
 
   // Not signed in
   if (session === null) {
-    return <Auth />
+    return <Auth inviteCode={pendingJoinCode ?? undefined} />
   }
 
   // Loading profile
@@ -549,6 +603,7 @@ export default function App() {
         userId={userId}
         onDone={goHome}
         onAddCustom={() => setScreen('course-setup')}
+        onPrefillCourse={(course) => { setEditingCourse(course); setScreen('course-setup') }}
       />
     )
   }
@@ -572,6 +627,26 @@ export default function App() {
         onAddCourse={() => { setAfterCourseSetup('new-round'); setScreen('course-catalog') }}
         initialStakesMode={newRoundStakesMode}
         templateRound={playAgainRound}
+      />
+    )
+  }
+  if (screen === 'join-round') {
+    return (
+      <JoinRound
+        userId={userId}
+        initialCode={pendingJoinCode ?? undefined}
+        onJoined={(roundId) => {
+          setPendingJoinCode(null)
+          sessionStorage.removeItem('pendingJoinCode')
+          setActiveRoundId(roundId)
+          setScorecardReadOnly(false)
+          setScreen('scorecard')
+        }}
+        onCancel={() => {
+          setPendingJoinCode(null)
+          sessionStorage.removeItem('pendingJoinCode')
+          goHome()
+        }}
       />
     )
   }
@@ -708,10 +783,14 @@ export default function App() {
       isAnonymous={isAnonymous}
       onUpgrade={() => setScreen('upgrade-account')}
       onEndRound={handleEndRound}
-      onViewRound={roundId => { setScorecardReadOnly(true); setActiveRoundId(roundId); setScreen('scorecard') }}
+      onViewRound={roundId => { setScorecardReadOnly(false); setActiveRoundId(roundId); setScreen('scorecard') }}
       onRoundsDetail={() => setScreen('rounds-detail')}
       onCoursesDetail={() => setScreen('courses-detail')}
       onHandicapDetail={() => setScreen('handicap-detail')}
+      onJoinRound={(code) => {
+        if (code) setPendingJoinCode(code)
+        setScreen('join-round')
+      }}
     />
     {appConfirmModal && (
       <ConfirmModal

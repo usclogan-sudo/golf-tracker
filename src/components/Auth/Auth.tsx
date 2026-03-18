@@ -3,7 +3,11 @@ import { supabase } from '../../lib/supabase'
 
 type AuthMode = 'splash' | 'sign-in' | 'sign-up' | 'forgot-password' | 'magic-link'
 
-export function Auth() {
+interface AuthProps {
+  inviteCode?: string
+}
+
+export function Auth({ inviteCode }: AuthProps = {}) {
   const [mode, setMode] = useState<AuthMode>('splash')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
@@ -126,6 +130,13 @@ export function Auth() {
             <h1 className="font-display text-4xl font-800 tracking-tight text-gray-900">Fore Skins</h1>
             <p className="text-amber-600 text-sm font-medium mt-2 tracking-widest uppercase">Golf &middot; Side Games &middot; Money</p>
           </div>
+
+          {inviteCode && (
+            <div className="bg-blue-50 border border-blue-200 rounded-2xl px-4 py-3 text-center">
+              <p className="text-blue-800 font-semibold text-sm">You've been invited to a round!</p>
+              <p className="text-blue-600 text-xs mt-0.5">Sign in or create an account to join.</p>
+            </div>
+          )}
 
           {/* Inline sign-in form */}
           <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-5 space-y-3">

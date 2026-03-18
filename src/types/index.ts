@@ -203,6 +203,19 @@ export interface Round {
 
   // Game master (scorekeeper) — can edit scores alongside round creator
   gameMasterId?: string
+
+  // Invite code for shared scoring
+  inviteCode?: string
+}
+
+// ─── Round Participant ──────────────────────────────────────────────────────
+
+export interface RoundParticipant {
+  id: string
+  roundId: string
+  userId: string
+  playerId: string
+  joinedAt?: Date
 }
 
 // ─── Pinned Friends ─────────────────────────────────────────────────────────

@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { v4 as uuidv4 } from 'uuid'
-import { supabase, rowToRound, rowToRoundPlayer, rowToHoleScore, rowToBBBPoint, rowToJunkRecord, holeScoreToRow, bbbPointToRow, junkRecordToRow } from '../../lib/supabase'
+import { supabase, rowToRound, rowToRoundPlayer, rowToHoleScore, rowToBBBPoint, rowToJunkRecord, rowToRoundParticipant, holeScoreToRow, bbbPointToRow, junkRecordToRow, generateInviteCode } from '../../lib/supabase'
 import { getCelebration, CelebrationToast, CelebrationFullscreen } from '../Celebrations'
 import { ConfirmModal } from '../ConfirmModal'
 import {
@@ -20,6 +20,7 @@ import type {
   BBBPoint,
   JunkRecord,
   JunkType,
+  RoundParticipant,
   SkinsConfig,
   BestBallConfig,
   NassauConfig,
@@ -114,7 +115,9 @@ export function Scorecard({ userId, roundId, onEndRound, onHome, readOnly: readO
   const [holeScores, setHoleScores] = useState<HoleScore[]>([])
   const [bbbPoints, setBbbPoints] = useState<BBBPoint[]>([])
   const [junkRecords, setJunkRecords] = useState<JunkRecord[]>([])
+  const [roundParticipants, setRoundParticipants] = useState<RoundParticipant[]>([])
   const [loading, setLoading] = useState(true)
+  const [inviteToast, setInviteToast] = useState<string | null>(null)
   const [saveError, setSaveError] = useState<string | null>(null)
   const [lastChange, setLastChange] = useState<{ playerId: string; holeNumber: number; previousScore: number } | null>(null)
   const [activeGroupTab, setActiveGroupTab] = useState<number | 'all'>(1)
@@ -129,12 +132,14 @@ export function Scorecard({ userId, roundId, onEndRound, onHome, readOnly: readO
       supabase.from('hole_scores').select('*').eq('round_id', roundId),
       supabase.from('bbb_points').select('*').eq('round_id', roundId),
       supabase.from('junk_records').select('*').eq('round_id', roundId),
-    ]).then(([roundRes, rpRes, hsRes, bbbRes, junkRes]) => {
+      supabase.from('round_participants').select('*').eq('round_id', roundId),
+    ]).then(([roundRes, rpRes, hsRes, bbbRes, junkRes, partRes]) => {
       if (roundRes.data) setRound(rowToRound(roundRes.data))
       if (rpRes.data) setRoundPlayers(rpRes.data.map(rowToRoundPlayer))
       if (hsRes.data) setHoleScores(hsRes.data.map(rowToHoleScore))
       if (bbbRes.data) setBbbPoints(bbbRes.data.map(rowToBBBPoint))
       if (junkRes.data) setJunkRecords(junkRes.data.map(rowToJunkRecord))
+      if (partRes.data) setRoundParticipants(partRes.data.map(rowToRoundParticipant))
       setLoading(false)
     })
   }, [roundId])
@@ -186,6 +191,18 @@ export function Scorecard({ userId, roundId, onEndRound, onHome, readOnly: readO
         const row = payload.new as any
         setRound(rowToRound(row))
       })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'round_participants', filter: `round_id=eq.${roundId}` }, (payload) => {
+        if (payload.eventType === 'INSERT') {
+          const row = payload.new as any
+          setRoundParticipants(prev => prev.some(p => p.id === row.id) ? prev : [...prev, rowToRoundParticipant(row)])
+        } else if (payload.eventType === 'UPDATE') {
+          const row = payload.new as any
+          setRoundParticipants(prev => prev.map(p => p.id === row.id ? rowToRoundParticipant(row) : p))
+        } else if (payload.eventType === 'DELETE') {
+          const row = payload.old as any
+          setRoundParticipants(prev => prev.filter(p => p.id !== row.id))
+        }
+      })
       .subscribe()
 
     return () => { supabase.removeChannel(channel) }
@@ -224,7 +241,22 @@ export function Scorecard({ userId, roundId, onEndRound, onHome, readOnly: readO
     }
 
     try {
-      if (existing) {
+      // Participant self-entry: use RPC so scores are stored with creator's user_id
+      if (selfEntryOnly && myParticipant && playerId === myParticipant.playerId) {
+        if (existing) {
+          setHoleScores(prev => prev.map(s => s.id === existing.id ? { ...s, grossScore } : s))
+        } else {
+          const tempId = uuidv4()
+          setHoleScores(prev => [...prev, { id: tempId, roundId, playerId, holeNumber: currentHole, grossScore }])
+        }
+        const { error } = await supabase.rpc('submit_participant_score', {
+          p_round_id: roundId,
+          p_player_id: playerId,
+          p_hole_number: currentHole,
+          p_gross_score: grossScore,
+        })
+        if (error) throw error
+      } else if (existing) {
         setHoleScores(prev => prev.map(s => s.id === existing.id ? { ...s, grossScore } : s))
         const { error } = await supabase.from('hole_scores').update({ gross_score: grossScore }).eq('id', existing.id)
         if (error) throw error
@@ -376,10 +408,13 @@ export function Scorecard({ userId, roundId, onEndRound, onHome, readOnly: readO
     return prevHole.winnerId === null ? prevHole.carry + 1 : 0
   }, [skinsResult, currentHole])
 
-  // Role-based access: only round creator or game master can edit scores
+  // Role-based access
   const isCreator = userId === round?.createdBy
   const isGameMaster = userId === round?.gameMasterId
-  const readOnly = readOnlyProp || (!isCreator && !isGameMaster)
+  const isScoremasterRole = isCreator || isGameMaster
+  const myParticipant = roundParticipants.find(p => p.userId === userId)
+  const selfEntryOnly = !!myParticipant && !isScoremasterRole
+  const readOnly = readOnlyProp || (!isScoremasterRole && !myParticipant)
 
   const headerClass = game?.stakesMode === 'high_roller' ? 'hr-header' : 'app-header'
 
@@ -402,7 +437,7 @@ export function Scorecard({ userId, roundId, onEndRound, onHome, readOnly: readO
               {snapshot.courseName}
               <span className="inline-flex items-center gap-1 text-[10px] bg-amber-500/30 px-1.5 py-0.5 rounded-full">
                 <span className="w-1.5 h-1.5 bg-amber-400 rounded-full animate-pulse" />
-                {readOnly ? 'Spectating' : 'Live'}
+                {readOnly ? 'Spectating' : selfEntryOnly ? 'Self-Entry' : 'Live'}
               </span>
             </p>
             <h1 className="text-xl font-bold flex items-center gap-2">
@@ -417,7 +452,30 @@ export function Scorecard({ userId, roundId, onEndRound, onHome, readOnly: readO
             </h1>
           </div>
           <div className="flex items-center gap-2">
-            {!readOnly && <button onClick={confirmEndRound} className="text-yellow-300 text-sm font-medium px-3 py-1.5 rounded-lg hover:bg-gray-600">End Round</button>}
+            {isScoremasterRole && (
+              <button
+                onClick={async () => {
+                  let code = round.inviteCode
+                  if (!code) {
+                    code = generateInviteCode()
+                    setRound(prev => prev ? { ...prev, inviteCode: code! } : prev)
+                    await supabase.from('rounds').update({ invite_code: code }).eq('id', roundId)
+                  }
+                  const url = `${window.location.origin}${window.location.pathname}?join=${code}`
+                  if (navigator.share) {
+                    try { await navigator.share({ title: 'Join my round!', text: `Join my round on Fore Skins! Code: ${code}`, url }) } catch {}
+                  } else {
+                    await navigator.clipboard.writeText(url)
+                  }
+                  setInviteToast(`Link copied! Code: ${code}`)
+                  setTimeout(() => setInviteToast(null), 3000)
+                }}
+                className="text-cyan-300 text-sm font-medium px-3 py-1.5 rounded-lg hover:bg-gray-600"
+              >
+                Invite
+              </button>
+            )}
+            {!readOnly && !selfEntryOnly && <button onClick={confirmEndRound} className="text-yellow-300 text-sm font-medium px-3 py-1.5 rounded-lg hover:bg-gray-600">End Round</button>}
             <button onClick={confirmGoHome} className="text-gray-300 text-sm font-medium px-3 py-1.5 rounded-lg hover:bg-gray-600">Home</button>
           </div>
         </div>
@@ -794,7 +852,8 @@ export function Scorecard({ userId, roundId, onEndRound, onHome, readOnly: readO
           const hasGroups = round.groups && Object.keys(round.groups).length > 0
           const groupNums = hasGroups ? [...new Set(Object.values(round.groups!))].sort((a, b) => a - b) : []
           const isInActiveGroup = !hasGroups || groupNums.length <= 1 || activeGroupTab === 'all' || activeGroupTab === playerGroup
-          const isEditable = !readOnly && isInActiveGroup && activeGroupTab !== 'all'
+          const isMyPlayer = selfEntryOnly && myParticipant?.playerId === player.id
+          const isEditable = isMyPlayer || (!readOnly && !selfEntryOnly && isInActiveGroup && activeGroupTab !== 'all')
 
           // Filter out players not in the active group tab (unless showing 'all')
           if (hasGroups && groupNums.length > 1 && activeGroupTab !== 'all' && playerGroup !== activeGroupTab) {
@@ -904,6 +963,15 @@ export function Scorecard({ userId, roundId, onEndRound, onHome, readOnly: readO
           )}
         </div>
       </div>
+
+      {/* Invite toast */}
+      {inviteToast && (
+        <div className="fixed top-20 inset-x-0 z-50 flex justify-center pointer-events-none">
+          <div className="bg-gray-800 text-white px-4 py-2 rounded-xl shadow-lg text-sm font-semibold">
+            {inviteToast}
+          </div>
+        </div>
+      )}
 
       {/* Celebrations */}
       {celebration && celebration.level === 'toast' && (

@@ -1,5 +1,5 @@
 import { createClient } from '@supabase/supabase-js'
-import type { Course, Player, Round, RoundPlayer, HoleScore, BuyIn, BBBPoint, JunkRecord, JunkType, UserProfile, GamePreset, GameType, StakesMode, PinnedFriend } from '../types'
+import type { Course, Player, Round, RoundPlayer, HoleScore, BuyIn, BBBPoint, JunkRecord, JunkType, UserProfile, GamePreset, GameType, StakesMode, PinnedFriend, RoundParticipant } from '../types'
 
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL as string
 const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY as string
@@ -49,6 +49,7 @@ export function rowToRound(row: any): Round {
     groups: row.groups ?? undefined,
     createdBy: row.user_id ?? undefined,
     gameMasterId: row.game_master_id ?? undefined,
+    inviteCode: row.invite_code ?? undefined,
   }
 }
 
@@ -141,6 +142,7 @@ export function roundToRow(r: Round, userId: string) {
     players: r.players ?? null,
     groups: r.groups ?? null,
     game_master_id: r.gameMasterId ?? null,
+    invite_code: r.inviteCode ?? null,
   }
 }
 
@@ -317,6 +319,30 @@ export function sharedCourseToRow(c: Course, userId: string) {
     tees: c.tees,
     holes: c.holes,
   }
+}
+
+// ─── Round Participant mappers ───────────────────────────────────────────────
+
+export function rowToRoundParticipant(row: any): RoundParticipant {
+  return {
+    id: row.id,
+    roundId: row.round_id,
+    userId: row.user_id,
+    playerId: row.player_id,
+    joinedAt: row.joined_at ? new Date(row.joined_at) : undefined,
+  }
+}
+
+// ─── Invite Code Generator ──────────────────────────────────────────────────
+
+const INVITE_CHARS = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789' // no 0/O, 1/I
+
+export function generateInviteCode(): string {
+  let code = ''
+  for (let i = 0; i < 6; i++) {
+    code += INVITE_CHARS[Math.floor(Math.random() * INVITE_CHARS.length)]
+  }
+  return code
 }
 
 // ─── Pinned Friends mappers ──────────────────────────────────────────────────
