@@ -266,26 +266,28 @@ function Home({
               <StatChip label="Handicap" value={userProfile.handicapIndex} accent onClick={onHandicapDetail} />
             )}
           </div>
-          {roundCount > 0 && (
-            <div className="mt-3 flex items-center gap-4">
-              <button onClick={onRoundHistory} className="text-gray-300 text-sm font-medium flex items-center gap-1.5 hover:text-white transition-colors">
-                <span>📋</span> Round History
-                {(notificationCount ?? 0) > 0 && <NotificationBadge count={notificationCount!} />}
-              </button>
-              <button onClick={onStats} className="text-gray-300 text-sm font-medium flex items-center gap-1.5 hover:text-white transition-colors">
-                <span>📊</span> Leaderboard
-              </button>
-              <button onClick={onPlayers} className="text-gray-300 text-sm font-medium flex items-center gap-1.5 hover:text-white transition-colors">
-                <span>🏌️</span> Players
-              </button>
-              <button onClick={onTournaments} className="text-gray-300 text-sm font-medium flex items-center gap-1.5 hover:text-white transition-colors">
-                <span>🏆</span> Tournaments
-              </button>
-              <button onClick={onPersonalDashboard} className="text-gray-300 text-sm font-medium flex items-center gap-1.5 hover:text-white transition-colors">
-                <span>📈</span> My Stats
-              </button>
-            </div>
-          )}
+          <div className="mt-3 flex items-center gap-4">
+            <button onClick={onPersonalDashboard} className="text-gray-300 text-sm font-medium flex items-center gap-1.5 hover:text-white transition-colors">
+              <span>📈</span> My Stats
+            </button>
+            {roundCount > 0 && (
+              <>
+                <button onClick={onRoundHistory} className="text-gray-300 text-sm font-medium flex items-center gap-1.5 hover:text-white transition-colors">
+                  <span>📋</span> Round History
+                  {(notificationCount ?? 0) > 0 && <NotificationBadge count={notificationCount!} />}
+                </button>
+                <button onClick={onStats} className="text-gray-300 text-sm font-medium flex items-center gap-1.5 hover:text-white transition-colors">
+                  <span>📊</span> Leaderboard
+                </button>
+                <button onClick={onPlayers} className="text-gray-300 text-sm font-medium flex items-center gap-1.5 hover:text-white transition-colors">
+                  <span>🏌️</span> Players
+                </button>
+                <button onClick={onTournaments} className="text-gray-300 text-sm font-medium flex items-center gap-1.5 hover:text-white transition-colors">
+                  <span>🏆</span> Tournaments
+                </button>
+              </>
+            )}
+          </div>
         </div>
       </header>
 
