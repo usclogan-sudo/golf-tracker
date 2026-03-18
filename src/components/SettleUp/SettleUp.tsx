@@ -1,5 +1,6 @@
-import { useEffect, useMemo, useState } from 'react'
-import { supabase, rowToRound, rowToRoundPlayer, rowToHoleScore, rowToBuyIn, rowToBBBPoint, rowToJunkRecord } from '../../lib/supabase'
+import { useEffect, useMemo, useState, useCallback } from 'react'
+import { v4 as uuidv4 } from 'uuid'
+import { supabase, rowToRound, rowToRoundPlayer, rowToHoleScore, rowToBuyIn, rowToBBBPoint, rowToJunkRecord, rowToSettlementRecord, settlementRecordToRow, rowToUserProfile } from '../../lib/supabase'
 import {
   buildCourseHandicaps,
   strokesOnHole,
@@ -14,17 +15,15 @@ import {
   calculateWolfPayouts,
   calculateBBBPayouts,
   calculateJunks,
+  buildUnifiedSettlements,
   JUNK_LABELS,
-  buildSettlements,
-  venmoLink,
   venmoWebLink,
-  venmoRequestLink,
   zelleLink,
   cashAppLink,
   paypalLink,
   fmtMoney,
 } from '../../lib/gameLogic'
-import type { PlayerPayout, Settlement, JunkResult } from '../../lib/gameLogic'
+import type { PlayerPayout, JunkResult } from '../../lib/gameLogic'
 import type {
   Round,
   RoundPlayer,
@@ -38,6 +37,8 @@ import type {
   NassauConfig,
   WolfConfig,
   GameType,
+  SettlementRecord,
+  UserProfile,
 } from '../../types'
 
 interface Props {
@@ -53,6 +54,21 @@ const GAME_LABELS: Record<GameType, string> = {
   nassau: 'Nassau',
   wolf: 'Wolf',
   bingo_bango_bongo: 'Bingo Bango Bongo',
+}
+
+/** Merge fresh profile payment info over snapshot player data */
+function mergePaymentInfo(player: Player, profiles: Map<string, UserProfile>, participantMap: Map<string, string>): Player {
+  const linkedUserId = participantMap.get(player.id)
+  if (!linkedUserId) return player
+  const profile = profiles.get(linkedUserId)
+  if (!profile) return player
+  return {
+    ...player,
+    venmoUsername: profile.venmoUsername ?? player.venmoUsername,
+    zelleIdentifier: profile.zelleIdentifier ?? player.zelleIdentifier,
+    cashAppUsername: profile.cashAppUsername ?? player.cashAppUsername,
+    paypalEmail: profile.paypalEmail ?? player.paypalEmail,
+  }
 }
 
 function PaymentButtons({ toPlayer, amountCents, note }: { toPlayer: Player; amountCents: number; note: string }) {
@@ -75,8 +91,7 @@ function PaymentButtons({ toPlayer, amountCents, note }: { toPlayer: Player; amo
         <>
           <div className="flex flex-wrap gap-2">
             {hasVenmo && (
-              <a href={venmoLink(toPlayer.venmoUsername!, amountCents, fullNote)}
-                onClick={() => { setTimeout(() => { window.open(venmoWebLink(toPlayer.venmoUsername!, amountCents, fullNote), '_blank') }, 1500) }}
+              <a href={venmoWebLink(toPlayer.venmoUsername!, amountCents, fullNote)} target="_blank" rel="noopener noreferrer"
                 className="flex-1 min-w-[120px] h-11 bg-blue-600 text-white font-semibold rounded-xl flex items-center justify-center gap-1.5 active:bg-blue-700 text-sm">
                 Venmo
               </a>
@@ -114,6 +129,26 @@ function PaymentButtons({ toPlayer, amountCents, note }: { toPlayer: Player; amo
   )
 }
 
+function NudgeButton({ playerName, amountCents, toPlayer }: { playerName: string; amountCents: number; toPlayer: Player }) {
+  const [nudgeCopied, setNudgeCopied] = useState(false)
+  const paymentLink = toPlayer.venmoUsername
+    ? `venmo.com/${toPlayer.venmoUsername.replace('@', '')}`
+    : toPlayer.cashAppUsername
+    ? `cash.app/$${toPlayer.cashAppUsername.replace('$', '')}`
+    : toPlayer.paypalEmail
+    ? `paypal.me/${toPlayer.paypalEmail}`
+    : null
+  const msg = `Hey ${playerName}! You owe ${fmtMoney(amountCents)} for golf.${paymentLink ? ` Pay here: ${paymentLink}` : ''}`
+  const handleNudge = () => {
+    navigator.clipboard.writeText(msg).then(() => { setNudgeCopied(true); setTimeout(() => setNudgeCopied(false), 2000) })
+  }
+  return (
+    <button onClick={handleNudge} className={`text-xs transition-colors ${nudgeCopied ? 'text-green-600 font-semibold' : 'text-amber-600 underline'}`}>
+      {nudgeCopied ? 'Copied!' : '📨 Nudge'}
+    </button>
+  )
+}
+
 export function SettleUp({ roundId, userId, onDone, onContinue }: Props) {
   const [round, setRound] = useState<Round | null>(null)
   const [roundPlayers, setRoundPlayers] = useState<RoundPlayer[]>([])
@@ -121,7 +156,11 @@ export function SettleUp({ roundId, userId, onDone, onContinue }: Props) {
   const [buyIns, setBuyIns] = useState<BuyIn[]>([])
   const [bbbPoints, setBbbPoints] = useState<BBBPoint[]>([])
   const [junkRecords, setJunkRecords] = useState<JunkRecord[]>([])
+  const [settlementRecords, setSettlementRecords] = useState<SettlementRecord[]>([])
+  const [profileMap, setProfileMap] = useState<Map<string, UserProfile>>(new Map())
+  const [participantMap, setParticipantMap] = useState<Map<string, string>>(new Map()) // playerId → userId
   const [loading, setLoading] = useState(true)
+  const [settlementsInitialized, setSettlementsInitialized] = useState(false)
 
   useEffect(() => {
     Promise.all([
@@ -131,13 +170,40 @@ export function SettleUp({ roundId, userId, onDone, onContinue }: Props) {
       supabase.from('buy_ins').select('*').eq('round_id', roundId),
       supabase.from('bbb_points').select('*').eq('round_id', roundId),
       supabase.from('junk_records').select('*').eq('round_id', roundId),
-    ]).then(([roundRes, rpRes, hsRes, biRes, bbbRes, junkRes]) => {
+      supabase.from('settlements').select('*').eq('round_id', roundId),
+      supabase.from('round_participants').select('*').eq('round_id', roundId),
+    ]).then(([roundRes, rpRes, hsRes, biRes, bbbRes, junkRes, settlRes, partRes]) => {
       if (roundRes.data) setRound(rowToRound(roundRes.data))
       if (rpRes.data) setRoundPlayers(rpRes.data.map(rowToRoundPlayer))
       if (hsRes.data) setHoleScores(hsRes.data.map(rowToHoleScore))
       if (biRes.data) setBuyIns(biRes.data.map(rowToBuyIn))
       if (bbbRes.data) setBbbPoints(bbbRes.data.map(rowToBBBPoint))
       if (junkRes.data) setJunkRecords(junkRes.data.map(rowToJunkRecord))
+      if (settlRes.data) setSettlementRecords(settlRes.data.map(rowToSettlementRecord))
+
+      // Build participant map: playerId → userId
+      if (partRes.data) {
+        const pMap = new Map<string, string>()
+        for (const row of partRes.data) {
+          pMap.set(row.player_id, row.user_id)
+        }
+        setParticipantMap(pMap)
+
+        // Fetch fresh user profiles for linked players
+        const userIds = [...new Set(partRes.data.map((r: any) => r.user_id))]
+        if (userIds.length > 0) {
+          supabase.from('user_profiles').select('*').in('user_id', userIds).then(({ data }) => {
+            if (data) {
+              const map = new Map<string, UserProfile>()
+              for (const row of data) {
+                map.set(row.user_id, rowToUserProfile(row))
+              }
+              setProfileMap(map)
+            }
+          })
+        }
+      }
+
       setLoading(false)
     })
   }, [roundId])
@@ -147,6 +213,11 @@ export function SettleUp({ roundId, userId, onDone, onContinue }: Props) {
   const game = round?.game
   const treasurerId = round?.treasurerPlayerId
   const treasurer = players.find(p => p.id === treasurerId)
+
+  // Merge fresh payment info from profiles over snapshot
+  const enrichedPlayers = useMemo(() => {
+    return players.map(p => mergePaymentInfo(p, profileMap, participantMap))
+  }, [players, profileMap, participantMap])
 
   const courseHcps = useMemo(() => {
     if (!snapshot || !roundPlayers) return {}
@@ -203,19 +274,49 @@ export function SettleUp({ roundId, userId, onDone, onContinue }: Props) {
     return []
   }, [game, players, snapshot, skinsResult, bestBallResult, nassauResult, wolfResult, bbbResult])
 
-  const settlements = useMemo((): Settlement[] => {
-    if (!treasurerId || payouts.length === 0) return []
-    return buildSettlements(payouts, treasurerId)
-  }, [payouts, treasurerId])
+  // Persist settlements: compute + insert on first view, or load from DB
+  const persistSettlements = useCallback(async () => {
+    if (!treasurerId || !userId || settlementsInitialized) return
+    setSettlementsInitialized(true)
+
+    // If DB already has settlements for this round, use those
+    if (settlementRecords.length > 0) return
+
+    // No payouts and no junk → nothing to settle
+    if (payouts.length === 0 && !junkResult) return
+
+    const unified = buildUnifiedSettlements(payouts, treasurerId, junkResult)
+    if (unified.length === 0) return
+
+    const records: SettlementRecord[] = unified.map(s => ({
+      id: uuidv4(),
+      roundId,
+      fromPlayerId: s.fromId,
+      toPlayerId: s.toId,
+      amountCents: s.amountCents,
+      reason: s.reason,
+      source: s.source,
+      status: 'owed' as const,
+    }))
+
+    setSettlementRecords(records)
+    await supabase.from('settlements').insert(records.map(r => settlementRecordToRow(r, userId)))
+  }, [treasurerId, userId, settlementsInitialized, settlementRecords.length, payouts, junkResult, roundId])
+
+  useEffect(() => {
+    if (!loading && round && game && snapshot) {
+      persistSettlements()
+    }
+  }, [loading, round, game, snapshot, persistSettlements])
 
   const potCents = game ? game.buyInCents * players.length : 0
   const unpaidBuyIns = buyIns.filter(b => b.status === 'unpaid')
-  const playerById = (id: string) => players.find(p => p.id === id)
+  const playerById = (id: string) => enrichedPlayers.find(p => p.id === id)
 
   // Treasurer access control
   const isTreasurer = userId === treasurerId || userId === round?.createdBy
 
-  const togglePaid = async (buyIn: BuyIn) => {
+  const toggleBuyInPaid = async (buyIn: BuyIn) => {
     const newStatus = buyIn.status === 'unpaid' ? 'marked_paid' : 'unpaid'
     const newPaidAt = newStatus === 'marked_paid' ? new Date().toISOString() : null
     setBuyIns(prev => prev.map(b =>
@@ -226,6 +327,17 @@ export function SettleUp({ roundId, userId, onDone, onContinue }: Props) {
     await supabase.from('buy_ins').update({ status: newStatus, paid_at: newPaidAt }).eq('id', buyIn.id)
   }
 
+  const toggleSettlementPaid = async (settlement: SettlementRecord) => {
+    const newStatus = settlement.status === 'owed' ? 'paid' : 'owed'
+    const newPaidAt = newStatus === 'paid' ? new Date().toISOString() : null
+    setSettlementRecords(prev => prev.map(s =>
+      s.id === settlement.id
+        ? { ...s, status: newStatus as SettlementRecord['status'], paidAt: newPaidAt ? new Date(newPaidAt) : undefined }
+        : s
+    ))
+    await supabase.from('settlements').update({ status: newStatus, paid_at: newPaidAt }).eq('id', settlement.id)
+  }
+
   if (loading || !round || !game || !snapshot) {
     return <div className="min-h-screen bg-gray-50 flex items-center justify-center"><p className="text-gray-400">Loading…</p></div>
   }
@@ -233,6 +345,10 @@ export function SettleUp({ roundId, userId, onDone, onContinue }: Props) {
   const gameLabel = GAME_LABELS[game.type] ?? game.type
   const isHighRoller = game.stakesMode === 'high_roller'
   const headerClass = isHighRoller ? 'hr-header' : 'app-header'
+
+  const owedSettlements = settlementRecords.filter(s => s.status === 'owed')
+  const paidSettlements = settlementRecords.filter(s => s.status === 'paid')
+  const allSettled = settlementRecords.length > 0 && owedSettlements.length === 0
 
   return (
     <div className="min-h-screen bg-gray-50 pb-32">
@@ -287,17 +403,13 @@ export function SettleUp({ roundId, userId, onDone, onContinue }: Props) {
                       </p>
                     </div>
                     <div className="flex items-center gap-2">
-                      {isTreasurer && !isPaid && p && (
-                        <div className="flex gap-1">
-                          {p.venmoUsername && (
-                            <a href={venmoRequestLink(p.venmoUsername, b.amountCents, `Fore Skins Golf buy-in`)}
-                              className="text-xs text-blue-600 font-semibold underline">Req</a>
-                          )}
-                        </div>
+                      {isTreasurer && !isPaid && p?.venmoUsername && (
+                        <a href={`https://venmo.com/u/${p.venmoUsername.replace('@', '')}`} target="_blank" rel="noopener noreferrer"
+                          className="text-xs text-blue-600 font-semibold underline">Venmo</a>
                       )}
                       {isTreasurer ? (
                         <button
-                          onClick={() => togglePaid(b)}
+                          onClick={() => toggleBuyInPaid(b)}
                           className={`px-4 py-2 rounded-xl text-sm font-semibold transition-colors ${
                             isPaid
                               ? 'bg-green-600 text-white active:bg-gray-800'
@@ -530,7 +642,7 @@ export function SettleUp({ roundId, userId, onDone, onContinue }: Props) {
           </section>
         )}
 
-        {/* ── Junk Results ── */}
+        {/* ── Junk Details (informational tallies) ── */}
         {junkResult && round?.junkConfig && (
           <section className="bg-white rounded-2xl shadow-sm p-4 space-y-3">
             <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">
@@ -563,7 +675,6 @@ export function SettleUp({ roundId, userId, onDone, onContinue }: Props) {
                   )
                 })}
             </div>
-            <p className="text-xs text-gray-400">Junks are peer-to-peer — settle separately from the main pot.</p>
           </section>
         )}
 
@@ -585,23 +696,63 @@ export function SettleUp({ roundId, userId, onDone, onContinue }: Props) {
           </section>
         )}
 
-        {/* ── Settlement instructions ── */}
-        {settlements.length > 0 && (
+        {/* ── Unified Settlements (game + junk) with Mark Paid ── */}
+        {settlementRecords.length > 0 && (
           <section className="bg-white rounded-2xl shadow-sm p-4 space-y-4">
             <div>
-              <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Pay Out</p>
-              <p className="text-sm text-gray-500 mt-1"><strong>{treasurer?.name}</strong> pays each winner from the pot.</p>
+              <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Settlements</p>
+              <p className="text-sm text-gray-500 mt-1">
+                {allSettled
+                  ? <span className="text-green-600 font-semibold">All settled!</span>
+                  : <span>{owedSettlements.length} remaining{paidSettlements.length > 0 ? ` · ${paidSettlements.length} paid` : ''}</span>
+                }
+              </p>
             </div>
-            {settlements.map((s, i) => {
-              const toPlayer = playerById(s.toId)
-              if (!toPlayer) return null
+            {settlementRecords.map(s => {
+              const fromPlayer = playerById(s.fromPlayerId)
+              const toPlayer = playerById(s.toPlayerId)
+              if (!fromPlayer || !toPlayer) return null
+              const isPaid = s.status === 'paid'
               return (
-                <div key={i} className="space-y-2">
+                <div key={s.id} className={`space-y-2 p-3 rounded-xl ${isPaid ? 'bg-green-50' : 'bg-gray-50'}`}>
                   <div className="flex items-center justify-between">
-                    <div><p className="font-bold text-gray-800">{treasurer?.name} → {toPlayer.name}</p><p className="text-xs text-gray-500">{s.note}</p></div>
-                    <p className="text-xl font-bold text-green-700">{fmtMoney(s.amountCents)}</p>
+                    <div>
+                      <p className="font-bold text-gray-800">{fromPlayer.name} → {toPlayer.name}</p>
+                      <div className="flex items-center gap-2 mt-0.5">
+                        {s.reason && <p className="text-xs text-gray-500">{s.reason}</p>}
+                        <span className={`text-xs font-semibold px-1.5 py-0.5 rounded ${
+                          s.source === 'junk' ? 'bg-indigo-100 text-indigo-700' : 'bg-blue-100 text-blue-700'
+                        }`}>
+                          {s.source === 'junk' ? 'Junk' : 'Game'}
+                        </span>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <p className={`text-xl font-bold ${isPaid ? 'text-green-700' : 'text-gray-800'}`}>{fmtMoney(s.amountCents)}</p>
+                      {isTreasurer ? (
+                        <button
+                          onClick={() => toggleSettlementPaid(s)}
+                          className={`px-3 py-1.5 rounded-xl text-sm font-semibold transition-colors ${
+                            isPaid
+                              ? 'bg-green-600 text-white active:bg-gray-800'
+                              : 'bg-amber-100 text-amber-700 active:bg-amber-200'
+                          }`}
+                        >
+                          {isPaid ? 'Paid' : 'Mark Paid'}
+                        </button>
+                      ) : (
+                        <span className={`px-2 py-1 rounded-xl text-xs font-semibold ${isPaid ? 'text-green-600' : 'text-amber-600'}`}>
+                          {isPaid ? 'Paid' : 'Owed'}
+                        </span>
+                      )}
+                    </div>
                   </div>
-                  <PaymentButtons toPlayer={toPlayer} amountCents={s.amountCents} note={s.note} />
+                  {!isPaid && (
+                    <PaymentButtons toPlayer={toPlayer} amountCents={s.amountCents} note={s.reason ?? 'settlement'} />
+                  )}
+                  {!isPaid && isTreasurer && (
+                    <NudgeButton playerName={fromPlayer.name} amountCents={s.amountCents} toPlayer={toPlayer} />
+                  )}
                 </div>
               )
             })}
@@ -618,7 +769,7 @@ export function SettleUp({ roundId, userId, onDone, onContinue }: Props) {
           )
         })()}
 
-        {payouts.length === 0 && (
+        {payouts.length === 0 && settlementRecords.length === 0 && (
           <section className="bg-gray-50 rounded-2xl p-4 text-center">
             <p className="text-gray-600 font-semibold">No winners calculated yet</p>
             <p className="text-gray-500 text-sm mt-1">Each player gets {fmtMoney(game.buyInCents)} back from the treasurer.</p>
@@ -626,11 +777,11 @@ export function SettleUp({ roundId, userId, onDone, onContinue }: Props) {
         )}
 
         {/* Payment Directory */}
-        {players.some(p => p.venmoUsername || p.zelleIdentifier || p.cashAppUsername || p.paypalEmail) && (
+        {enrichedPlayers.some(p => p.venmoUsername || p.zelleIdentifier || p.cashAppUsername || p.paypalEmail) && (
           <section className="bg-white rounded-2xl shadow-sm p-4 space-y-3">
             <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Payment Directory</p>
             <div className="space-y-2">
-              {players.map(p => {
+              {enrichedPlayers.map(p => {
                 const methods: string[] = []
                 if (p.venmoUsername) methods.push(`Venmo: ${p.venmoUsername}`)
                 if (p.zelleIdentifier) methods.push(`Zelle: ${p.zelleIdentifier}`)

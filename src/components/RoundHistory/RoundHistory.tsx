@@ -7,6 +7,7 @@ import type { Round, HoleScore, RoundPlayer, GameType } from '../../types'
 interface Props {
   userId: string
   onBack: () => void
+  onViewSettlements?: (roundId: string) => void
 }
 
 const GAME_EMOJI: Record<GameType, string> = {
@@ -17,7 +18,7 @@ const GAME_EMOJI: Record<GameType, string> = {
   bingo_bango_bongo: '⭐ BBB',
 }
 
-export function RoundHistory({ userId, onBack }: Props) {
+export function RoundHistory({ userId, onBack, onViewSettlements }: Props) {
   const [rounds, setRounds] = useState<Round[]>([])
   const [loading, setLoading] = useState(true)
   const [expandedId, setExpandedId] = useState<string | null>(null)
@@ -25,6 +26,7 @@ export function RoundHistory({ userId, onBack }: Props) {
   const [expandedRoundPlayers, setExpandedRoundPlayers] = useState<RoundPlayer[]>([])
   const [deleting, setDeleting] = useState<string | null>(null)
   const [deleteModal, setDeleteModal] = useState<string | null>(null)
+  const [settlementStatus, setSettlementStatus] = useState<Map<string, { owed: number; paid: number }>>(new Map())
 
   useEffect(() => {
     supabase
@@ -33,7 +35,26 @@ export function RoundHistory({ userId, onBack }: Props) {
       .eq('status', 'complete')
       .order('date', { ascending: false })
       .then(({ data }) => {
-        if (data) setRounds(data.map(rowToRound))
+        if (data) {
+          const mapped = data.map(rowToRound)
+          setRounds(mapped)
+          // Fetch settlement status for all completed rounds
+          const ids = mapped.map(r => r.id)
+          if (ids.length > 0) {
+            supabase.from('settlements').select('round_id, status').in('round_id', ids).then(({ data: sData }) => {
+              if (sData) {
+                const map = new Map<string, { owed: number; paid: number }>()
+                for (const row of sData) {
+                  const entry = map.get(row.round_id) ?? { owed: 0, paid: 0 }
+                  if (row.status === 'owed') entry.owed++
+                  else if (row.status === 'paid') entry.paid++
+                  map.set(row.round_id, entry)
+                }
+                setSettlementStatus(map)
+              }
+            })
+          }
+        }
         setLoading(false)
       })
   }, [userId])
@@ -109,6 +130,7 @@ export function RoundHistory({ userId, onBack }: Props) {
           const players = round.players ?? []
           const isExpanded = expandedId === round.id
           const potCents = game ? game.buyInCents * players.length : 0
+          const sStatus = settlementStatus.get(round.id)
 
           return (
             <div key={round.id} className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
@@ -118,7 +140,15 @@ export function RoundHistory({ userId, onBack }: Props) {
               >
                 <div className="flex items-center justify-between">
                   <div>
-                    <p className="font-semibold text-gray-900">{snapshot?.courseName ?? 'Unknown Course'}</p>
+                    <p className="font-semibold text-gray-900 flex items-center gap-2">
+                      {snapshot?.courseName ?? 'Unknown Course'}
+                      {sStatus && sStatus.owed === 0 && sStatus.paid > 0 && (
+                        <span className="text-xs font-semibold text-green-700 bg-green-100 px-1.5 py-0.5 rounded-full">All Settled</span>
+                      )}
+                      {sStatus && sStatus.owed > 0 && (
+                        <span className="text-xs font-semibold text-amber-700 bg-amber-100 px-1.5 py-0.5 rounded-full">{sStatus.owed} owed</span>
+                      )}
+                    </p>
                     <p className="text-sm text-gray-500 mt-0.5">
                       {new Date(round.date).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}
                       {game && <> · {GAME_EMOJI[game.type] ?? game.type}</>}
@@ -190,13 +220,23 @@ export function RoundHistory({ userId, onBack }: Props) {
                     )
                   })()}
 
-                  <button
-                    onClick={() => confirmDelete(round.id)}
-                    disabled={deleting === round.id}
-                    className="w-full h-10 border border-red-200 text-red-600 text-sm font-semibold rounded-xl active:bg-red-50 disabled:opacity-50"
-                  >
-                    {deleting === round.id ? 'Deleting...' : 'Delete Round'}
-                  </button>
+                  <div className="flex gap-2">
+                    {onViewSettlements && sStatus && (
+                      <button
+                        onClick={() => onViewSettlements(round.id)}
+                        className="flex-1 h-10 border border-amber-200 text-amber-700 text-sm font-semibold rounded-xl active:bg-amber-50"
+                      >
+                        View Settlements
+                      </button>
+                    )}
+                    <button
+                      onClick={() => confirmDelete(round.id)}
+                      disabled={deleting === round.id}
+                      className={`${onViewSettlements && sStatus ? 'flex-1' : 'w-full'} h-10 border border-red-200 text-red-600 text-sm font-semibold rounded-xl active:bg-red-50 disabled:opacity-50`}
+                    >
+                      {deleting === round.id ? 'Deleting...' : 'Delete Round'}
+                    </button>
+                  </div>
                 </div>
               )}
             </div>

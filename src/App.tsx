@@ -147,6 +147,7 @@ function Home({
   const [participantRounds, setParticipantRounds] = useState<Round[]>([])
   const [roundCount, setRoundCount] = useState(0)
   const [joinCode, setJoinCode] = useState('')
+  const [unsettledCount, setUnsettledCount] = useState(0)
   const [personalSummary, setPersonalSummary] = useState<{
     totalRounds: number
     lastCourse: string
@@ -176,6 +177,14 @@ function Home({
     })
     supabase.from('rounds').select('id', { count: 'exact', head: true }).then(({ count }) => {
       setRoundCount(count ?? 0)
+    })
+
+    // Unsettled rounds count
+    supabase.from('settlements').select('round_id').eq('status', 'owed').then(({ data }) => {
+      if (data) {
+        const uniqueRounds = new Set(data.map((d: any) => d.round_id))
+        setUnsettledCount(uniqueRounds.size)
+      }
     })
 
     // Personal summary
@@ -279,6 +288,18 @@ function Home({
             </p>
           </div>
         )}
+        {unsettledCount > 0 && (
+          <button
+            onClick={onRoundHistory}
+            className="w-full bg-amber-50 border border-amber-200 rounded-2xl px-4 py-3 text-left active:bg-amber-100 transition-colors"
+          >
+            <p className="text-amber-800 text-sm font-semibold">
+              💰 {unsettledCount} round{unsettledCount !== 1 ? 's' : ''} ha{unsettledCount !== 1 ? 've' : 's'} unsettled payouts
+            </p>
+            <p className="text-amber-600 text-xs mt-0.5">Tap to view in Round History →</p>
+          </button>
+        )}
+
         {!personalSummary && roundCount === 0 && (
           <div className="bg-white rounded-2xl shadow-sm border border-gray-100 px-4 py-3 text-center">
             <p className="text-sm text-gray-500">Time to hit the links!</p>
@@ -664,7 +685,7 @@ export default function App() {
     )
   }
   if (screen === 'round-history') {
-    return <RoundHistory userId={userId} onBack={goHome} />
+    return <RoundHistory userId={userId} onBack={goHome} onViewSettlements={(id) => { setActiveRoundId(id); setScreen('settle-up') }} />
   }
   if (screen === 'stats') {
     return <Stats userId={userId} onBack={goHome} />

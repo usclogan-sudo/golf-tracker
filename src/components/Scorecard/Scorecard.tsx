@@ -8,6 +8,8 @@ import {
   calculateSkins,
   calculateBestBall,
   calculateNassau,
+  calculateWolf,
+  calculateBBB,
   wolfForHole,
   strokesOnHole,
   fmtMoney,
@@ -401,6 +403,16 @@ export function Scorecard({ userId, roundId, onEndRound, onHome, readOnly: readO
     return calculateNassau(players, holeScores, snapshot, game.config as NassauConfig, courseHcps)
   }, [game, players, holeScores, snapshot, courseHcps])
 
+  const wolfResult = useMemo(() => {
+    if (!game || game.type !== 'wolf' || !snapshot) return null
+    return calculateWolf(players, holeScores, snapshot, game.config as WolfConfig, courseHcps)
+  }, [game, players, holeScores, snapshot, courseHcps])
+
+  const bbbResult = useMemo(() => {
+    if (!game || game.type !== 'bingo_bango_bongo') return null
+    return calculateBBB(players, bbbPoints)
+  }, [game, players, bbbPoints])
+
   const currentCarry = useMemo(() => {
     if (!skinsResult) return 0
     const prevHole = skinsResult.holeResults.find(h => h.holeNumber === currentHole - 1)
@@ -603,15 +615,20 @@ export function Scorecard({ userId, roundId, onEndRound, onHome, readOnly: readO
             </table>
 
             {/* Game-specific running totals */}
-            {skinsResult && skinsResult.totalSkins > 0 && (
+            {skinsResult && (
               <div className="mt-3 pt-3 border-t border-gray-100">
-                <p className="text-xs font-semibold text-gray-500 uppercase mb-2">Skins</p>
+                <p className="text-xs font-semibold text-gray-500 uppercase mb-2">
+                  Skins — {skinsResult.totalSkins} won{skinsResult.pendingCarry > 0 ? ` · ${skinsResult.pendingCarry} carry` : ''}
+                </p>
                 <div className="flex flex-wrap gap-2">
                   {players.filter(p => (skinsResult.skinsWon[p.id] ?? 0) > 0).map(p => (
                     <span key={p.id} className="text-xs bg-amber-50 text-amber-700 font-semibold px-2 py-1 rounded-lg">
                       {p.name}: {skinsResult.skinsWon[p.id]}
                     </span>
                   ))}
+                  {skinsResult.totalSkins === 0 && (
+                    <span className="text-xs text-gray-400">No skins won yet</span>
+                  )}
                 </div>
               </div>
             )}
@@ -622,6 +639,60 @@ export function Scorecard({ userId, roundId, onEndRound, onHome, readOnly: readO
                 <p className="text-sm font-semibold text-gray-700">
                   Team A: {bestBallResult.holesWon.A}W · Team B: {bestBallResult.holesWon.B}W · Tied: {bestBallResult.holesWon.tied}
                 </p>
+              </div>
+            )}
+
+            {nassauResult && (
+              <div className="mt-3 pt-3 border-t border-gray-100">
+                <p className="text-xs font-semibold text-gray-500 uppercase mb-2">Nassau</p>
+                <div className="space-y-1">
+                  {[
+                    { label: 'Front', seg: nassauResult.front },
+                    { label: 'Back', seg: nassauResult.back },
+                    { label: 'Total', seg: nassauResult.total },
+                  ].map(({ label, seg }) => {
+                    const leader = seg.winner ? players.find(p => p.id === seg.winner)?.name : null
+                    const tiedNames = seg.tiedPlayers.map(id => players.find(p => p.id === id)?.name).filter(Boolean).join(', ')
+                    return (
+                      <p key={label} className="text-sm text-gray-700">
+                        <span className="font-semibold">{label}:</span>{' '}
+                        {seg.incomplete ? <span className="text-gray-400">In progress</span> : leader ? <span className="text-teal-700 font-semibold">{leader}</span> : tiedNames ? <span className="text-gray-500">Tied ({tiedNames})</span> : '—'}
+                      </p>
+                    )
+                  })}
+                </div>
+              </div>
+            )}
+
+            {wolfResult && (
+              <div className="mt-3 pt-3 border-t border-gray-100">
+                <p className="text-xs font-semibold text-gray-500 uppercase mb-2">Wolf — Net Units</p>
+                <div className="flex flex-wrap gap-2">
+                  {players.slice().sort((a, b) => (wolfResult.netUnits[b.id] ?? 0) - (wolfResult.netUnits[a.id] ?? 0)).map(p => {
+                    const u = wolfResult.netUnits[p.id] ?? 0
+                    return (
+                      <span key={p.id} className={`text-xs font-semibold px-2 py-1 rounded-lg ${u > 0 ? 'bg-purple-50 text-purple-700' : u < 0 ? 'bg-red-50 text-red-600' : 'bg-gray-50 text-gray-500'}`}>
+                        {p.name}: {u > 0 ? '+' : ''}{u}
+                      </span>
+                    )
+                  })}
+                </div>
+              </div>
+            )}
+
+            {bbbResult && (
+              <div className="mt-3 pt-3 border-t border-gray-100">
+                <p className="text-xs font-semibold text-gray-500 uppercase mb-2">Bingo Bango Bongo</p>
+                <div className="flex flex-wrap gap-2">
+                  {players.slice().sort((a, b) => (bbbResult.pointsWon[b.id] ?? 0) - (bbbResult.pointsWon[a.id] ?? 0)).map(p => {
+                    const pts = bbbResult.pointsWon[p.id] ?? 0
+                    return (
+                      <span key={p.id} className={`text-xs font-semibold px-2 py-1 rounded-lg ${pts > 0 ? 'bg-amber-50 text-amber-700' : 'bg-gray-50 text-gray-500'}`}>
+                        {p.name}: {pts}pt{pts !== 1 ? 's' : ''}
+                      </span>
+                    )
+                  })}
+                </div>
               </div>
             )}
           </div>
