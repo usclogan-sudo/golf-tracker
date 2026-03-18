@@ -1,5 +1,6 @@
 import { useEffect, useState, useMemo } from 'react'
 import { supabase, rowToRound, rowToUserProfile, rowToPinnedFriend } from '../../lib/supabase'
+import { venmoProfileLink, cashAppProfileLink, zelleLink, paypalLink } from '../../lib/gameLogic'
 import { UserAvatar } from '../AvatarPicker'
 import type { Round, Player, UserProfile, PinnedFriend } from '../../types'
 
@@ -18,6 +19,10 @@ interface PlayerEntry {
   isRegistered: boolean
   avatarPreset?: string
   avatarUrl?: string
+  venmoUsername?: string
+  zelleIdentifier?: string
+  cashAppUsername?: string
+  paypalEmail?: string
 }
 
 export function PlayerDirectory({ userId, onBack }: Props) {
@@ -67,6 +72,10 @@ export function PlayerDirectory({ userId, onBack }: Props) {
             existing.isRegistered = true
             existing.avatarPreset = prof.avatarPreset
             existing.avatarUrl = prof.avatarUrl
+            existing.venmoUsername = prof.venmoUsername
+            existing.zelleIdentifier = prof.zelleIdentifier
+            existing.cashAppUsername = prof.cashAppUsername
+            existing.paypalEmail = prof.paypalEmail
           }
         } else {
           playerMap.set(p.id, {
@@ -79,6 +88,10 @@ export function PlayerDirectory({ userId, onBack }: Props) {
             isRegistered: !!prof,
             avatarPreset: prof?.avatarPreset,
             avatarUrl: prof?.avatarUrl,
+            venmoUsername: prof?.venmoUsername,
+            zelleIdentifier: prof?.zelleIdentifier,
+            cashAppUsername: prof?.cashAppUsername,
+            paypalEmail: prof?.paypalEmail,
           })
         }
       }
@@ -97,6 +110,10 @@ export function PlayerDirectory({ userId, onBack }: Props) {
           isRegistered: true,
           avatarPreset: prof.avatarPreset,
           avatarUrl: prof.avatarUrl,
+          venmoUsername: prof.venmoUsername,
+          zelleIdentifier: prof.zelleIdentifier,
+          cashAppUsername: prof.cashAppUsername,
+          paypalEmail: prof.paypalEmail,
         })
       }
     }
@@ -209,6 +226,7 @@ function Section({ title, icon, children }: { title: string; icon?: string; chil
 }
 
 function PlayerCard({ player, isPinned, onTogglePin }: { player: PlayerEntry; isPinned: boolean; onTogglePin: () => void }) {
+  const hasPayment = player.venmoUsername || player.zelleIdentifier || player.cashAppUsername || player.paypalEmail
   return (
     <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700 p-4 flex items-center gap-3">
       <UserAvatar url={player.avatarUrl} preset={player.avatarPreset} name={player.name} size="md" />
@@ -225,6 +243,34 @@ function PlayerCard({ player, isPinned, onTogglePin }: { player: PlayerEntry; is
             <> · Last {player.lastPlayed.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}</>
           )}
         </p>
+        {hasPayment && (
+          <div className="flex flex-wrap gap-1.5 mt-1.5">
+            {player.venmoUsername && (
+              <a href={venmoProfileLink(player.venmoUsername)} target="_blank" rel="noopener noreferrer"
+                className="text-[11px] font-semibold px-2 py-0.5 rounded-full bg-blue-100 text-blue-700 active:bg-blue-200">
+                Venmo
+              </a>
+            )}
+            {player.zelleIdentifier && (
+              <a href={zelleLink(player.zelleIdentifier)} target="_blank" rel="noopener noreferrer"
+                className="text-[11px] font-semibold px-2 py-0.5 rounded-full bg-purple-100 text-purple-700 active:bg-purple-200">
+                Zelle
+              </a>
+            )}
+            {player.cashAppUsername && (
+              <a href={cashAppProfileLink(player.cashAppUsername)} target="_blank" rel="noopener noreferrer"
+                className="text-[11px] font-semibold px-2 py-0.5 rounded-full bg-green-100 text-green-700 active:bg-green-200">
+                Cash App
+              </a>
+            )}
+            {player.paypalEmail && (
+              <a href={paypalLink(player.paypalEmail, 0)} target="_blank" rel="noopener noreferrer"
+                className="text-[11px] font-semibold px-2 py-0.5 rounded-full bg-yellow-100 text-yellow-700 active:bg-yellow-200">
+                PayPal
+              </a>
+            )}
+          </div>
+        )}
       </div>
       <button
         onClick={onTogglePin}

@@ -224,9 +224,13 @@ export function RoundHistory({ userId, onBack, onViewSettlements }: Props) {
                     {onViewSettlements && sStatus && (
                       <button
                         onClick={() => onViewSettlements(round.id)}
-                        className="flex-1 h-10 border border-amber-200 text-amber-700 text-sm font-semibold rounded-xl active:bg-amber-50"
+                        className={`flex-1 h-10 text-sm font-semibold rounded-xl transition-colors ${
+                          sStatus.owed > 0
+                            ? 'bg-amber-500 text-white active:bg-amber-600 shadow-sm'
+                            : 'border border-green-200 text-green-700 active:bg-green-50'
+                        }`}
                       >
-                        View Settlements
+                        {sStatus.owed > 0 ? '💰 Settle Up' : 'View Settlements'}
                       </button>
                     )}
                     <button

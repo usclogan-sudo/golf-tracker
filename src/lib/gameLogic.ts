@@ -746,6 +746,18 @@ export function paypalLink(email: string, amountCents: number): string {
   return `https://www.paypal.com/paypalme/${encodeURIComponent(email)}/${amount}`
 }
 
+// ─── Profile links (no amount — for directory/roster views) ─────────────────
+
+export function venmoProfileLink(username: string): string {
+  const isMobile = /iPhone|iPad|Android/i.test(navigator.userAgent)
+  const clean = username.replace('@', '')
+  return isMobile ? `venmo://users/${clean}` : `https://venmo.com/${clean}`
+}
+
+export function cashAppProfileLink(username: string): string {
+  return `https://cash.app/$${username.replace('$', '')}`
+}
+
 // ─── Junks (side bets) ───────────────────────────────────────────────────────
 
 export const JUNK_LABELS: Record<JunkType, { emoji: string; name: string; description: string }> = {
