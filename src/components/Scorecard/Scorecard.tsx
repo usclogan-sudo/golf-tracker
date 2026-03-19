@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, useCallback } from 'react'
+import { useEffect, useMemo, useState, useCallback, useRef } from 'react'
 import { v4 as uuidv4 } from 'uuid'
 import { useOnlineStatus } from '../../hooks/useOnlineStatus'
 import { enqueue, flush, getPending } from '../../lib/offlineQueue'
@@ -143,9 +143,14 @@ export function Scorecard({ userId, roundId, onEndRound, onHome, readOnly: readO
   const [sideBetDesc, setSideBetDesc] = useState('')
   const [sideBetAmount, setSideBetAmount] = useState('5')
   const [sideBetParticipants, setSideBetParticipants] = useState<string[]>([])
+  const [editingHcpPlayerId, setEditingHcpPlayerId] = useState<string | null>(null)
+  const [editingHcpValue, setEditingHcpValue] = useState('')
+  const [showHoleConfirm, setShowHoleConfirm] = useState(false)
+  const [showMiniBoard, setShowMiniBoard] = useState(true)
   const { isOnline } = useOnlineStatus()
   const [syncing, setSyncing] = useState(false)
   const [pendingCount, setPendingCount] = useState(getPending())
+  const holeNavRef = useRef<HTMLDivElement>(null)
 
   // Event-related state
   const [event, setEvent] = useState<GolfEvent | null>(null)
@@ -292,6 +297,13 @@ export function Scorecard({ userId, roundId, onEndRound, onHome, readOnly: readO
       setLocalHole(round.currentHole)
     }
   }, [isEventRound, round?.currentHole])
+
+  // Auto-scroll hole nav bar to current hole
+  useEffect(() => {
+    if (!holeNavRef.current) return
+    const btn = holeNavRef.current.querySelector(`[data-hole="${currentHole}"]`) as HTMLElement | null
+    if (btn) btn.scrollIntoView({ behavior: 'smooth', inline: 'center', block: 'nearest' })
+  }, [currentHole])
 
   const courseHcps = useMemo(() => {
     if (!snapshot || !roundPlayers) return {}
@@ -557,6 +569,23 @@ export function Scorecard({ userId, roundId, onEndRound, onHome, readOnly: readO
     await supabase.from('side_bets').update({ status: 'cancelled' }).eq('id', betId)
   }
 
+  const saveHandicapEdit = async () => {
+    if (!editingHcpPlayerId || !round) return
+    const newHcp = parseFloat(editingHcpValue)
+    if (isNaN(newHcp) || newHcp < 0 || newHcp > 54) return
+    // Update the player snapshot in the round
+    const updatedPlayers = (round.players ?? []).map(p =>
+      p.id === editingHcpPlayerId ? { ...p, handicapIndex: newHcp } : p
+    )
+    setRound(prev => prev ? { ...prev, players: updatedPlayers } : prev)
+    setEditingHcpPlayerId(null)
+    setEditingHcpValue('')
+    // Persist: update round's player snapshot
+    await supabase.from('rounds').update({ players: updatedPlayers }).eq('id', roundId)
+    // Also update the player in the players table
+    await supabase.from('players').update({ handicap_index: newHcp }).eq('id', editingHcpPlayerId)
+  }
+
   // Role-based access (must be before approvedScores which depends on isEventRound)
   const isCreator = userId === round?.createdBy
   const isGameMaster = userId === round?.gameMasterId
@@ -629,6 +658,32 @@ export function Scorecard({ userId, roundId, onEndRound, onHome, readOnly: readO
     if (!prevHole) return 0
     return prevHole.winnerId === null ? prevHole.carry + 1 : 0
   }, [skinsResult, currentHole])
+
+  const miniBoard = useMemo(() => {
+    if (!snapshot) return []
+    const board = players.map(p => {
+      const pScores = holeScores.filter(s => s.playerId === p.id)
+      const gross = pScores.reduce((s, hs) => s + hs.grossScore, 0)
+      const courseHcp = courseHcps[p.id] ?? 0
+      const netStrokes = pScores.reduce((s, hs) => {
+        const hole = snapshot.holes.find(h => h.number === hs.holeNumber)
+        return s + (hole ? strokesOnHole(courseHcp, hole.strokeIndex, snapshot.holes.length) : 0)
+      }, 0)
+      const net = gross - netStrokes
+      const scoredPar = pScores.reduce((s, hs) => {
+        const hole = snapshot.holes.find(h => h.number === hs.holeNumber)
+        return s + (hole?.par ?? 0)
+      }, 0)
+      const vsPar = gross - scoredPar
+      return { player: p, gross, net, vsPar, thru: pScores.length }
+    }).sort((a, b) => a.net - b.net)
+    const positions: number[] = []
+    board.forEach((entry, idx) => {
+      if (idx === 0) positions.push(1)
+      else positions.push(entry.net === board[idx - 1].net ? positions[idx - 1] : idx + 1)
+    })
+    return board.map((entry, idx) => ({ ...entry, pos: positions[idx] }))
+  }, [players, holeScores, snapshot, courseHcps])
 
   const headerClass = game?.stakesMode === 'high_roller' ? 'hr-header' : 'app-header'
 
@@ -776,11 +831,11 @@ export function Scorecard({ userId, roundId, onEndRound, onHome, readOnly: readO
             <button onClick={confirmGoHome} className="text-gray-300 text-sm font-medium px-3 min-h-[44px] rounded-lg hover:bg-gray-600">← Back</button>
           </div>
         </div>
-        <div className="max-w-2xl mx-auto mt-2 flex gap-1.5 overflow-x-auto pb-1">
+        <div ref={holeNavRef} className="max-w-2xl mx-auto mt-2 flex gap-1.5 overflow-x-auto pb-1">
           {Array.from({ length: snapshot?.holes.length ?? 18 }, (_, i) => i + 1).map(n => {
             const hasScore = players.length > 0 && players.every(p => holeScores.some(s => s.playerId === p.id && s.holeNumber === n))
             return (
-              <button key={n} onClick={() => goToHole(n)}
+              <button key={n} data-hole={n} onClick={() => goToHole(n)}
                 className={`min-w-[44px] min-h-[44px] w-11 h-11 rounded-full text-sm font-bold flex-shrink-0 transition-colors flex items-center justify-center ${
                   n === currentHole ? 'bg-white text-gray-800 ring-2 ring-amber-400' : hasScore ? 'bg-amber-500 text-white' : 'bg-gray-700/40 text-gray-400 border border-gray-500/30'
                 }`}>{n}</button>
@@ -810,6 +865,117 @@ export function Scorecard({ userId, roundId, onEndRound, onHome, readOnly: readO
           </button>
         </div>
       </div>
+
+      {/* Mini-leaderboard on Scores tab */}
+      {scoreTab === 'scores' && miniBoard.length > 0 && (
+        <div className="px-4 pt-3 max-w-2xl mx-auto">
+          <div className="bg-gray-50 border border-gray-200 rounded-xl overflow-hidden">
+            <button
+              onClick={() => setShowMiniBoard(!showMiniBoard)}
+              className="w-full px-3 py-2 flex items-center justify-between"
+            >
+              {showMiniBoard ? (
+                <span className="text-xs font-semibold text-gray-500 uppercase">Standings</span>
+              ) : (
+                <div className="flex-1 flex items-center gap-1.5 overflow-x-auto text-xs font-semibold text-gray-600">
+                  {miniBoard.map((e, i) => (
+                    <span key={e.player.id}>
+                      {i > 0 && <span className="text-gray-300 mx-0.5">·</span>}
+                      {e.pos}. {e.player.name}{' '}
+                      <span className={e.vsPar > 0 ? 'text-red-500' : e.vsPar < 0 ? 'text-green-600' : 'text-gray-400'}>
+                        ({e.thru > 0 ? `${e.vsPar > 0 ? '+' : ''}${e.vsPar === 0 ? 'E' : e.vsPar}` : '—'})
+                      </span>
+                    </span>
+                  ))}
+                </div>
+              )}
+              <span className="text-gray-400 text-xs ml-2 flex-shrink-0">{showMiniBoard ? '▾' : '▸'}</span>
+            </button>
+            {showMiniBoard && (
+              <div className="px-3 pb-2">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="text-xs text-gray-400 uppercase">
+                      <th className="text-left py-1 px-1 font-medium w-6">Pos</th>
+                      <th className="text-left py-1 px-1 font-medium">Player</th>
+                      <th className="text-center py-1 px-1 font-medium">Net</th>
+                      <th className="text-center py-1 px-1 font-medium">vs Par</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {miniBoard.map(e => (
+                      <tr key={e.player.id} className={e.pos === 1 ? 'bg-amber-50' : ''}>
+                        <td className={`py-1 px-1 font-bold text-sm ${e.pos === 1 ? 'text-amber-600' : 'text-gray-500'}`}>{e.pos}</td>
+                        <td className="py-1 px-1 font-semibold text-gray-800 text-sm">{e.player.name}</td>
+                        <td className="py-1 px-1 text-center font-semibold text-gray-700 text-sm">{e.net || '—'}</td>
+                        <td className={`py-1 px-1 text-center font-semibold text-sm ${e.vsPar > 0 ? 'text-red-600' : e.vsPar < 0 ? 'text-green-600' : 'text-gray-400'}`}>
+                          {e.thru > 0 ? `${e.vsPar > 0 ? '+' : ''}${e.vsPar === 0 ? 'E' : e.vsPar}` : '—'}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+                {/* Game summaries */}
+                <div className="mt-1.5 space-y-0.5">
+                  {skinsResult && (
+                    <p className="text-xs text-gray-500">
+                      <span className="font-semibold">Skins:</span>{' '}
+                      {skinsResult.totalSkins === 0 ? 'No skins won yet' : (
+                        <>
+                          {players.filter(p => (skinsResult.skinsWon[p.id] ?? 0) > 0).map(p => `${p.name} ${skinsResult.skinsWon[p.id]}`).join(', ')}
+                          {skinsResult.pendingCarry > 0 && ` · ${skinsResult.pendingCarry} carry`}
+                        </>
+                      )}
+                    </p>
+                  )}
+                  {nassauResult && (() => {
+                    const getName = (id: string | null) => id ? (players.find(p => p.id === id)?.name ?? '?') : null
+                    const segs = [
+                      { label: 'F', seg: nassauResult.front },
+                      { label: 'B', seg: nassauResult.back },
+                      { label: 'T', seg: nassauResult.total },
+                    ]
+                    return (
+                      <p className="text-xs text-gray-500">
+                        <span className="font-semibold">Nassau:</span>{' '}
+                        {segs.map(({ label, seg }) => {
+                          const leader = seg.incomplete ? 'In play' : seg.winner ? getName(seg.winner) : seg.tiedPlayers.length > 1 ? 'Tied' : '—'
+                          return `${label}: ${leader}`
+                        }).join(' · ')}
+                      </p>
+                    )
+                  })()}
+                  {bestBallResult && (
+                    <p className="text-xs text-gray-500">
+                      <span className="font-semibold">Best Ball:</span> Team A {bestBallResult.holesWon.A} – Team B {bestBallResult.holesWon.B}
+                    </p>
+                  )}
+                  {wolfResult && (
+                    <p className="text-xs text-gray-500">
+                      <span className="font-semibold">Wolf:</span>{' '}
+                      {players.slice().sort((a, b) => (wolfResult.netUnits[b.id] ?? 0) - (wolfResult.netUnits[a.id] ?? 0))
+                        .map(p => { const u = wolfResult.netUnits[p.id] ?? 0; return `${p.name} ${u > 0 ? '+' : ''}${u}` }).join(', ')}
+                    </p>
+                  )}
+                  {hammerResult && (
+                    <p className="text-xs text-gray-500">
+                      <span className="font-semibold">Hammer:</span>{' '}
+                      {players.map(p => { const c = hammerResult.netCents[p.id] ?? 0; return `${p.name} ${c >= 0 ? '+' : '−'}${fmtMoney(Math.abs(c))}` }).join(', ')}
+                    </p>
+                  )}
+                  {bbbResult && (
+                    <p className="text-xs text-gray-500">
+                      <span className="font-semibold">BBB:</span>{' '}
+                      {players.slice().sort((a, b) => (bbbResult.pointsWon[b.id] ?? 0) - (bbbResult.pointsWon[a.id] ?? 0))
+                        .map(p => `${p.name} ${bbbResult.pointsWon[p.id] ?? 0}`).join(', ')}
+                    </p>
+                  )}
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* Group tabs */}
       {scoreTab === 'scores' && round.groups && (() => {
@@ -1245,63 +1411,127 @@ export function Scorecard({ userId, roundId, onEndRound, onHome, readOnly: readO
           )
         })()}
 
-        {/* Junk panel */}
-        {!readOnly && junkConfig && junkConfig.types.length > 0 && (() => {
-          const holeJunks = junkRecords.filter(jr => jr.holeNumber === currentHole)
-          return (
-            <div className="bg-indigo-50 border border-indigo-200 rounded-xl p-3 space-y-3">
-              <p className="font-bold text-indigo-800 text-sm">
-                🎲 Junks — Hole {currentHole}
-                <span className="text-indigo-400 font-normal text-xs ml-2">{fmtMoney(junkConfig.valueCents)}/junk</span>
-              </p>
-              {junkConfig.types.map(jt => {
-                const info = JUNK_LABELS[jt]
-                const isSnake = jt === 'snake'
-                return (
-                  <div key={jt} className="space-y-1">
-                    <p className={`text-xs font-semibold ${isSnake ? 'text-red-600' : 'text-indigo-700'}`}>
-                      {info.emoji} {info.name} — {info.description}
-                    </p>
-                    <div className="flex flex-wrap gap-1.5">
-                      {players.map(p => {
-                        const active = holeJunks.some(jr => jr.playerId === p.id && jr.junkType === jt)
-                        return (
-                          <button
-                            key={p.id}
-                            onClick={() => toggleJunk(jt, p.id)}
-                            className={`px-2.5 py-1 rounded-lg text-xs font-semibold transition-colors ${
-                              active
-                                ? isSnake ? 'bg-red-500 text-white' : 'bg-indigo-500 text-white'
-                                : 'bg-white border border-indigo-200 text-indigo-700'
-                            }`}
-                          >
-                            {p.name}
-                          </button>
-                        )
-                      })}
-                    </div>
-                  </div>
-                )
-              })}
-            </div>
-          )
-        })()}
-
-        {/* Side Bets panel */}
+        {/* Merged Hole Bets panel (junks + side bets) */}
         {!readOnly && (() => {
+          const hasJunks = junkConfig && junkConfig.types.length > 0
+          const holeJunks = hasJunks ? junkRecords.filter(jr => jr.holeNumber === currentHole) : []
           const holeBets = sideBets.filter(sb => sb.holeNumber === currentHole && sb.status !== 'cancelled')
+          if (!hasJunks && holeBets.length === 0 && !showSideBetForm) {
+            // Show minimal panel with just "Add Side Bet" button
+            return (
+              <div className="bg-amber-50 dark:bg-amber-900/30 border border-amber-200 dark:border-amber-700 rounded-xl p-3">
+                <div className="flex items-center justify-between">
+                  <p className="font-bold text-amber-800 dark:text-amber-300 text-sm">🎯 Hole Bets — Hole {currentHole}</p>
+                  <button
+                    onClick={() => setShowSideBetForm(true)}
+                    className="text-xs font-semibold px-2.5 py-1 rounded-lg bg-amber-500 text-white active:bg-amber-600"
+                  >
+                    + Side Bet
+                  </button>
+                </div>
+                <p className="text-xs text-amber-600 dark:text-amber-400 mt-1">No bets on this hole</p>
+              </div>
+            )
+          }
           return (
             <div className="bg-amber-50 dark:bg-amber-900/30 border border-amber-200 dark:border-amber-700 rounded-xl p-3 space-y-3">
-              <div className="flex items-center justify-between">
-                <p className="font-bold text-amber-800 dark:text-amber-300 text-sm">💰 Side Bets — Hole {currentHole}</p>
-                <button
-                  onClick={() => setShowSideBetForm(!showSideBetForm)}
-                  className="text-xs font-semibold px-2.5 py-1 rounded-lg bg-amber-500 text-white active:bg-amber-600"
-                >
-                  {showSideBetForm ? 'Cancel' : '+ Side Bet'}
-                </button>
-              </div>
+              <p className="font-bold text-amber-800 dark:text-amber-300 text-sm">🎯 Hole Bets — Hole {currentHole}</p>
 
+              {/* Quick Junks Row */}
+              {hasJunks && (
+                <div className="space-y-2">
+                  <p className="text-xs font-semibold text-indigo-700 dark:text-indigo-300">
+                    🎲 Junks <span className="text-indigo-400 font-normal">{fmtMoney(junkConfig!.valueCents)}/junk</span>
+                  </p>
+                  {junkConfig!.types.map(jt => {
+                    const info = JUNK_LABELS[jt]
+                    const isSnake = jt === 'snake'
+                    return (
+                      <div key={jt} className="space-y-1">
+                        <p className={`text-xs font-semibold ${isSnake ? 'text-red-600' : 'text-indigo-700 dark:text-indigo-300'}`}>
+                          {info.emoji} {info.name} — {info.description}
+                        </p>
+                        <div className="flex flex-wrap gap-1.5">
+                          {players.map(p => {
+                            const active = holeJunks.some(jr => jr.playerId === p.id && jr.junkType === jt)
+                            return (
+                              <button
+                                key={p.id}
+                                onClick={() => toggleJunk(jt, p.id)}
+                                className={`px-2.5 py-1 rounded-lg text-xs font-semibold transition-colors ${
+                                  active
+                                    ? isSnake ? 'bg-red-500 text-white' : 'bg-indigo-500 text-white'
+                                    : 'bg-white dark:bg-gray-700 border border-indigo-200 dark:border-indigo-600 text-indigo-700 dark:text-indigo-300'
+                                }`}
+                              >
+                                {p.name}
+                              </button>
+                            )
+                          })}
+                        </div>
+                      </div>
+                    )
+                  })}
+                </div>
+              )}
+
+              {/* Divider between junks and side bets */}
+              {hasJunks && (holeBets.length > 0 || showSideBetForm) && (
+                <div className="border-t border-amber-200 dark:border-amber-600" />
+              )}
+
+              {/* Side Bets List */}
+              {holeBets.length > 0 && (
+                <div className="space-y-2">
+                  <p className="text-xs font-semibold text-amber-700 dark:text-amber-300">💰 Side Bets</p>
+                  {holeBets.map(bet => {
+                    const participantNames = bet.participants.map(id => players.find(p => p.id === id)?.name ?? '?')
+                    const winnerName = bet.winnerPlayerId ? players.find(p => p.id === bet.winnerPlayerId)?.name : null
+                    return (
+                      <div key={bet.id} className={`rounded-lg p-2.5 ${bet.status === 'resolved' ? 'bg-green-50 dark:bg-green-900/30' : 'bg-white dark:bg-gray-800'}`}>
+                        <div className="flex items-center justify-between">
+                          <div>
+                            <p className="text-sm font-semibold text-gray-800 dark:text-gray-100">{bet.description}</p>
+                            <p className="text-xs text-gray-500 dark:text-gray-400">
+                              {fmtMoney(bet.amountCents)} · {participantNames.join(' vs ')}
+                            </p>
+                          </div>
+                          {bet.status === 'resolved' && winnerName && (
+                            <span className="text-xs font-bold text-green-700 dark:text-green-400">🏆 {winnerName}</span>
+                          )}
+                          {bet.status === 'open' && (
+                            <button
+                              onClick={() => cancelSideBet(bet.id)}
+                              className="text-xs text-red-500 font-semibold"
+                            >
+                              ✕
+                            </button>
+                          )}
+                        </div>
+                        {bet.status === 'open' && (
+                          <div className="mt-2 flex flex-wrap gap-1.5">
+                            <span className="text-xs text-gray-500 dark:text-gray-400 self-center">Winner:</span>
+                            {bet.participants.map(pid => {
+                              const pName = players.find(p => p.id === pid)?.name ?? '?'
+                              return (
+                                <button
+                                  key={pid}
+                                  onClick={() => resolveSideBet(bet.id, pid)}
+                                  className="px-2.5 py-1 rounded-lg text-xs font-semibold bg-green-100 dark:bg-green-800 text-green-700 dark:text-green-300 active:bg-green-200"
+                                >
+                                  {pName}
+                                </button>
+                              )
+                            })}
+                          </div>
+                        )}
+                      </div>
+                    )
+                  })}
+                </div>
+              )}
+
+              {/* New Side Bet Form */}
               {showSideBetForm && (
                 <div className="space-y-2 bg-white dark:bg-gray-800 rounded-lg p-3">
                   <input
@@ -1350,57 +1580,14 @@ export function Scorecard({ userId, roundId, onEndRound, onHome, readOnly: readO
                 </div>
               )}
 
-              {holeBets.length > 0 && (
-                <div className="space-y-2">
-                  {holeBets.map(bet => {
-                    const participantNames = bet.participants.map(id => players.find(p => p.id === id)?.name ?? '?')
-                    const winnerName = bet.winnerPlayerId ? players.find(p => p.id === bet.winnerPlayerId)?.name : null
-                    return (
-                      <div key={bet.id} className={`rounded-lg p-2.5 ${bet.status === 'resolved' ? 'bg-green-50 dark:bg-green-900/30' : 'bg-white dark:bg-gray-800'}`}>
-                        <div className="flex items-center justify-between">
-                          <div>
-                            <p className="text-sm font-semibold text-gray-800 dark:text-gray-100">{bet.description}</p>
-                            <p className="text-xs text-gray-500 dark:text-gray-400">
-                              {fmtMoney(bet.amountCents)} · {participantNames.join(' vs ')}
-                            </p>
-                          </div>
-                          {bet.status === 'resolved' && winnerName && (
-                            <span className="text-xs font-bold text-green-700 dark:text-green-400">🏆 {winnerName}</span>
-                          )}
-                          {bet.status === 'open' && (
-                            <button
-                              onClick={() => cancelSideBet(bet.id)}
-                              className="text-xs text-red-500 font-semibold"
-                            >
-                              ✕
-                            </button>
-                          )}
-                        </div>
-                        {bet.status === 'open' && (
-                          <div className="mt-2 flex flex-wrap gap-1.5">
-                            <span className="text-xs text-gray-500 dark:text-gray-400 self-center">Winner:</span>
-                            {bet.participants.map(pid => {
-                              const pName = players.find(p => p.id === pid)?.name ?? '?'
-                              return (
-                                <button
-                                  key={pid}
-                                  onClick={() => resolveSideBet(bet.id, pid)}
-                                  className="px-2.5 py-1 rounded-lg text-xs font-semibold bg-green-100 dark:bg-green-800 text-green-700 dark:text-green-300 active:bg-green-200"
-                                >
-                                  {pName}
-                                </button>
-                              )
-                            })}
-                          </div>
-                        )}
-                      </div>
-                    )
-                  })}
-                </div>
-              )}
-
-              {holeBets.length === 0 && !showSideBetForm && (
-                <p className="text-xs text-amber-600 dark:text-amber-400">No side bets on this hole</p>
+              {/* Add Side Bet button at bottom */}
+              {!showSideBetForm && (
+                <button
+                  onClick={() => setShowSideBetForm(true)}
+                  className="w-full text-xs font-semibold px-2.5 py-2 rounded-lg bg-amber-500 text-white active:bg-amber-600"
+                >
+                  + Add Side Bet
+                </button>
               )}
             </div>
           )
@@ -1544,9 +1731,36 @@ export function Scorecard({ userId, roundId, onEndRound, onHome, readOnly: readO
                     {isPending && <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-yellow-200 text-yellow-700">PENDING</span>}
                     {isRejected && <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-red-200 text-red-700">REJECTED</span>}
                   </div>
-                  <p className="text-sm text-gray-500">HCP {player.handicapIndex}
-                    {strokesGiven > 0 && <span className="ml-2 text-amber-600 font-semibold">+{strokesGiven} stroke{strokesGiven !== 1 ? 's' : ''}</span>}
-                  </p>
+                  {editingHcpPlayerId === player.id ? (
+                    <div className="flex items-center gap-2 mt-1">
+                      <input
+                        type="number"
+                        inputMode="decimal"
+                        step="0.1"
+                        min="0"
+                        max="54"
+                        value={editingHcpValue}
+                        onChange={e => setEditingHcpValue(e.target.value)}
+                        className="w-16 h-8 px-2 rounded-lg border border-amber-300 text-sm text-gray-800 focus:outline-none focus:ring-2 focus:ring-amber-500"
+                        autoFocus
+                        onKeyDown={e => { if (e.key === 'Enter') saveHandicapEdit(); if (e.key === 'Escape') setEditingHcpPlayerId(null) }}
+                      />
+                      <button onClick={saveHandicapEdit} className="text-xs font-semibold text-green-700 bg-green-100 px-2 py-1 rounded-lg">Save</button>
+                      <button onClick={() => setEditingHcpPlayerId(null)} className="text-xs text-gray-500">Cancel</button>
+                    </div>
+                  ) : (
+                    <p className={`text-sm text-gray-500 ${!readOnly ? 'cursor-pointer active:text-amber-600' : ''}`}
+                      onClick={() => {
+                        if (readOnly) return
+                        setEditingHcpPlayerId(player.id)
+                        setEditingHcpValue(String(player.handicapIndex))
+                      }}
+                    >
+                      HCP {player.handicapIndex}
+                      {strokesGiven > 0 && <span className="ml-2 text-amber-600 font-semibold">+{strokesGiven} stroke{strokesGiven !== 1 ? 's' : ''}</span>}
+                      {!readOnly && <span className="ml-1 text-gray-300 text-xs">✎</span>}
+                    </p>
+                  )}
                 </div>
                 <div className="text-right">
                   <span className={`inline-block text-xs font-bold px-2 py-0.5 rounded-full ${getScoreClass(grossScore, par)}`}>{scoreBadge}</span>
@@ -1582,7 +1796,7 @@ export function Scorecard({ userId, roundId, onEndRound, onHome, readOnly: readO
         })()}
 
         {/* Next Hole / End Round — in scrollable content */}
-        {!readOnly && (() => {
+        {!readOnly && !showHoleConfirm && (() => {
           const missingPlayers = players.filter(p => !holeScores.some(s => s.playerId === p.id && s.holeNumber === currentHole))
           return missingPlayers.length > 0 ? (
             <p className="text-amber-600 text-xs font-medium text-center py-1.5 bg-amber-50 rounded-xl">
@@ -1591,8 +1805,60 @@ export function Scorecard({ userId, roundId, onEndRound, onHome, readOnly: readO
           ) : null
         })()}
 
-        {currentHole < (snapshot?.holes.length ?? 18) ? (
-          <button onClick={() => goToHole(currentHole + 1)}
+        {/* Hole Confirm Panel */}
+        {showHoleConfirm && (() => {
+          const unscoredPlayers = players.filter(p => !holeScores.some(s => s.playerId === p.id && s.holeNumber === currentHole))
+          return (
+            <div className="bg-blue-50 border border-blue-200 rounded-2xl p-4 space-y-3">
+              <p className="font-bold text-blue-800 text-sm">Confirm Hole {currentHole} Scores</p>
+              <div className="space-y-1.5">
+                {players.map(p => {
+                  const hs = holeScores.find(s => s.playerId === p.id && s.holeNumber === currentHole)
+                  const score = hs?.grossScore ?? par
+                  const isAssumed = !hs
+                  return (
+                    <div key={p.id} className={`flex items-center justify-between px-3 py-1.5 rounded-lg ${isAssumed ? 'bg-amber-50 border border-amber-200' : 'bg-white'}`}>
+                      <span className="text-sm font-medium text-gray-800">{p.name}</span>
+                      <span className={`text-sm font-bold ${isAssumed ? 'text-amber-600' : 'text-gray-800'}`}>
+                        {score} {isAssumed && <span className="text-xs font-normal">(par assumed)</span>}
+                      </span>
+                    </div>
+                  )
+                })}
+              </div>
+              <div className="flex gap-2">
+                <button
+                  onClick={async () => {
+                    // Auto-save par for unscored players
+                    if (unscoredPlayers.length > 0) {
+                      await Promise.all(unscoredPlayers.map(p => setScore(p.id, par)))
+                    }
+                    setShowHoleConfirm(false)
+                    goToHole(currentHole + 1)
+                  }}
+                  className="flex-1 h-12 bg-blue-600 text-white font-bold rounded-xl active:bg-blue-700 text-sm"
+                >
+                  Confirm & Next →
+                </button>
+                <button
+                  onClick={() => setShowHoleConfirm(false)}
+                  className="flex-1 h-12 bg-gray-100 text-gray-700 font-bold rounded-xl active:bg-gray-200 text-sm"
+                >
+                  Edit Scores
+                </button>
+              </div>
+            </div>
+          )
+        })()}
+
+        {!showHoleConfirm && (currentHole < (snapshot?.holes.length ?? 18) ? (
+          <button onClick={() => {
+            if (!readOnly && !selfEntryOnly && isScoremasterRole) {
+              setShowHoleConfirm(true)
+            } else {
+              goToHole(currentHole + 1)
+            }
+          }}
             className="w-full h-14 bg-gray-800 text-white text-lg font-bold rounded-2xl active:bg-gray-900 transition-colors shadow-lg">Next Hole →</button>
         ) : readOnly ? (
           <button onClick={onHome}
@@ -1600,7 +1866,7 @@ export function Scorecard({ userId, roundId, onEndRound, onHome, readOnly: readO
         ) : (
           <button onClick={confirmEndRound}
             className="w-full h-14 bg-yellow-500 text-white text-lg font-bold rounded-2xl active:bg-yellow-600 transition-colors shadow-lg">🏁 End Round & Settle Up</button>
-        )}
+        ))}
       </div>
       )} {/* end scoreTab === 'scores' */}
 
