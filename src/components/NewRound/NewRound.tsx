@@ -3,6 +3,7 @@ import { v4 as uuidv4 } from 'uuid'
 import { supabase, courseToRow, playerToRow, roundToRow, roundPlayerToRow, buyInToRow, rowToCourse, rowToPlayer, rowToSharedCourse, rowToGamePreset, rowToUserProfile } from '../../lib/supabase'
 import { fmtMoney, JUNK_LABELS } from '../../lib/gameLogic'
 import { venturaCourses } from '../../data/venturaCourses'
+import { NearMeCourses } from '../NearMeCourses/NearMeCourses'
 import type {
   Course,
   Player,
@@ -230,6 +231,8 @@ function CoursePicker({
       </header>
 
       <div className="px-4 py-4 max-w-2xl mx-auto space-y-3">
+        <NearMeCourses onAddCourse={onAddCourse} />
+
         <input
           type="text"
           placeholder="Search courses…"

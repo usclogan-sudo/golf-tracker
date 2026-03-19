@@ -606,15 +606,20 @@ export function Scorecard({ userId, roundId, onEndRound, onHome, readOnly: readO
             {isScoremasterRole && (
               <button
                 onClick={async () => {
-                  let code = round.inviteCode
+                  // Use event invite code when in event context, else round code
+                  let code = (event?.inviteCode) ?? round.inviteCode
                   if (!code) {
                     code = generateInviteCode()
                     setRound(prev => prev ? { ...prev, inviteCode: code! } : prev)
                     await supabase.from('rounds').update({ invite_code: code }).eq('id', roundId)
                   }
+                  const title = event ? `Join ${event.name}!` : 'Join my round!'
+                  const text = event
+                    ? `Join ${event.name} on Fore Skins! Code: ${code}`
+                    : `Join my round on Fore Skins! Code: ${code}`
                   const url = `${window.location.origin}${window.location.pathname}?join=${code}`
                   if (navigator.share) {
-                    try { await navigator.share({ title: 'Join my round!', text: `Join my round on Fore Skins! Code: ${code}`, url }) } catch {}
+                    try { await navigator.share({ title, text, url }) } catch {}
                   } else {
                     await navigator.clipboard.writeText(url)
                   }

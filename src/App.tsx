@@ -13,7 +13,6 @@ import { CourseSetup } from './components/CourseSetup/CourseSetup'
 import { NewRound } from './components/NewRound/NewRound'
 import { Scorecard } from './components/Scorecard/Scorecard'
 import { SettleUp } from './components/SettleUp/SettleUp'
-import { NearMeCourses } from './components/NearMeCourses/NearMeCourses'
 import { RoundHistory } from './components/RoundHistory/RoundHistory'
 import { Settings } from './components/Settings/Settings'
 import { Onboarding } from './components/Onboarding/Onboarding'
@@ -515,8 +514,6 @@ function Home({
             </button>
           </div>
         </div>
-
-        <NearMeCourses onAddCourse={(name) => onAddCourse(name)} />
 
         {userProfile?.displayName && (
           <section>

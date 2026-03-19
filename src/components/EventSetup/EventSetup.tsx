@@ -3,6 +3,7 @@ import { v4 as uuidv4 } from 'uuid'
 import { supabase, rowToCourse, rowToPlayer, rowToSharedCourse, roundToRow, roundPlayerToRow, buyInToRow, eventToRow, generateInviteCode, rowToUserProfile } from '../../lib/supabase'
 import { fmtMoney } from '../../lib/gameLogic'
 import { venturaCourses } from '../../data/venturaCourses'
+import { NearMeCourses } from '../NearMeCourses/NearMeCourses'
 import type {
   Course,
   Player,
@@ -28,13 +29,17 @@ interface Props {
   onAddCourse: () => void
 }
 
-type Step = 'name' | 'course' | 'players' | 'groups' | 'game' | 'review'
+type Step = 'name' | 'course' | 'players' | 'groups' | 'game' | 'review' | 'share'
 
 const MAX_PER_GROUP = 5
 
 export function EventSetup({ userId, onStart, onCancel, onAddCourse }: Props) {
   const [step, setStep] = useState<Step>('name')
   const [saving, setSaving] = useState(false)
+  const [createdRoundId, setCreatedRoundId] = useState<string | null>(null)
+  const [createdEventId, setCreatedEventId] = useState<string | null>(null)
+  const [createdInviteCode, setCreatedInviteCode] = useState<string | null>(null)
+  const [shareToast, setShareToast] = useState<string | null>(null)
 
   // Step 1: Event name
   const [eventName, setEventName] = useState('')
@@ -267,7 +272,10 @@ export function EventSetup({ userId, onStart, onCancel, onAddCourse }: Props) {
         }
       }
 
-      onStart(roundId, eventId)
+      setCreatedRoundId(roundId)
+      setCreatedEventId(eventId)
+      setCreatedInviteCode(inviteCode)
+      setStep('share')
     } finally {
       setSaving(false)
     }
@@ -344,6 +352,8 @@ export function EventSetup({ userId, onStart, onCancel, onAddCourse }: Props) {
           </div>
         </header>
         <div className="px-4 py-4 max-w-2xl mx-auto space-y-3">
+          <NearMeCourses onAddCourse={onAddCourse} />
+
           <input
             type="text"
             placeholder="Search courses..."
@@ -684,6 +694,63 @@ export function EventSetup({ userId, onStart, onCancel, onAddCourse }: Props) {
               className="w-full h-14 bg-gray-800 text-white text-lg font-bold rounded-2xl disabled:opacity-40 active:bg-gray-900"
             >
               Next: Review →
+            </button>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  // ─── Share Step ────────────────────────────────────────────────────────────
+  if (step === 'share' && createdInviteCode && createdRoundId && createdEventId) {
+    const shareInvite = async () => {
+      const code = createdInviteCode
+      const url = `${window.location.origin}${window.location.pathname}?join=${code}`
+      const title = `Join ${eventName}!`
+      const text = `Join ${eventName} on Fore Skins! Code: ${code}`
+      if (navigator.share) {
+        try { await navigator.share({ title, text, url }) } catch {}
+      } else {
+        await navigator.clipboard.writeText(url)
+      }
+      setShareToast(`Link copied! Code: ${code}`)
+      setTimeout(() => setShareToast(null), 3000)
+    }
+
+    return (
+      <div className="min-h-screen bg-gray-50 dark:bg-gray-900 pb-28">
+        <header className="app-header text-white px-4 py-4 sticky top-0 z-10 shadow-xl flex items-center gap-3">
+          <div className="w-[44px]" />
+          <h1 className="text-xl font-bold">Event Created!</h1>
+        </header>
+        <div className="px-4 py-8 max-w-2xl mx-auto space-y-6">
+          <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700 p-6 text-center space-y-4">
+            <p className="text-4xl">🎉</p>
+            <h2 className="font-display font-bold text-2xl text-gray-900 dark:text-gray-100">{eventName}</h2>
+            <p className="text-gray-500 text-sm">Share this code so players can join from their phones</p>
+            <div className="bg-gray-100 dark:bg-gray-700 rounded-2xl py-6 px-4">
+              <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Invite Code</p>
+              <p className="text-4xl font-mono font-bold tracking-[0.3em] text-gray-900 dark:text-gray-100">{createdInviteCode}</p>
+            </div>
+            <button
+              onClick={shareInvite}
+              className="w-full h-14 bg-amber-500 text-white text-lg font-bold rounded-2xl active:bg-amber-600 shadow-lg flex items-center justify-center gap-2"
+            >
+              Share Invite Link
+            </button>
+            {shareToast && (
+              <p className="text-green-600 font-semibold text-sm animate-pulse">{shareToast}</p>
+            )}
+          </div>
+          <p className="text-center text-xs text-gray-400">Players open the link or enter the code on their phone to join and self-score.</p>
+        </div>
+        <div className="fixed bottom-0 inset-x-0 p-4 bg-white/95 dark:bg-gray-800/95 backdrop-blur-sm border-t border-gray-200 safe-bottom">
+          <div className="max-w-2xl mx-auto">
+            <button
+              onClick={() => onStart(createdRoundId, createdEventId)}
+              className="w-full h-14 bg-gray-800 text-white text-lg font-bold rounded-2xl active:bg-gray-900"
+            >
+              Start Scoring →
             </button>
           </div>
         </div>
