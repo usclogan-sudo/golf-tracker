@@ -582,17 +582,6 @@ export function Scorecard({ userId, roundId, onEndRound, onHome, readOnly: readO
     return calculateBBB(players, bbbPoints)
   }, [game, players, bbbPoints])
 
-  // Hammer game state
-  const hammerConfig = game?.type === 'hammer' ? game.config as HammerConfig : null
-  const hammerStates = hammerConfig?.hammerStates ?? {}
-
-  const hammerResult = useMemo(() => {
-    if (!game || game.type !== 'hammer' || !snapshot || players.length !== 2) return null
-    return calculateHammer(players, approvedScores, snapshot, game.config as HammerConfig, courseHcps)
-  }, [game, players, approvedScores, snapshot, courseHcps])
-
-  const currentHammerState = hammerStates[currentHole] ?? null
-
   const currentCarry = useMemo(() => {
     if (!skinsResult) return 0
     const prevHole = skinsResult.holeResults.find(h => h.holeNumber === currentHole - 1)
@@ -622,6 +611,17 @@ export function Scorecard({ userId, roundId, onEndRound, onHome, readOnly: readO
     if (!isEventRound) return holeScores
     return holeScores.filter(s => s.scoreStatus !== 'rejected' && s.scoreStatus !== 'pending')
   }, [holeScores, isEventRound])
+
+  // Hammer game state
+  const hammerConfig = game?.type === 'hammer' ? game.config as HammerConfig : null
+  const hammerStates = hammerConfig?.hammerStates ?? {}
+
+  const hammerResult = useMemo(() => {
+    if (!game || game.type !== 'hammer' || !snapshot || players.length !== 2) return null
+    return calculateHammer(players, approvedScores, snapshot, game.config as HammerConfig, courseHcps)
+  }, [game, players, approvedScores, snapshot, courseHcps])
+
+  const currentHammerState = hammerStates[currentHole] ?? null
 
   // Pending scores for approval panel
   const pendingScores = useMemo(() => {
