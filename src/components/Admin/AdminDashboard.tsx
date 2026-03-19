@@ -565,10 +565,192 @@ function GamePresetsTab({ userId }: { userId: string }) {
   )
 }
 
+// ─── Users Tab (Admin) ────────────────────────────────────────────────────────
+
+function UsersTab() {
+  const [users, setUsers] = useState<any[]>([])
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    supabase.rpc('admin_get_all_users').then(({ data, error }) => {
+      if (error) {
+        // Fallback: if RPC doesn't exist yet, show message
+        console.error('admin_get_all_users RPC error:', error)
+        setLoading(false)
+        return
+      }
+      if (data) setUsers(data)
+      setLoading(false)
+    })
+  }, [])
+
+  if (loading) {
+    return <div className="flex justify-center py-8"><div className="w-8 h-8 border-2 border-amber-500 border-t-transparent rounded-full animate-spin" /></div>
+  }
+
+  if (users.length === 0) {
+    return (
+      <div className="text-center py-8">
+        <p className="text-gray-500 text-sm">No users found. Make sure the <code className="bg-gray-100 px-1 rounded">admin_get_all_users</code> RPC is deployed.</p>
+        <p className="text-gray-400 text-xs mt-2">See <code>supabase-schema-admin.sql</code></p>
+      </div>
+    )
+  }
+
+  return (
+    <div className="space-y-2">
+      <p className="text-xs text-gray-500">{users.length} registered users</p>
+      {users.map((u: any) => (
+        <div key={u.user_id} className="bg-white rounded-xl border border-gray-200 p-3">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="font-semibold text-gray-800">{u.display_name || 'No name'}</p>
+              <p className="text-xs text-gray-500">
+                HCP: {u.handicap_index ?? '—'}
+                {u.venmo_username && ` · Venmo: @${u.venmo_username}`}
+                {u.zelle_identifier && ` · Zelle: ${u.zelle_identifier}`}
+                {u.cashapp_username && ` · Cash App: $${u.cashapp_username}`}
+              </p>
+            </div>
+            <div className="flex items-center gap-1.5">
+              {u.is_admin && <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-amber-100 text-amber-700">Admin</span>}
+            </div>
+          </div>
+        </div>
+      ))}
+    </div>
+  )
+}
+
+// ─── Rounds Tab (Admin) ───────────────────────────────────────────────────────
+
+function RoundsTab() {
+  const [rounds, setRounds] = useState<any[]>([])
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    supabase.rpc('admin_get_all_rounds').then(({ data, error }) => {
+      if (error) {
+        console.error('admin_get_all_rounds RPC error:', error)
+        setLoading(false)
+        return
+      }
+      if (data) setRounds(data)
+      setLoading(false)
+    })
+  }, [])
+
+  if (loading) {
+    return <div className="flex justify-center py-8"><div className="w-8 h-8 border-2 border-amber-500 border-t-transparent rounded-full animate-spin" /></div>
+  }
+
+  if (rounds.length === 0) {
+    return (
+      <div className="text-center py-8">
+        <p className="text-gray-500 text-sm">No rounds found. Make sure the <code className="bg-gray-100 px-1 rounded">admin_get_all_rounds</code> RPC is deployed.</p>
+        <p className="text-gray-400 text-xs mt-2">See <code>supabase-schema-admin.sql</code></p>
+      </div>
+    )
+  }
+
+  return (
+    <div className="space-y-2">
+      <p className="text-xs text-gray-500">{rounds.length} total rounds</p>
+      {rounds.map((r: any) => {
+        const courseName = r.course_snapshot?.courseName ?? 'Unknown'
+        const playerCount = Array.isArray(r.players) ? r.players.length : 0
+        const gameType = r.game?.type ?? null
+        const date = r.date ? new Date(r.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : '—'
+        return (
+          <div key={r.id} className="bg-white rounded-xl border border-gray-200 p-3">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="font-semibold text-gray-800">{courseName}</p>
+                <p className="text-xs text-gray-500">
+                  {date} · {playerCount} players
+                  {gameType && ` · ${gameType.replace(/_/g, ' ')}`}
+                </p>
+              </div>
+              <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${
+                r.status === 'active' ? 'bg-green-100 text-green-700' :
+                r.status === 'complete' ? 'bg-blue-100 text-blue-700' :
+                'bg-gray-100 text-gray-500'
+              }`}>
+                {r.status}
+              </span>
+            </div>
+          </div>
+        )
+      })}
+    </div>
+  )
+}
+
+// ─── System Tab (Admin) ───────────────────────────────────────────────────────
+
+function SystemTab() {
+  const [stats, setStats] = useState<any>(null)
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    supabase.rpc('admin_get_system_stats').then(({ data, error }) => {
+      if (error) {
+        console.error('admin_get_system_stats RPC error:', error)
+        setLoading(false)
+        return
+      }
+      if (data && data.length > 0) setStats(data[0])
+      setLoading(false)
+    })
+  }, [])
+
+  if (loading) {
+    return <div className="flex justify-center py-8"><div className="w-8 h-8 border-2 border-amber-500 border-t-transparent rounded-full animate-spin" /></div>
+  }
+
+  if (!stats) {
+    return (
+      <div className="text-center py-8">
+        <p className="text-gray-500 text-sm">System stats unavailable. Deploy the <code className="bg-gray-100 px-1 rounded">admin_get_system_stats</code> RPC.</p>
+        <p className="text-gray-400 text-xs mt-2">See <code>supabase-schema-admin.sql</code></p>
+      </div>
+    )
+  }
+
+  const items = [
+    { label: 'Total Users', value: stats.total_users, color: 'bg-blue-50 text-blue-700' },
+    { label: 'Total Rounds', value: stats.total_rounds, color: 'bg-green-50 text-green-700' },
+    { label: 'Active Rounds', value: stats.total_active_rounds, color: 'bg-amber-50 text-amber-700' },
+    { label: 'Completed Rounds', value: stats.total_completed_rounds, color: 'bg-purple-50 text-purple-700' },
+    { label: 'Shared Courses', value: stats.total_courses, color: 'bg-gray-50 text-gray-700' },
+  ]
+
+  return (
+    <div className="grid grid-cols-2 gap-3">
+      {items.map(({ label, value, color }) => (
+        <div key={label} className={`rounded-2xl p-4 ${color}`}>
+          <p className="text-2xl font-bold font-display">{value}</p>
+          <p className="text-xs">{label}</p>
+        </div>
+      ))}
+    </div>
+  )
+}
+
 // ─── Admin Dashboard ─────────────────────────────────────────────────────────
 
+type AdminTab = 'courses' | 'presets' | 'users' | 'rounds' | 'system'
+
 export function AdminDashboard({ userId, onBack }: Props) {
-  const [tab, setTab] = useState<'courses' | 'presets'>('courses')
+  const [tab, setTab] = useState<AdminTab>('courses')
+
+  const tabs: { key: AdminTab; label: string }[] = [
+    { key: 'courses', label: 'Courses' },
+    { key: 'presets', label: 'Presets' },
+    { key: 'users', label: 'Users' },
+    { key: 'rounds', label: 'Rounds' },
+    { key: 'system', label: 'System' },
+  ]
 
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-900 pb-8">
@@ -587,27 +769,25 @@ export function AdminDashboard({ userId, onBack }: Props) {
       </header>
 
       <div className="px-4 py-4 max-w-2xl mx-auto">
-        <div className="flex gap-2 mb-4">
-          <button
-            onClick={() => setTab('courses')}
-            className={`flex-1 h-11 rounded-xl font-semibold text-sm transition-colors ${
-              tab === 'courses' ? 'bg-gray-800 text-white' : 'bg-white text-gray-700 border border-gray-200'
-            }`}
-          >
-            Shared Courses
-          </button>
-          <button
-            onClick={() => setTab('presets')}
-            className={`flex-1 h-11 rounded-xl font-semibold text-sm transition-colors ${
-              tab === 'presets' ? 'bg-gray-800 text-white' : 'bg-white text-gray-700 border border-gray-200'
-            }`}
-          >
-            Game Presets
-          </button>
+        <div className="flex gap-1.5 mb-4 overflow-x-auto pb-1">
+          {tabs.map(t => (
+            <button
+              key={t.key}
+              onClick={() => setTab(t.key)}
+              className={`px-3 h-10 rounded-xl font-semibold text-sm transition-colors flex-shrink-0 ${
+                tab === t.key ? 'bg-gray-800 text-white' : 'bg-white text-gray-700 border border-gray-200'
+              }`}
+            >
+              {t.label}
+            </button>
+          ))}
         </div>
 
         {tab === 'courses' && <SharedCoursesTab userId={userId} />}
         {tab === 'presets' && <GamePresetsTab userId={userId} />}
+        {tab === 'users' && <UsersTab />}
+        {tab === 'rounds' && <RoundsTab />}
+        {tab === 'system' && <SystemTab />}
       </div>
     </div>
   )

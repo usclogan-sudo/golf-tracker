@@ -15,8 +15,18 @@ function smartVenmoLink(username: string, amountCents: number, note: string): st
   return venmoWebLink(username, amountCents, note)
 }
 
-export function PaymentButtons({ toPlayer, amountCents, note }: { toPlayer: Player; amountCents: number; note: string }) {
+/** Returns the preferred payment method for a player (first available) */
+export function getPreferredPayment(player: Player): { method: string; handle: string; link?: string } | null {
+  if (player.venmoUsername) return { method: 'Venmo', handle: `@${player.venmoUsername.replace('@', '')}` }
+  if (player.zelleIdentifier) return { method: 'Zelle', handle: player.zelleIdentifier }
+  if (player.cashAppUsername) return { method: 'Cash App', handle: `$${player.cashAppUsername.replace('$', '')}` }
+  if (player.paypalEmail) return { method: 'PayPal', handle: player.paypalEmail }
+  return null
+}
+
+export function PaymentButtons({ toPlayer, amountCents, note, compact }: { toPlayer: Player; amountCents: number; note: string; compact?: boolean }) {
   const [copied, setCopied] = useState(false)
+  const [showMore, setShowMore] = useState(false)
   const fullNote = `Fore Skins Golf — ${note}`
   const copyText = `Pay ${toPlayer.name} ${fmtMoney(amountCents)} for ${fullNote}`
   const handleCopy = () => {
@@ -28,6 +38,42 @@ export function PaymentButtons({ toPlayer, amountCents, note }: { toPlayer: Play
   const hasCashApp = !!toPlayer.cashAppUsername
   const hasPaypal = !!toPlayer.paypalEmail
   const hasAny = hasVenmo || hasZelle || hasCashApp || hasPaypal
+
+  const methods = [
+    hasVenmo && { key: 'venmo', label: 'Venmo', href: smartVenmoLink(toPlayer.venmoUsername!, amountCents, fullNote), bg: 'bg-blue-600 active:bg-blue-700 text-white' },
+    hasZelle && { key: 'zelle', label: 'Zelle', href: zelleLink(toPlayer.zelleIdentifier!), bg: 'bg-purple-600 active:bg-purple-700 text-white' },
+    hasCashApp && { key: 'cashapp', label: 'Cash App', href: cashAppLink(toPlayer.cashAppUsername!, amountCents, fullNote), bg: 'bg-green-600 active:bg-green-700 text-white' },
+    hasPaypal && { key: 'paypal', label: 'PayPal', href: paypalLink(toPlayer.paypalEmail!, amountCents), bg: 'bg-yellow-500 active:bg-yellow-600 text-black' },
+  ].filter(Boolean) as { key: string; label: string; href: string; bg: string }[]
+
+  // Compact mode: show only primary button + "more" link
+  if (compact && hasAny) {
+    const primary = methods[0]
+    const others = methods.slice(1)
+    return (
+      <div className="space-y-1">
+        <a href={primary.href} target="_blank" rel="noopener noreferrer"
+          className={`w-full h-10 font-semibold rounded-xl flex items-center justify-center text-sm ${primary.bg}`}>
+          Pay via {primary.label}
+        </a>
+        {others.length > 0 && !showMore && (
+          <button onClick={() => setShowMore(true)} className="text-xs text-gray-400 underline w-full text-center">
+            More options
+          </button>
+        )}
+        {showMore && (
+          <div className="flex flex-wrap gap-1.5">
+            {others.map(m => (
+              <a key={m.key} href={m.href} target="_blank" rel="noopener noreferrer"
+                className={`flex-1 min-w-[80px] h-9 font-semibold rounded-lg flex items-center justify-center text-xs ${m.bg}`}>
+                {m.label}
+              </a>
+            ))}
+          </div>
+        )}
+      </div>
+    )
+  }
 
   return (
     <div className="space-y-2">

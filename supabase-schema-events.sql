@@ -2,7 +2,8 @@
 -- Events & Real-time Self-Scoring Schema
 -- ═══════════════════════════════════════════════════════════════════════════════
 
--- ─── Events table ────────────────────────────────────────────────────────────
+-- ─── Create tables first (before any cross-referencing policies) ─────────────
+
 CREATE TABLE IF NOT EXISTS events (
   id text PRIMARY KEY,
   user_id uuid REFERENCES auth.users NOT NULL,
@@ -14,7 +15,23 @@ CREATE TABLE IF NOT EXISTS events (
   created_at timestamptz DEFAULT now()
 );
 
+CREATE TABLE IF NOT EXISTS event_participants (
+  id text PRIMARY KEY,
+  event_id text REFERENCES events(id) ON DELETE CASCADE,
+  user_id uuid REFERENCES auth.users NOT NULL,
+  player_id text NOT NULL,
+  role text NOT NULL DEFAULT 'player',  -- manager | scorekeeper | player
+  group_number int,
+  joined_at timestamptz DEFAULT now(),
+  UNIQUE (event_id, user_id)
+);
+
+-- ─── Enable RLS ──────────────────────────────────────────────────────────────
+
 ALTER TABLE events ENABLE ROW LEVEL SECURITY;
+ALTER TABLE event_participants ENABLE ROW LEVEL SECURITY;
+
+-- ─── Events policies ─────────────────────────────────────────────────────────
 
 -- Owner can do everything
 CREATE POLICY "events_owner" ON events
@@ -29,19 +46,7 @@ CREATE POLICY "events_participant_read" ON events
     )
   );
 
--- ─── Event Participants table ────────────────────────────────────────────────
-CREATE TABLE IF NOT EXISTS event_participants (
-  id text PRIMARY KEY,
-  event_id text REFERENCES events(id) ON DELETE CASCADE,
-  user_id uuid REFERENCES auth.users NOT NULL,
-  player_id text NOT NULL,
-  role text NOT NULL DEFAULT 'player',  -- manager | scorekeeper | player
-  group_number int,
-  joined_at timestamptz DEFAULT now(),
-  UNIQUE (event_id, user_id)
-);
-
-ALTER TABLE event_participants ENABLE ROW LEVEL SECURITY;
+-- ─── Event Participants policies ─────────────────────────────────────────────
 
 -- Participants can read all participants in their event
 CREATE POLICY "event_participants_read" ON event_participants

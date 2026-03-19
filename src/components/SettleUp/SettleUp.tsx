@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState, useCallback } from 'react'
 import { v4 as uuidv4 } from 'uuid'
 import { supabase, rowToRound, rowToRoundPlayer, rowToHoleScore, rowToBuyIn, rowToBBBPoint, rowToJunkRecord, rowToSideBet, rowToSettlementRecord, settlementRecordToRow, rowToUserProfile, rowToEvent } from '../../lib/supabase'
-import { PaymentButtons } from '../PaymentButtons'
+import { PaymentButtons, getPreferredPayment } from '../PaymentButtons'
 import {
   buildCourseHandicaps,
   strokesOnHole,
@@ -818,6 +818,12 @@ export function SettleUp({ roundId, userId, eventId, onDone, onContinue }: Props
                           {s.source === 'side_bet' ? 'Side Bet' : s.source === 'junk' ? 'Junk' : 'Game'}
                         </span>
                       </div>
+                      {!isPaid && (() => {
+                        const pref = getPreferredPayment(toPlayer)
+                        return pref ? (
+                          <p className="text-xs text-blue-600 mt-0.5">Pay via {pref.method} {pref.handle}</p>
+                        ) : null
+                      })()}
                     </div>
                     <div className="flex items-center gap-2">
                       <p className={`text-xl font-bold ${isPaid ? 'text-green-700' : 'text-gray-800'}`}>{fmtMoney(s.amountCents)}</p>
@@ -840,7 +846,7 @@ export function SettleUp({ roundId, userId, eventId, onDone, onContinue }: Props
                     </div>
                   </div>
                   {!isPaid && (
-                    <PaymentButtons toPlayer={toPlayer} amountCents={s.amountCents} note={s.reason ?? 'settlement'} />
+                    <PaymentButtons toPlayer={toPlayer} amountCents={s.amountCents} note={s.reason ?? 'settlement'} compact />
                   )}
                   {!isPaid && isTreasurer && (
                     <NudgeButton playerName={fromPlayer.name} amountCents={s.amountCents} toPlayer={toPlayer} />

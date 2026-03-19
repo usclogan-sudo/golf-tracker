@@ -1384,11 +1384,24 @@ function GameSetup({
         <section className="bg-white dark:bg-gray-800 rounded-2xl shadow-sm p-4 space-y-3">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Junk Side Bets</p>
+              <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">
+                Junk Side Bets
+                {junksEnabled && junkTypes.size > 0 && (
+                  <span className="ml-2 text-amber-600 font-normal">({junkTypes.size} active)</span>
+                )}
+              </p>
               <p className="text-xs text-gray-400 mt-0.5">Optional peer-to-peer bets tracked per hole</p>
             </div>
             <button
-              onClick={() => setJunksEnabled(v => !v)}
+              role="switch"
+              aria-checked={junksEnabled}
+              onClick={() => {
+                if (junksEnabled) {
+                  setJunkTypes(new Set(['sandy', 'greenie', 'snake']))
+                  setJunkValueDollars('1')
+                }
+                setJunksEnabled(v => !v)
+              }}
               className={`relative w-12 h-7 rounded-full transition-colors ${junksEnabled ? 'bg-amber-600' : 'bg-gray-300'}`}
             >
               <span className={`absolute top-0.5 w-6 h-6 bg-white rounded-full shadow transition-transform ${junksEnabled ? 'translate-x-5' : 'translate-x-0.5'}`} />
@@ -1504,6 +1517,8 @@ function TreasurerAndBuyIns({
   })
   const [allowStartUnpaid, setAllowStartUnpaid] = useState(false)
   const [saving, setSaving] = useState(false)
+
+  useEffect(() => { window.scrollTo({ top: 0, behavior: 'smooth' }) }, [])
 
   const potCents = game.buyInCents * players.length
   const allPaid = players.every(p => paid[p.id])
