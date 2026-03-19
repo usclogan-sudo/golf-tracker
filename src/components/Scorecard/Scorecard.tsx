@@ -557,6 +557,36 @@ export function Scorecard({ userId, roundId, onEndRound, onHome, readOnly: readO
     await supabase.from('side_bets').update({ status: 'cancelled' }).eq('id', betId)
   }
 
+  // Role-based access (must be before approvedScores which depends on isEventRound)
+  const isCreator = userId === round?.createdBy
+  const isGameMaster = userId === round?.gameMasterId
+  const isScoremasterRole = isCreator || isGameMaster
+  const myParticipant = roundParticipants.find(p => p.userId === userId)
+  const selfEntryOnly = !!myParticipant && !isScoremasterRole
+
+  // Event role detection
+  const myEventParticipant = eventParticipants.find(ep => ep.userId === userId)
+  const isEventManager = myEventParticipant?.role === 'manager' || isCreator
+  const isGroupScorekeeper = myEventParticipant?.role === 'scorekeeper'
+  const canApproveScores = isEventRound && (isEventManager || isGroupScorekeeper || isScoremasterRole)
+  const myEventGroupNumber = myEventParticipant?.groupNumber
+
+  // For event rounds, participants can self-score (not read-only)
+  const readOnly = readOnlyProp || (!isScoremasterRole && !myParticipant && !myEventParticipant)
+
+  // Filter scores for game logic: only use approved scores
+  const approvedScores = useMemo(() => {
+    if (!isEventRound) return holeScores
+    return holeScores.filter(s => s.scoreStatus !== 'rejected' && s.scoreStatus !== 'pending')
+  }, [holeScores, isEventRound])
+
+  // Pending scores for approval panel
+  const pendingScores = useMemo(() => {
+    if (!isEventRound) return []
+    return holeScores.filter(s => s.scoreStatus === 'pending')
+  }, [holeScores, isEventRound])
+
+  // Game result calculations (all depend on approvedScores, must come after it)
   const skinsResult = useMemo(() => {
     if (!game || game.type !== 'skins' || !snapshot) return null
     return calculateSkins(players, approvedScores, snapshot, game.config as SkinsConfig, courseHcps)
@@ -582,36 +612,6 @@ export function Scorecard({ userId, roundId, onEndRound, onHome, readOnly: readO
     return calculateBBB(players, bbbPoints)
   }, [game, players, bbbPoints])
 
-  const currentCarry = useMemo(() => {
-    if (!skinsResult) return 0
-    const prevHole = skinsResult.holeResults.find(h => h.holeNumber === currentHole - 1)
-    if (!prevHole) return 0
-    return prevHole.winnerId === null ? prevHole.carry + 1 : 0
-  }, [skinsResult, currentHole])
-
-  // Role-based access
-  const isCreator = userId === round?.createdBy
-  const isGameMaster = userId === round?.gameMasterId
-  const isScoremasterRole = isCreator || isGameMaster
-  const myParticipant = roundParticipants.find(p => p.userId === userId)
-  const selfEntryOnly = !!myParticipant && !isScoremasterRole
-
-  // Event role detection
-  const myEventParticipant = eventParticipants.find(ep => ep.userId === userId)
-  const isEventManager = myEventParticipant?.role === 'manager' || isCreator
-  const isGroupScorekeeper = myEventParticipant?.role === 'scorekeeper'
-  const canApproveScores = isEventRound && (isEventManager || isGroupScorekeeper || isScoremasterRole)
-  const myEventGroupNumber = myEventParticipant?.groupNumber
-
-  // For event rounds, participants can self-score (not read-only)
-  const readOnly = readOnlyProp || (!isScoremasterRole && !myParticipant && !myEventParticipant)
-
-  // Filter scores for game logic: only use approved scores
-  const approvedScores = useMemo(() => {
-    if (!isEventRound) return holeScores
-    return holeScores.filter(s => s.scoreStatus !== 'rejected' && s.scoreStatus !== 'pending')
-  }, [holeScores, isEventRound])
-
   // Hammer game state
   const hammerConfig = game?.type === 'hammer' ? game.config as HammerConfig : null
   const hammerStates = hammerConfig?.hammerStates ?? {}
@@ -623,11 +623,12 @@ export function Scorecard({ userId, roundId, onEndRound, onHome, readOnly: readO
 
   const currentHammerState = hammerStates[currentHole] ?? null
 
-  // Pending scores for approval panel
-  const pendingScores = useMemo(() => {
-    if (!isEventRound) return []
-    return holeScores.filter(s => s.scoreStatus === 'pending')
-  }, [holeScores, isEventRound])
+  const currentCarry = useMemo(() => {
+    if (!skinsResult) return 0
+    const prevHole = skinsResult.holeResults.find(h => h.holeNumber === currentHole - 1)
+    if (!prevHole) return 0
+    return prevHole.winnerId === null ? prevHole.carry + 1 : 0
+  }, [skinsResult, currentHole])
 
   const headerClass = game?.stakesMode === 'high_roller' ? 'hr-header' : 'app-header'
 
