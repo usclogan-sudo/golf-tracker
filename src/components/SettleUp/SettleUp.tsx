@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState, useCallback } from 'react'
 import { v4 as uuidv4 } from 'uuid'
-import { supabase, rowToRound, rowToRoundPlayer, rowToHoleScore, rowToBuyIn, rowToBBBPoint, rowToJunkRecord, rowToSideBet, rowToSettlementRecord, settlementRecordToRow, rowToUserProfile } from '../../lib/supabase'
+import { supabase, rowToRound, rowToRoundPlayer, rowToHoleScore, rowToBuyIn, rowToBBBPoint, rowToJunkRecord, rowToSideBet, rowToSettlementRecord, settlementRecordToRow, rowToUserProfile, rowToEvent } from '../../lib/supabase'
 import { PaymentButtons } from '../PaymentButtons'
 import {
   buildCourseHandicaps,
@@ -38,11 +38,13 @@ import type {
   SideBet,
   SettlementRecord,
   UserProfile,
+  GolfEvent,
 } from '../../types'
 
 interface Props {
   roundId: string
   userId?: string
+  eventId?: string
   onDone: () => void
   onContinue: () => void
 }
@@ -90,7 +92,7 @@ function NudgeButton({ playerName, amountCents, toPlayer }: { playerName: string
   )
 }
 
-export function SettleUp({ roundId, userId, onDone, onContinue }: Props) {
+export function SettleUp({ roundId, userId, eventId, onDone, onContinue }: Props) {
   const [round, setRound] = useState<Round | null>(null)
   const [roundPlayers, setRoundPlayers] = useState<RoundPlayer[]>([])
   const [holeScores, setHoleScores] = useState<HoleScore[]>([])
@@ -103,6 +105,7 @@ export function SettleUp({ roundId, userId, onDone, onContinue }: Props) {
   const [participantMap, setParticipantMap] = useState<Map<string, string>>(new Map()) // playerId → userId
   const [loading, setLoading] = useState(true)
   const [settlementsInitialized, setSettlementsInitialized] = useState(false)
+  const [eventData, setEventData] = useState<GolfEvent | null>(null)
 
   useEffect(() => {
     Promise.all([
@@ -150,7 +153,23 @@ export function SettleUp({ roundId, userId, onDone, onContinue }: Props) {
 
       setLoading(false)
     })
-  }, [roundId])
+
+    // Fetch event data if eventId provided or round has one
+    if (eventId) {
+      supabase.from('events').select('*').eq('id', eventId).single().then(({ data }) => {
+        if (data) setEventData(rowToEvent(data))
+      })
+    }
+  }, [roundId, eventId])
+
+  // Fetch event from round if not provided via prop
+  useEffect(() => {
+    if (!eventData && round?.eventId) {
+      supabase.from('events').select('*').eq('id', round.eventId).single().then(({ data }) => {
+        if (data) setEventData(rowToEvent(data))
+      })
+    }
+  }, [round?.eventId, eventData])
 
   const players = round?.players ?? []
   const snapshot = round?.courseSnapshot
@@ -311,7 +330,9 @@ export function SettleUp({ roundId, userId, onDone, onContinue }: Props) {
               </span>
             )}
           </h1>
-          <p className="text-gray-300 text-sm mt-0.5">{snapshot.courseName} · {gameLabel}</p>
+          <p className="text-gray-300 text-sm mt-0.5">
+            {eventData ? `${eventData.name} · ` : ''}{snapshot.courseName} · {gameLabel}
+          </p>
         </div>
       </header>
 
@@ -401,6 +422,48 @@ export function SettleUp({ roundId, userId, onDone, onContinue }: Props) {
             Treasurer: <strong>{treasurer?.name ?? 'Not assigned'}</strong>
           </p>
         </section>
+
+        {/* ── Group Breakdown (Event only) ── */}
+        {eventData && round?.groups && (() => {
+          const groupNums = [...new Set(Object.values(round.groups!))].sort((a, b) => a - b)
+          if (groupNums.length <= 1) return null
+          return (
+            <section className="bg-white dark:bg-gray-800 rounded-2xl shadow-sm p-4 space-y-3">
+              <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Group Breakdown</p>
+              {groupNums.map(gn => {
+                const groupPlayerIds = Object.entries(round.groups!)
+                  .filter(([, g]) => g === gn)
+                  .map(([pid]) => pid)
+                const groupPlayers = players.filter(p => groupPlayerIds.includes(p.id))
+                const groupScores = holeScores.filter(s => groupPlayerIds.includes(s.playerId))
+                return (
+                  <div key={gn} className="bg-gray-50 dark:bg-gray-700 rounded-xl p-3">
+                    <p className="text-sm font-bold text-gray-800 dark:text-gray-100 mb-1">Group {gn}</p>
+                    <div className="space-y-1">
+                      {groupPlayers.map(p => {
+                        const pScores = groupScores.filter(s => s.playerId === p.id)
+                        const gross = pScores.reduce((s, hs) => s + hs.grossScore, 0)
+                        const scoredPar = pScores.reduce((s, hs) => {
+                          const hole = snapshot?.holes.find(h => h.number === hs.holeNumber)
+                          return s + (hole?.par ?? 0)
+                        }, 0)
+                        const vsPar = gross - scoredPar
+                        return (
+                          <div key={p.id} className="flex items-center justify-between text-sm">
+                            <span className="text-gray-700 dark:text-gray-300">{p.name}</span>
+                            <span className={`font-semibold ${vsPar > 0 ? 'text-red-600' : vsPar < 0 ? 'text-green-600' : 'text-gray-400'}`}>
+                              {pScores.length > 0 ? `${gross} (${vsPar > 0 ? '+' : ''}${vsPar})` : '—'}
+                            </span>
+                          </div>
+                        )
+                      })}
+                    </div>
+                  </div>
+                )
+              })}
+            </section>
+          )
+        })()}
 
         {/* ── Scoreboard ── */}
         {snapshot && players.length > 0 && holeScores.length > 0 && (() => {

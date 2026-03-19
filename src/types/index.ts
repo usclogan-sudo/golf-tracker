@@ -171,6 +171,33 @@ export interface BuyIn {
   paidAt?: Date
 }
 
+// ─── Events ──────────────────────────────────────────────────────────────────
+
+export type EventStatus = 'setup' | 'active' | 'complete'
+export type EventRole = 'manager' | 'scorekeeper' | 'player'
+export type ScoreStatus = 'pending' | 'approved' | 'rejected'
+
+export interface GolfEvent {
+  id: string
+  name: string
+  status: EventStatus
+  roundId?: string
+  inviteCode?: string
+  groupScorekeepers: Record<number, string>  // groupNumber → playerId
+  createdBy: string
+  createdAt: Date
+}
+
+export interface EventParticipant {
+  id: string
+  eventId: string
+  userId: string
+  playerId: string
+  role: EventRole
+  groupNumber?: number
+  joinedAt?: Date
+}
+
 // ─── Round ────────────────────────────────────────────────────────────────────
 
 export interface Round {
@@ -206,6 +233,9 @@ export interface Round {
 
   // Invite code for shared scoring
   inviteCode?: string
+
+  // Event ID if this round is part of an event
+  eventId?: string
 }
 
 // ─── Round Participant ──────────────────────────────────────────────────────
@@ -242,6 +272,8 @@ export interface HoleScore {
   playerId: string
   holeNumber: number
   grossScore: number
+  scoreStatus?: ScoreStatus
+  submittedBy?: string
 }
 
 // ─── Settlements ─────────────────────────────────────────────────────────────

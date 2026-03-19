@@ -1,5 +1,5 @@
 import { createClient } from '@supabase/supabase-js'
-import type { Course, Player, Round, RoundPlayer, HoleScore, BuyIn, BBBPoint, JunkRecord, JunkType, UserProfile, GamePreset, GameType, StakesMode, PinnedFriend, RoundParticipant, SettlementRecord, SettlementStatus, AppNotification, NotificationType, SideBet, SideBetStatus, Tournament, TournamentFormat, TournamentStatus, TournamentRound, TournamentMatchup, MatchupStatus } from '../types'
+import type { Course, Player, Round, RoundPlayer, HoleScore, BuyIn, BBBPoint, JunkRecord, JunkType, UserProfile, GamePreset, GameType, StakesMode, PinnedFriend, RoundParticipant, SettlementRecord, SettlementStatus, AppNotification, NotificationType, SideBet, SideBetStatus, Tournament, TournamentFormat, TournamentStatus, TournamentRound, TournamentMatchup, MatchupStatus, GolfEvent, EventStatus, EventParticipant, EventRole, ScoreStatus } from '../types'
 
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL as string
 const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY as string
@@ -50,6 +50,7 @@ export function rowToRound(row: any): Round {
     createdBy: row.user_id ?? undefined,
     gameMasterId: row.game_master_id ?? undefined,
     inviteCode: row.invite_code ?? undefined,
+    eventId: row.event_id ?? undefined,
   }
 }
 
@@ -71,6 +72,8 @@ export function rowToHoleScore(row: any): HoleScore {
     playerId: row.player_id,
     holeNumber: row.hole_number,
     grossScore: row.gross_score,
+    scoreStatus: row.score_status ?? undefined,
+    submittedBy: row.submitted_by ?? undefined,
   }
 }
 
@@ -143,6 +146,7 @@ export function roundToRow(r: Round, userId: string) {
     groups: r.groups ?? null,
     game_master_id: r.gameMasterId ?? null,
     invite_code: r.inviteCode ?? null,
+    event_id: r.eventId ?? null,
   }
 }
 
@@ -166,6 +170,8 @@ export function holeScoreToRow(hs: HoleScore, userId: string) {
     player_id: hs.playerId,
     hole_number: hs.holeNumber,
     gross_score: hs.grossScore,
+    score_status: hs.scoreStatus ?? 'approved',
+    submitted_by: hs.submittedBy ?? null,
   }
 }
 
@@ -525,5 +531,44 @@ export function tournamentMatchupToRow(m: TournamentMatchup, userId: string) {
     winner_id: m.winnerId ?? null,
     loser_bracket: m.loserBracket,
     status: m.status,
+  }
+}
+
+// ─── Event mappers ──────────────────────────────────────────────────────────
+
+export function rowToEvent(row: any): GolfEvent {
+  return {
+    id: row.id,
+    name: row.name,
+    status: row.status as EventStatus,
+    roundId: row.round_id ?? undefined,
+    inviteCode: row.invite_code ?? undefined,
+    groupScorekeepers: row.group_scorekeepers ?? {},
+    createdBy: row.user_id,
+    createdAt: new Date(row.created_at),
+  }
+}
+
+export function eventToRow(e: GolfEvent, userId: string) {
+  return {
+    id: e.id,
+    user_id: userId,
+    name: e.name,
+    status: e.status,
+    round_id: e.roundId ?? null,
+    invite_code: e.inviteCode ?? null,
+    group_scorekeepers: e.groupScorekeepers,
+  }
+}
+
+export function rowToEventParticipant(row: any): EventParticipant {
+  return {
+    id: row.id,
+    eventId: row.event_id,
+    userId: row.user_id,
+    playerId: row.player_id,
+    role: row.role as EventRole,
+    groupNumber: row.group_number ?? undefined,
+    joinedAt: row.joined_at ? new Date(row.joined_at) : undefined,
   }
 }

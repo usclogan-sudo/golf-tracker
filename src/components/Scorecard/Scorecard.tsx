@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { v4 as uuidv4 } from 'uuid'
-import { supabase, rowToRound, rowToRoundPlayer, rowToHoleScore, rowToBBBPoint, rowToJunkRecord, rowToSideBet, rowToRoundParticipant, holeScoreToRow, bbbPointToRow, junkRecordToRow, sideBetToRow, generateInviteCode } from '../../lib/supabase'
+import { supabase, rowToRound, rowToRoundPlayer, rowToHoleScore, rowToBBBPoint, rowToJunkRecord, rowToSideBet, rowToRoundParticipant, rowToEvent, rowToEventParticipant, holeScoreToRow, bbbPointToRow, junkRecordToRow, sideBetToRow, generateInviteCode } from '../../lib/supabase'
 import { getCelebration, CelebrationToast, CelebrationFullscreen } from '../Celebrations'
 import { ConfirmModal } from '../ConfirmModal'
 import {
@@ -28,6 +28,9 @@ import type {
   BestBallConfig,
   NassauConfig,
   WolfConfig,
+  GolfEvent,
+  EventParticipant,
+  ScoreStatus,
 } from '../../types'
 
 interface Props {
@@ -133,6 +136,12 @@ export function Scorecard({ userId, roundId, onEndRound, onHome, readOnly: readO
   const [sideBetAmount, setSideBetAmount] = useState('5')
   const [sideBetParticipants, setSideBetParticipants] = useState<string[]>([])
 
+  // Event-related state
+  const [event, setEvent] = useState<GolfEvent | null>(null)
+  const [eventParticipants, setEventParticipants] = useState<EventParticipant[]>([])
+  const [localHole, setLocalHole] = useState<number | null>(null)
+  const [showApprovalPanel, setShowApprovalPanel] = useState(false)
+
   useEffect(() => {
     Promise.all([
       supabase.from('rounds').select('*').eq('id', roundId).single(),
@@ -153,6 +162,18 @@ export function Scorecard({ userId, roundId, onEndRound, onHome, readOnly: readO
       setLoading(false)
     })
   }, [roundId])
+
+  // ─── Fetch event data when round is part of an event ──────────────────────
+  useEffect(() => {
+    if (!round?.eventId) return
+    Promise.all([
+      supabase.from('events').select('*').eq('id', round.eventId).single(),
+      supabase.from('event_participants').select('*').eq('event_id', round.eventId),
+    ]).then(([eventRes, epRes]) => {
+      if (eventRes.data) setEvent(rowToEvent(eventRes.data))
+      if (epRes.data) setEventParticipants(epRes.data.map(rowToEventParticipant))
+    })
+  }, [round?.eventId])
 
   // ─── Realtime subscriptions for multi-device sync ──────────────────────────
   useEffect(() => {
@@ -233,7 +254,16 @@ export function Scorecard({ userId, roundId, onEndRound, onHome, readOnly: readO
   const players = round?.players ?? []
   const snapshot = round?.courseSnapshot
   const game = round?.game
-  const currentHole = round?.currentHole ?? 1
+  const isEventRound = !!round?.eventId
+  // For event rounds, use local hole navigation; for regular rounds, use DB-synced hole
+  const currentHole = (isEventRound && localHole !== null) ? localHole : (round?.currentHole ?? 1)
+
+  // Initialize localHole from round's currentHole on first load
+  useEffect(() => {
+    if (isEventRound && localHole === null && round) {
+      setLocalHole(round.currentHole)
+    }
+  }, [isEventRound, round?.currentHole])
 
   const courseHcps = useMemo(() => {
     if (!snapshot || !roundPlayers) return {}
@@ -263,8 +293,34 @@ export function Scorecard({ userId, roundId, onEndRound, onHome, readOnly: readO
     }
 
     try {
+      // Event self-scoring: use event RPC which auto-sets pending/approved status
+      if (isEventRound && myEventParticipant) {
+        const scoreStatus: ScoreStatus = canApproveScores ? 'approved' : 'pending'
+        if (existing) {
+          setHoleScores(prev => prev.map(s => s.id === existing.id ? { ...s, grossScore, scoreStatus } : s))
+        } else {
+          const tempId = uuidv4()
+          setHoleScores(prev => [...prev, { id: tempId, roundId, playerId, holeNumber: currentHole, grossScore, scoreStatus, submittedBy: userId }])
+        }
+        const { data, error } = await supabase.rpc('submit_event_score', {
+          p_round_id: roundId,
+          p_player_id: playerId,
+          p_hole_number: currentHole,
+          p_gross_score: grossScore,
+        })
+        if (error) throw error
+        // Update with actual status from server
+        if (data) {
+          const actualStatus = (data as any).status as ScoreStatus
+          const actualId = (data as any).id as string
+          setHoleScores(prev => prev.map(s =>
+            (s.playerId === playerId && s.holeNumber === currentHole)
+              ? { ...s, id: actualId, scoreStatus: actualStatus }
+              : s
+          ))
+        }
       // Participant self-entry: use RPC so scores are stored with creator's user_id
-      if (selfEntryOnly && myParticipant && playerId === myParticipant.playerId) {
+      } else if (selfEntryOnly && myParticipant && playerId === myParticipant.playerId) {
         if (existing) {
           setHoleScores(prev => prev.map(s => s.id === existing.id ? { ...s, grossScore } : s))
         } else {
@@ -305,9 +361,19 @@ export function Scorecard({ userId, roundId, onEndRound, onHome, readOnly: readO
 
   const goToHole = async (holeNum: number) => {
     setSaveError(null)
-    setRound(prev => prev ? { ...prev, currentHole: holeNum } : prev)
-    const { error } = await supabase.from('rounds').update({ current_hole: holeNum }).eq('id', roundId)
-    if (error) setSaveError('Failed to save hole change — check your connection')
+    if (isEventRound) {
+      // Event rounds: navigate locally, only event manager updates DB
+      setLocalHole(holeNum)
+      if (isEventManager) {
+        setRound(prev => prev ? { ...prev, currentHole: holeNum } : prev)
+        const { error } = await supabase.from('rounds').update({ current_hole: holeNum }).eq('id', roundId)
+        if (error) setSaveError('Failed to save hole change — check your connection')
+      }
+    } else {
+      setRound(prev => prev ? { ...prev, currentHole: holeNum } : prev)
+      const { error } = await supabase.from('rounds').update({ current_hole: holeNum }).eq('id', roundId)
+      if (error) setSaveError('Failed to save hole change — check your connection')
+    }
   }
 
   const confirmEndRound = () => {
@@ -442,23 +508,23 @@ export function Scorecard({ userId, roundId, onEndRound, onHome, readOnly: readO
 
   const skinsResult = useMemo(() => {
     if (!game || game.type !== 'skins' || !snapshot) return null
-    return calculateSkins(players, holeScores, snapshot, game.config as SkinsConfig, courseHcps)
-  }, [game, players, holeScores, snapshot, courseHcps])
+    return calculateSkins(players, approvedScores, snapshot, game.config as SkinsConfig, courseHcps)
+  }, [game, players, approvedScores, snapshot, courseHcps])
 
   const bestBallResult = useMemo(() => {
     if (!game || game.type !== 'best_ball' || !snapshot) return null
-    return calculateBestBall(players, holeScores, snapshot, game.config as BestBallConfig, courseHcps)
-  }, [game, players, holeScores, snapshot, courseHcps])
+    return calculateBestBall(players, approvedScores, snapshot, game.config as BestBallConfig, courseHcps)
+  }, [game, players, approvedScores, snapshot, courseHcps])
 
   const nassauResult = useMemo(() => {
     if (!game || game.type !== 'nassau' || !snapshot) return null
-    return calculateNassau(players, holeScores, snapshot, game.config as NassauConfig, courseHcps)
-  }, [game, players, holeScores, snapshot, courseHcps])
+    return calculateNassau(players, approvedScores, snapshot, game.config as NassauConfig, courseHcps)
+  }, [game, players, approvedScores, snapshot, courseHcps])
 
   const wolfResult = useMemo(() => {
     if (!game || game.type !== 'wolf' || !snapshot) return null
-    return calculateWolf(players, holeScores, snapshot, game.config as WolfConfig, courseHcps)
-  }, [game, players, holeScores, snapshot, courseHcps])
+    return calculateWolf(players, approvedScores, snapshot, game.config as WolfConfig, courseHcps)
+  }, [game, players, approvedScores, snapshot, courseHcps])
 
   const bbbResult = useMemo(() => {
     if (!game || game.type !== 'bingo_bango_bongo') return null
@@ -478,7 +544,28 @@ export function Scorecard({ userId, roundId, onEndRound, onHome, readOnly: readO
   const isScoremasterRole = isCreator || isGameMaster
   const myParticipant = roundParticipants.find(p => p.userId === userId)
   const selfEntryOnly = !!myParticipant && !isScoremasterRole
-  const readOnly = readOnlyProp || (!isScoremasterRole && !myParticipant)
+
+  // Event role detection
+  const myEventParticipant = eventParticipants.find(ep => ep.userId === userId)
+  const isEventManager = myEventParticipant?.role === 'manager' || isCreator
+  const isGroupScorekeeper = myEventParticipant?.role === 'scorekeeper'
+  const canApproveScores = isEventRound && (isEventManager || isGroupScorekeeper || isScoremasterRole)
+  const myEventGroupNumber = myEventParticipant?.groupNumber
+
+  // For event rounds, participants can self-score (not read-only)
+  const readOnly = readOnlyProp || (!isScoremasterRole && !myParticipant && !myEventParticipant)
+
+  // Filter scores for game logic: only use approved scores
+  const approvedScores = useMemo(() => {
+    if (!isEventRound) return holeScores
+    return holeScores.filter(s => s.scoreStatus !== 'rejected' && s.scoreStatus !== 'pending')
+  }, [holeScores, isEventRound])
+
+  // Pending scores for approval panel
+  const pendingScores = useMemo(() => {
+    if (!isEventRound) return []
+    return holeScores.filter(s => s.scoreStatus === 'pending')
+  }, [holeScores, isEventRound])
 
   const headerClass = game?.stakesMode === 'high_roller' ? 'hr-header' : 'app-header'
 
@@ -498,10 +585,10 @@ export function Scorecard({ userId, roundId, onEndRound, onHome, readOnly: readO
         <div className="max-w-2xl mx-auto flex items-center justify-between">
           <div>
             <p className="text-xs text-gray-300 font-medium flex items-center gap-1.5">
-              {snapshot.courseName}
+              {event ? `${event.name} · ` : ''}{snapshot.courseName}
               <span className="inline-flex items-center gap-1 text-[10px] bg-amber-500/30 px-1.5 py-0.5 rounded-full">
                 <span className="w-1.5 h-1.5 bg-amber-400 rounded-full animate-pulse" />
-                {readOnly ? 'Spectating' : selfEntryOnly ? 'Self-Entry' : 'Live'}
+                {readOnly ? 'Spectating' : isEventRound ? (canApproveScores ? 'Scorekeeper' : 'Self-Entry') : selfEntryOnly ? 'Self-Entry' : 'Live'}
               </span>
             </p>
             <h1 className="text-xl font-bold flex items-center gap-2">
@@ -1065,6 +1152,61 @@ export function Scorecard({ userId, roundId, onEndRound, onHome, readOnly: readO
           )
         })()}
 
+        {/* Event Approval Panel */}
+        {isEventRound && canApproveScores && pendingScores.length > 0 && (
+          <div className="bg-yellow-50 border border-yellow-200 rounded-xl p-3 space-y-2">
+            <button
+              onClick={() => setShowApprovalPanel(!showApprovalPanel)}
+              className="w-full flex items-center justify-between"
+            >
+              <p className="font-bold text-yellow-800 text-sm">
+                ⏳ {pendingScores.length} Pending Score{pendingScores.length !== 1 ? 's' : ''}
+              </p>
+              <span className="text-yellow-600 text-xs font-semibold">
+                {showApprovalPanel ? 'Hide' : 'Review'}
+              </span>
+            </button>
+            {showApprovalPanel && (
+              <div className="space-y-2 mt-2">
+                {pendingScores.map(score => {
+                  const player = players.find(p => p.id === score.playerId)
+                  const hole = snapshot?.holes.find(h => h.number === score.holeNumber)
+                  return (
+                    <div key={score.id} className="flex items-center justify-between bg-white rounded-lg p-2.5">
+                      <div>
+                        <p className="text-sm font-semibold text-gray-800">{player?.name ?? 'Unknown'}</p>
+                        <p className="text-xs text-gray-500">
+                          Hole {score.holeNumber} · Par {hole?.par ?? '?'} · Shot {score.grossScore}
+                        </p>
+                      </div>
+                      <div className="flex gap-1.5">
+                        <button
+                          onClick={async () => {
+                            setHoleScores(prev => prev.map(s => s.id === score.id ? { ...s, scoreStatus: 'approved' as ScoreStatus } : s))
+                            await supabase.rpc('approve_score', { p_score_id: score.id })
+                          }}
+                          className="px-3 py-1.5 bg-green-500 text-white text-xs font-bold rounded-lg active:bg-green-600"
+                        >
+                          Approve
+                        </button>
+                        <button
+                          onClick={async () => {
+                            setHoleScores(prev => prev.map(s => s.id === score.id ? { ...s, scoreStatus: 'rejected' as ScoreStatus } : s))
+                            await supabase.rpc('reject_score', { p_score_id: score.id })
+                          }}
+                          className="px-3 py-1.5 bg-red-500 text-white text-xs font-bold rounded-lg active:bg-red-600"
+                        >
+                          Reject
+                        </button>
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+            )}
+          </div>
+        )}
+
         {/* Score cards */}
         {players.map(player => {
           const grossScore = getScore(player.id)
@@ -1095,7 +1237,14 @@ export function Scorecard({ userId, roundId, onEndRound, onHome, readOnly: readO
           const groupNums = hasGroups ? [...new Set(Object.values(round.groups!))].sort((a, b) => a - b) : []
           const isInActiveGroup = !hasGroups || groupNums.length <= 1 || activeGroupTab === 'all' || activeGroupTab === playerGroup
           const isMyPlayer = selfEntryOnly && myParticipant?.playerId === player.id
-          const isEditable = isMyPlayer || (!readOnly && !selfEntryOnly && isInActiveGroup && activeGroupTab !== 'all')
+          const isMyEventPlayer = isEventRound && myEventParticipant?.playerId === player.id
+          const isEditable = isMyPlayer || isMyEventPlayer || (!readOnly && !selfEntryOnly && isInActiveGroup && activeGroupTab !== 'all')
+
+          // Score status for event rounds
+          const currentScore = holeScores.find(s => s.playerId === player.id && s.holeNumber === currentHole)
+          const scoreStatus = isEventRound ? (currentScore?.scoreStatus ?? undefined) : undefined
+          const isPending = scoreStatus === 'pending'
+          const isRejected = scoreStatus === 'rejected'
 
           // Filter out players not in the active group tab (unless showing 'all')
           if (hasGroups && groupNums.length > 1 && activeGroupTab !== 'all' && playerGroup !== activeGroupTab) {
@@ -1105,15 +1254,17 @@ export function Scorecard({ userId, roundId, onEndRound, onHome, readOnly: readO
           // Compact read-only row for "all" tab or readOnly mode with groups
           if (!isEditable) {
             return (
-              <div key={player.id} className="bg-white rounded-xl shadow-sm border border-gray-100 px-4 py-2.5 flex items-center justify-between">
+              <div key={player.id} className={`bg-white rounded-xl shadow-sm border px-4 py-2.5 flex items-center justify-between ${isPending ? 'border-yellow-300 bg-yellow-50/50' : isRejected ? 'border-red-300 bg-red-50/50' : 'border-gray-100'}`}>
                 <div className="flex items-center gap-2">
-                  <p className="font-semibold text-gray-800 text-sm">{player.name}</p>
+                  <p className={`font-semibold text-sm ${isRejected ? 'text-gray-400 line-through' : isPending ? 'text-gray-600' : 'text-gray-800'}`}>{player.name}</p>
                   {hasGroups && groupNums.length > 1 && (
                     <span className="text-[10px] font-bold uppercase px-1.5 py-0.5 rounded bg-gray-100 text-gray-500">G{playerGroup}</span>
                   )}
+                  {isPending && <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-yellow-200 text-yellow-700">PENDING</span>}
+                  {isRejected && <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-red-200 text-red-700">REJECTED</span>}
                 </div>
                 <div className="flex items-center gap-3 text-right">
-                  <span className={`text-sm font-bold px-1.5 py-0.5 rounded ${getScoreClass(grossScore, par)}`}>{grossScore}</span>
+                  <span className={`text-sm font-bold px-1.5 py-0.5 rounded ${isPending ? 'opacity-50' : ''} ${isRejected ? 'line-through opacity-40' : ''} ${getScoreClass(grossScore, par)}`}>{grossScore}</span>
                   {strokesGiven > 0 && <span className="text-xs text-amber-600 font-semibold">Net {netScore}</span>}
                   {holesPlayed > 0 && (
                     <span className={`text-xs font-semibold ${runningVsPar > 0 ? 'text-red-500' : runningVsPar < 0 ? 'text-green-600' : 'text-gray-400'}`}>
@@ -1131,10 +1282,14 @@ export function Scorecard({ userId, roundId, onEndRound, onHome, readOnly: readO
           if (grossScore >= par + 5) warnings.push(`That's +${grossScore - par} over par — verify score`)
 
           return (
-            <div key={player.id} className="bg-white dark:bg-gray-800 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700 p-4">
+            <div key={player.id} className={`bg-white dark:bg-gray-800 rounded-2xl shadow-sm border p-4 ${isPending ? 'border-yellow-300' : isRejected ? 'border-red-300' : 'border-gray-100 dark:border-gray-700'}`}>
               <div className="flex items-start justify-between mb-3">
                 <div>
-                  <p className="font-bold text-gray-800 text-lg">{player.name}</p>
+                  <div className="flex items-center gap-2">
+                    <p className="font-bold text-gray-800 text-lg">{player.name}</p>
+                    {isPending && <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-yellow-200 text-yellow-700">PENDING</span>}
+                    {isRejected && <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-red-200 text-red-700">REJECTED</span>}
+                  </div>
                   <p className="text-sm text-gray-500">HCP {player.handicapIndex}
                     {strokesGiven > 0 && <span className="ml-2 text-amber-600 font-semibold">+{strokesGiven} stroke{strokesGiven !== 1 ? 's' : ''}</span>}
                   </p>

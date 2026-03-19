@@ -30,9 +30,11 @@ import { PersonalDashboard } from './components/PersonalDashboard/PersonalDashbo
 import { TournamentList } from './components/TournamentList/TournamentList'
 import { TournamentSetup } from './components/TournamentSetup/TournamentSetup'
 import { TournamentDetail } from './components/TournamentDetail/TournamentDetail'
+import { EventSetup } from './components/EventSetup/EventSetup'
+import { EventLeaderboard } from './components/EventLeaderboard/EventLeaderboard'
 import type { Course, Round, HoleScore, UserProfile, GameType, StakesMode } from './types'
 
-type Screen = 'home' | 'course-catalog' | 'course-setup' | 'new-round' | 'scorecard' | 'settle-up' | 'round-history' | 'stats' | 'settings' | 'onboarding' | 'admin' | 'upgrade-account' | 'player-directory' | 'rounds-detail' | 'courses-detail' | 'handicap-detail' | 'join-round' | 'tournament-list' | 'tournament-setup' | 'tournament-detail' | 'personal-dashboard'
+type Screen = 'home' | 'course-catalog' | 'course-setup' | 'new-round' | 'scorecard' | 'settle-up' | 'round-history' | 'stats' | 'settings' | 'onboarding' | 'admin' | 'upgrade-account' | 'player-directory' | 'rounds-detail' | 'courses-detail' | 'handicap-detail' | 'join-round' | 'tournament-list' | 'tournament-setup' | 'tournament-detail' | 'personal-dashboard' | 'event-setup' | 'event-leaderboard'
 
 const GAME_EMOJI: Record<GameType, string> = {
   skins: '🎰 Skins',
@@ -127,6 +129,7 @@ function Home({
   notificationCount,
   onTournaments,
   onPersonalDashboard,
+  onCreateEvent,
 }: {
   userId: string
   userProfile: UserProfile | null
@@ -154,6 +157,7 @@ function Home({
   onJoinRound: (code?: string) => void
   onTournaments: () => void
   onPersonalDashboard: () => void
+  onCreateEvent: () => void
 }) {
   const [courses, setCourses] = useState<Course[]>([])
   const [activeRounds, setActiveRounds] = useState<Round[]>([])
@@ -477,6 +481,18 @@ function Home({
         </button>
 
 
+        <button onClick={onCreateEvent}
+          className="w-full rounded-2xl shadow-lg overflow-hidden active:scale-[0.98] transition-transform"
+          style={{ background: 'linear-gradient(135deg, #0f172a 0%, #1e40af 100%)' }}>
+          <div className="px-6 py-5 flex items-center justify-between">
+            <div className="text-left">
+              <p className="font-display font-bold text-white text-xl">Create Event</p>
+              <p className="text-blue-200 text-sm mt-0.5">Multi-group outing · Players self-score</p>
+            </div>
+            <div className="w-14 h-14 bg-white/15 rounded-2xl flex items-center justify-center text-3xl border border-white/20">🏌️</div>
+          </div>
+        </button>
+
         {/* Join Round */}
         <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700 p-4">
           <p className="font-display font-semibold text-gray-800 dark:text-gray-100 text-sm mb-2">Join a Round</p>
@@ -571,6 +587,7 @@ export default function App() {
   const [scorecardReadOnly, setScorecardReadOnly] = useState(false)
   const [appConfirmModal, setAppConfirmModal] = useState<{ title: string; message: string; onConfirm: () => void; destructive?: boolean } | null>(null)
   const [activeTournamentId, setActiveTournamentId] = useState<string | null>(null)
+  const [activeEventId, setActiveEventId] = useState<string | null>(null)
   const { unreadCount: notificationCount, latestToast, dismissToast } = useNotifications(session?.user?.id ?? null)
 
   const [pendingJoinCode, setPendingJoinCode] = useState<string | null>(() => {
@@ -838,6 +855,33 @@ export default function App() {
       />
     )
   }
+  if (screen === 'event-setup') {
+    return (
+      <EventSetup
+        userId={userId}
+        onStart={(roundId, eventId) => {
+          setActiveRoundId(roundId)
+          setActiveEventId(eventId)
+          setScorecardReadOnly(false)
+          setScreen('scorecard')
+        }}
+        onCancel={goHome}
+        onAddCourse={() => { setAfterCourseSetup('home'); setScreen('course-catalog') }}
+      />
+    )
+  }
+  if (screen === 'event-leaderboard' && activeEventId) {
+    return (
+      <EventLeaderboard
+        userId={userId}
+        eventId={activeEventId}
+        onBack={() => {
+          if (activeRoundId) setScreen('scorecard')
+          else goHome()
+        }}
+      />
+    )
+  }
 
   const handleDeleteCourse = (courseId: string) => {
     setAppConfirmModal({
@@ -922,6 +966,7 @@ export default function App() {
       notificationCount={notificationCount}
       onTournaments={() => setScreen('tournament-list')}
       onPersonalDashboard={() => setScreen('personal-dashboard')}
+      onCreateEvent={() => setScreen('event-setup')}
     />
     {appConfirmModal && (
       <ConfirmModal
