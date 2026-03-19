@@ -36,6 +36,7 @@ const MAX_PER_GROUP = 5
 export function EventSetup({ userId, onStart, onCancel, onAddCourse }: Props) {
   const [step, setStep] = useState<Step>('name')
   const [saving, setSaving] = useState(false)
+  const [createError, setCreateError] = useState<string | null>(null)
   const [createdRoundId, setCreatedRoundId] = useState<string | null>(null)
   const [createdEventId, setCreatedEventId] = useState<string | null>(null)
   const [createdInviteCode, setCreatedInviteCode] = useState<string | null>(null)
@@ -70,6 +71,8 @@ export function EventSetup({ userId, onStart, onCancel, onAddCourse }: Props) {
   const [wolfMode, setWolfMode] = useState<'gross' | 'net'>('net')
   const [bbbMode, setBbbMode] = useState<'gross' | 'net'>('net')
   const [treasurerId, setTreasurerId] = useState<string | null>(null)
+  const [customBuyIn, setCustomBuyIn] = useState('')
+  const [gameError, setGameError] = useState<string | null>(null)
 
   // Load courses
   useEffect(() => {
@@ -182,6 +185,7 @@ export function EventSetup({ userId, onStart, onCancel, onAddCourse }: Props) {
   const createEvent = async () => {
     if (!selectedCourse || !treasurerId) return
     setSaving(true)
+    setCreateError(null)
     try {
       const roundId = uuidv4()
       const eventId = uuidv4()
@@ -276,6 +280,9 @@ export function EventSetup({ userId, onStart, onCancel, onAddCourse }: Props) {
       setCreatedEventId(eventId)
       setCreatedInviteCode(inviteCode)
       setStep('share')
+    } catch (err) {
+      console.error('Failed to create event:', err)
+      setCreateError('Failed to create event. Please try again.')
     } finally {
       setSaving(false)
     }
@@ -580,7 +587,14 @@ export function EventSetup({ userId, onStart, onCancel, onAddCourse }: Props) {
         <div className="fixed bottom-0 inset-x-0 p-4 bg-white/95 dark:bg-gray-800/95 backdrop-blur-sm border-t border-gray-200 safe-bottom">
           <div className="max-w-2xl mx-auto">
             <button
-              onClick={() => setStep('game')}
+              onClick={() => {
+                // Validate groups: no empty groups, max per group
+                const hasEmpty = groupNumbers.some(gn => !selectedPlayers.some(p => groups[p.id] === gn))
+                if (hasEmpty) return
+                const oversize = groupNumbers.some(gn => selectedPlayers.filter(p => groups[p.id] === gn).length > MAX_PER_GROUP)
+                if (oversize) return
+                setStep('game')
+              }}
               className="w-full h-14 bg-gray-800 text-white text-lg font-bold rounded-2xl active:bg-gray-900"
             >
               Next: Game Setup →
@@ -607,20 +621,31 @@ export function EventSetup({ userId, onStart, onCancel, onAddCourse }: Props) {
           <section className="bg-white dark:bg-gray-800 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700 p-4 space-y-3">
             <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Game Type</p>
             <div className="grid grid-cols-3 gap-2">
-              {GAME_OPTIONS.map(opt => (
-                <button
-                  key={opt.type}
-                  onClick={() => setGameType(opt.type)}
-                  className={`py-3 rounded-xl text-sm font-semibold transition-colors ${
-                    gameType === opt.type
-                      ? 'bg-amber-500 text-white'
-                      : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300'
-                  }`}
-                >
-                  {opt.emoji} {opt.label}
-                </button>
-              ))}
+              {GAME_OPTIONS.map(opt => {
+                const disabled = (opt.type === 'wolf' && selectedPlayers.length < 3) ||
+                  (opt.type === 'best_ball' && selectedPlayers.length % 2 !== 0)
+                return (
+                  <button
+                    key={opt.type}
+                    onClick={() => { if (!disabled) { setGameType(opt.type); setGameError(null) } }}
+                    disabled={disabled}
+                    className={`py-3 rounded-xl text-sm font-semibold transition-colors ${
+                      gameType === opt.type
+                        ? 'bg-amber-500 text-white'
+                        : disabled
+                          ? 'bg-gray-50 dark:bg-gray-800 text-gray-300 dark:text-gray-600'
+                          : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300'
+                    }`}
+                  >
+                    {opt.emoji} {opt.label}
+                    {disabled && <span className="block text-[10px] font-normal mt-0.5">
+                      {opt.type === 'wolf' ? '3+ players' : 'Even #'}
+                    </span>}
+                  </button>
+                )
+              })}
             </div>
+            {gameError && <p className="text-red-500 text-sm">{gameError}</p>}
           </section>
 
           {/* Buy-in */}
@@ -630,9 +655,9 @@ export function EventSetup({ userId, onStart, onCancel, onAddCourse }: Props) {
               {BUY_IN_PRESETS.map(cents => (
                 <button
                   key={cents}
-                  onClick={() => setBuyInCents(cents)}
+                  onClick={() => { setBuyInCents(cents); setCustomBuyIn('') }}
                   className={`py-3 rounded-xl text-sm font-semibold transition-colors ${
-                    buyInCents === cents
+                    buyInCents === cents && !customBuyIn
                       ? 'bg-amber-500 text-white'
                       : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300'
                   }`}
@@ -640,6 +665,24 @@ export function EventSetup({ userId, onStart, onCancel, onAddCourse }: Props) {
                   {fmtMoney(cents)}
                 </button>
               ))}
+            </div>
+            <div className="flex items-center gap-2">
+              <span className="text-sm text-gray-500 font-medium">Custom:</span>
+              <div className="relative flex-1">
+                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-sm">$</span>
+                <input
+                  type="number"
+                  inputMode="decimal"
+                  placeholder="Amount"
+                  value={customBuyIn}
+                  onChange={e => {
+                    setCustomBuyIn(e.target.value)
+                    const v = Math.round(parseFloat(e.target.value) * 100)
+                    if (!isNaN(v) && v > 0) setBuyInCents(v)
+                  }}
+                  className="w-full h-10 pl-7 pr-3 rounded-xl border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 text-sm focus:outline-none focus:ring-2 focus:ring-amber-500"
+                />
+              </div>
             </div>
             <p className="text-sm text-gray-500 text-center">
               Pot: {fmtMoney(buyInCents * selectedPlayers.length)}
@@ -824,6 +867,7 @@ export function EventSetup({ userId, onStart, onCancel, onAddCourse }: Props) {
       </div>
       <div className="fixed bottom-0 inset-x-0 p-4 bg-white/95 dark:bg-gray-800/95 backdrop-blur-sm border-t border-gray-200 safe-bottom">
         <div className="max-w-2xl mx-auto">
+          {createError && <p className="text-red-500 text-sm text-center mb-2">{createError}</p>}
           <button
             onClick={createEvent}
             disabled={saving}

@@ -126,6 +126,7 @@ export function Scorecard({ userId, roundId, onEndRound, onHome, readOnly: readO
   const [loading, setLoading] = useState(true)
   const [inviteToast, setInviteToast] = useState<string | null>(null)
   const [saveError, setSaveError] = useState<string | null>(null)
+  const [lastFailedSave, setLastFailedSave] = useState<{ playerId: string; grossScore: number } | null>(null)
   const [lastChange, setLastChange] = useState<{ playerId: string; holeNumber: number; previousScore: number } | null>(null)
   const [activeGroupTab, setActiveGroupTab] = useState<number | 'all'>(1)
   const [celebration, setCelebration] = useState<{ level: 'toast' | 'fullscreen'; title: string; subtitle?: string; emoji: string; playerName: string } | null>(null)
@@ -346,6 +347,7 @@ export function Scorecard({ userId, roundId, onEndRound, onHome, readOnly: readO
       }
     } catch {
       setSaveError('Score failed to save — check your connection')
+      setLastFailedSave({ playerId, grossScore })
     }
   }
 
@@ -846,9 +848,17 @@ export function Scorecard({ userId, roundId, onEndRound, onHome, readOnly: readO
       {scoreTab === 'scores' && (
       <div className="px-4 py-4 max-w-2xl mx-auto space-y-4">
         {saveError && (
-          <div className="bg-red-50 border border-red-200 rounded-xl px-4 py-3 flex items-center justify-between">
-            <p className="text-red-700 text-sm font-semibold">{saveError}</p>
-            <button onClick={() => setSaveError(null)} className="text-red-400 text-lg font-bold ml-2">&times;</button>
+          <div className="bg-red-50 border border-red-200 rounded-xl px-4 py-3 flex items-center justify-between gap-2">
+            <p className="text-red-700 text-sm font-semibold flex-1">{saveError}</p>
+            {lastFailedSave && (
+              <button
+                onClick={() => { setSaveError(null); setLastFailedSave(null); setScore(lastFailedSave.playerId, lastFailedSave.grossScore) }}
+                className="text-red-600 text-xs font-bold bg-red-100 px-3 py-1.5 rounded-lg active:bg-red-200 whitespace-nowrap"
+              >
+                Retry
+              </button>
+            )}
+            <button onClick={() => { setSaveError(null); setLastFailedSave(null) }} className="text-red-400 text-lg font-bold ml-1">&times;</button>
           </div>
         )}
         {/* Game status bars */}

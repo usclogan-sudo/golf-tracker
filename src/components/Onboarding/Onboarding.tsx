@@ -28,21 +28,32 @@ export function Onboarding({ userId, onComplete }: Props) {
 
   const handleFinish = async () => {
     setSaving(true)
-    const hcp = parseFloat(handicapIndex)
-    await supabase
-      .from('user_profiles')
-      .update({
-        onboarding_complete: true,
-        display_name: displayName.trim(),
-        handicap_index: hcp,
-        venmo_username: venmo.trim() || null,
-        zelle_identifier: zelle.trim() || null,
-        cashapp_username: cashapp.trim() || null,
-        paypal_email: paypal.trim() || null,
-        preferred_payment: preferred || null,
-      })
-      .eq('user_id', userId)
-    onComplete()
+    setError('')
+    try {
+      const hcp = parseFloat(handicapIndex)
+      const { error: err } = await supabase
+        .from('user_profiles')
+        .update({
+          onboarding_complete: true,
+          display_name: displayName.trim(),
+          handicap_index: hcp,
+          venmo_username: venmo.trim() || null,
+          zelle_identifier: zelle.trim() || null,
+          cashapp_username: cashapp.trim() || null,
+          paypal_email: paypal.trim() || null,
+          preferred_payment: preferred || null,
+        })
+        .eq('user_id', userId)
+      if (err) {
+        setError('Failed to save profile. Please try again.')
+        setSaving(false)
+        return
+      }
+      onComplete()
+    } catch {
+      setError('Something went wrong. Please try again.')
+      setSaving(false)
+    }
   }
 
   const METHODS = [

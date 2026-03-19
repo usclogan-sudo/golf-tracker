@@ -111,7 +111,7 @@ export function Settings({ userId, email, onBack, onSignOut, isAdmin, onAdmin, i
     setDeleteError('')
     try {
       // Delete all user data from all tables — explicitly scoped to current user
-      const tables = ['hole_scores', 'bbb_points', 'buy_ins', 'round_players', 'rounds', 'players', 'courses']
+      const tables = ['hole_scores', 'bbb_points', 'buy_ins', 'round_players', 'rounds', 'players', 'courses', 'user_profiles']
       for (const table of tables) {
         const { error } = await supabase.from(table).delete().eq('user_id', userId)
         if (error) console.error(`Failed to delete from ${table}:`, error)

@@ -1408,7 +1408,7 @@ function TreasurerAndBuyIns({
   stepIndicator?: React.ReactNode
 }) {
   const [treasurerId, setTreasurerId] = useState<string | null>(null)
-  const [gameMasterId, setGameMasterId] = useState<string>(userId)
+  const [gameMasterId, setGameMasterId] = useState<string>(players.find(p => p.id === userId)?.id ?? players[0]?.id ?? userId)
   const [paid, setPaid] = useState<Record<string, boolean>>(() => {
     const init: Record<string, boolean> = {}
     players.forEach(p => (init[p.id] = false))

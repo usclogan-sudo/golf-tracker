@@ -82,17 +82,28 @@ export function RoundHistory({ userId, onBack, onViewSettlements }: Props) {
     }
   }
 
+  const [deleteError, setDeleteError] = useState<string | null>(null)
+
   const deleteRound = async (roundId: string) => {
     setDeleting(roundId)
-    await Promise.all([
-      supabase.from('hole_scores').delete().eq('round_id', roundId),
-      supabase.from('round_players').delete().eq('round_id', roundId),
-      supabase.from('buy_ins').delete().eq('round_id', roundId),
-      supabase.from('bbb_points').delete().eq('round_id', roundId),
-    ])
-    await supabase.from('rounds').delete().eq('id', roundId)
-    setRounds(prev => prev.filter(r => r.id !== roundId))
-    if (expandedId === roundId) setExpandedId(null)
+    setDeleteError(null)
+    try {
+      const results = await Promise.all([
+        supabase.from('hole_scores').delete().eq('round_id', roundId),
+        supabase.from('round_players').delete().eq('round_id', roundId),
+        supabase.from('buy_ins').delete().eq('round_id', roundId),
+        supabase.from('bbb_points').delete().eq('round_id', roundId),
+        supabase.from('settlements').delete().eq('round_id', roundId),
+      ])
+      const failed = results.find(r => r.error)
+      if (failed?.error) throw failed.error
+      const { error } = await supabase.from('rounds').delete().eq('id', roundId)
+      if (error) throw error
+      setRounds(prev => prev.filter(r => r.id !== roundId))
+      if (expandedId === roundId) setExpandedId(null)
+    } catch {
+      setDeleteError('Failed to delete round. Please try again.')
+    }
     setDeleting(null)
   }
 
@@ -247,6 +258,12 @@ export function RoundHistory({ userId, onBack, onViewSettlements }: Props) {
           )
         })}
       </div>
+      {deleteError && (
+        <div className="fixed bottom-4 left-4 right-4 bg-red-100 border border-red-300 rounded-xl p-3 text-center z-20">
+          <p className="text-red-700 text-sm font-medium">{deleteError}</p>
+          <button onClick={() => setDeleteError(null)} className="text-red-500 text-xs underline mt-1">Dismiss</button>
+        </div>
+      )}
       <ConfirmModal
         open={!!deleteModal}
         title="Delete Round?"

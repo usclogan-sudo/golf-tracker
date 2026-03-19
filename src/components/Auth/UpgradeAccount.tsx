@@ -16,6 +16,7 @@ export function UpgradeAccount({ onComplete, onCancel }: Props) {
 
   const handleUpgrade = async () => {
     if (!email.trim()) { setError('Enter your email address'); return }
+    if (!/^\S+@\S+\.\S+$/.test(email.trim())) { setError('Enter a valid email address'); return }
     if (password.length < 6) { setError('Password must be at least 6 characters'); return }
     if (password !== confirmPassword) { setError('Passwords do not match'); return }
 
@@ -44,12 +45,25 @@ export function UpgradeAccount({ onComplete, onCancel }: Props) {
         </div>
 
         {message ? (
-          <div className="bg-amber-50 border border-amber-200 rounded-2xl p-6 text-center space-y-2">
+          <div className="bg-amber-50 border border-amber-200 rounded-2xl p-6 text-center space-y-3">
             <p className="text-3xl">&#128236;</p>
             <p className="font-semibold text-green-900">{message}</p>
             <button
+              onClick={async () => {
+                setLoading(true)
+                const { error: err } = await supabase.auth.updateUser({ email: email.trim() })
+                setLoading(false)
+                if (err) setError(err.message)
+                else setMessage('Confirmation email resent! Check your inbox.')
+              }}
+              disabled={loading}
+              className="text-amber-600 text-sm underline"
+            >
+              {loading ? 'Sending...' : 'Resend confirmation email'}
+            </button>
+            <button
               onClick={onComplete}
-              className="text-amber-600 text-sm underline mt-2"
+              className="text-amber-600 text-sm underline mt-2 block mx-auto"
             >
               Done
             </button>

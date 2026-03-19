@@ -25,8 +25,8 @@ export function CoursesDetail({ userId, onBack }: Props) {
   useEffect(() => {
     Promise.all([
       supabase.from('courses').select('*').eq('user_id', userId).neq('hidden', true),
-      supabase.from('rounds').select('*').in('status', ['complete', 'active']),
-      supabase.from('hole_scores').select('*'),
+      supabase.from('rounds').select('*').eq('user_id', userId).in('status', ['complete', 'active']),
+      supabase.from('hole_scores').select('*').eq('user_id', userId),
     ]).then(([coursesRes, roundsRes, scoresRes]) => {
       if (coursesRes.data) setCourses(coursesRes.data.map(rowToCourse))
       if (roundsRes.data) setRounds(roundsRes.data.map(rowToRound))

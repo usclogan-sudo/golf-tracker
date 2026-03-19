@@ -22,8 +22,11 @@ export function Auth({ inviteCode }: AuthProps = {}) {
     setMode(nextMode)
   }
 
+  const isValidEmail = (e: string) => /^\S+@\S+\.\S+$/.test(e)
+
   const handleSignIn = async () => {
     if (!email.trim()) { setError('Enter your email address'); return }
+    if (!isValidEmail(email.trim())) { setError('Enter a valid email address'); return }
     if (!password) { setError('Enter your password'); return }
     setLoading(true)
     setError(null)
@@ -37,6 +40,7 @@ export function Auth({ inviteCode }: AuthProps = {}) {
 
   const handleSignUp = async () => {
     if (!email.trim()) { setError('Enter your email address'); return }
+    if (!isValidEmail(email.trim())) { setError('Enter a valid email address'); return }
     if (password.length < 6) { setError('Password must be at least 6 characters'); return }
     setLoading(true)
     setError(null)
@@ -55,6 +59,7 @@ export function Auth({ inviteCode }: AuthProps = {}) {
 
   const handleForgotPassword = async () => {
     if (!email.trim()) { setError('Enter your email address'); return }
+    if (!isValidEmail(email.trim())) { setError('Enter a valid email address'); return }
     setLoading(true)
     setError(null)
     const { error: err } = await supabase.auth.resetPasswordForEmail(email.trim(), {
@@ -70,6 +75,7 @@ export function Auth({ inviteCode }: AuthProps = {}) {
 
   const handleMagicLink = async () => {
     if (!email.trim()) { setError('Enter your email address'); return }
+    if (!isValidEmail(email.trim())) { setError('Enter a valid email address'); return }
     setLoading(true)
     setError(null)
     const { error: err } = await supabase.auth.signInWithOtp({

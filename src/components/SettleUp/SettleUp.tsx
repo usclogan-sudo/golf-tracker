@@ -267,7 +267,8 @@ export function SettleUp({ roundId, userId, eventId, onDone, onContinue }: Props
     }))
 
     setSettlementRecords(records)
-    await supabase.from('settlements').insert(records.map(r => settlementRecordToRow(r, userId)))
+    const { error } = await supabase.from('settlements').insert(records.map(r => settlementRecordToRow(r, userId)))
+    if (error) console.error('Failed to persist settlements:', error)
   }, [treasurerId, userId, settlementsInitialized, settlementRecords.length, payouts, junkResult, sideBetSettlements, roundId])
 
   useEffect(() => {
@@ -739,14 +740,28 @@ export function SettleUp({ roundId, userId, eventId, onDone, onContinue }: Props
         {/* ── Unified Settlements (game + junk) with Mark Paid ── */}
         {settlementRecords.length > 0 && (
           <section className="bg-white dark:bg-gray-800 rounded-2xl shadow-sm p-4 space-y-4">
-            <div>
-              <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Settlements</p>
-              <p className="text-sm text-gray-500 mt-1">
-                {allSettled
-                  ? <span className="text-green-600 font-semibold">All settled!</span>
-                  : <span>{owedSettlements.length} remaining{paidSettlements.length > 0 ? ` · ${paidSettlements.length} paid` : ''}</span>
-                }
-              </p>
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Settlements</p>
+                <p className="text-sm text-gray-500 mt-1">
+                  {allSettled
+                    ? <span className="text-green-600 font-semibold">All settled!</span>
+                    : <span>{owedSettlements.length} remaining{paidSettlements.length > 0 ? ` · ${paidSettlements.length} paid` : ''}</span>
+                  }
+                </p>
+              </div>
+              {isTreasurer && (
+                <button
+                  onClick={async () => {
+                    await supabase.from('settlements').delete().eq('round_id', roundId)
+                    setSettlementRecords([])
+                    setSettlementsInitialized(false)
+                  }}
+                  className="text-xs text-gray-500 border border-gray-200 px-3 py-1.5 rounded-lg font-semibold active:bg-gray-100"
+                >
+                  Recalculate
+                </button>
+              )}
             </div>
             {settlementRecords.map(s => {
               const fromPlayer = playerById(s.fromPlayerId)

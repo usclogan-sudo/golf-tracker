@@ -152,8 +152,11 @@ export function calculateSkins(
       const min18 = Math.min(...valid18.map(s => s.score))
       const tied18 = valid18.filter(s => s.score === min18)
       const perPlayer = Math.floor(carry / tied18.length)
+      let rem = carry - perPlayer * tied18.length
       for (const t of tied18) {
-        skinsWon[t.playerId] = (skinsWon[t.playerId] ?? 0) + perPlayer
+        const extra = rem > 0 ? 1 : 0
+        rem = Math.max(0, rem - 1)
+        skinsWon[t.playerId] = (skinsWon[t.playerId] ?? 0) + perPlayer + extra
       }
     } else {
       pendingCarry = carry
@@ -561,9 +564,9 @@ export function calculateBBB(
   players.forEach(p => (pointsWon[p.id] = 0))
 
   for (const pt of bbbPoints) {
-    if (pt.bingo && pointsWon[pt.bingo] !== undefined) pointsWon[pt.bingo]++
-    if (pt.bango && pointsWon[pt.bango] !== undefined) pointsWon[pt.bango]++
-    if (pt.bongo && pointsWon[pt.bongo] !== undefined) pointsWon[pt.bongo]++
+    if (pt.bingo) { if (pointsWon[pt.bingo] !== undefined) pointsWon[pt.bingo]++; else console.warn(`BBB: unknown player ${pt.bingo}`) }
+    if (pt.bango) { if (pointsWon[pt.bango] !== undefined) pointsWon[pt.bango]++; else console.warn(`BBB: unknown player ${pt.bango}`) }
+    if (pt.bongo) { if (pointsWon[pt.bongo] !== undefined) pointsWon[pt.bongo]++; else console.warn(`BBB: unknown player ${pt.bongo}`) }
   }
 
   const totalPoints = Object.values(pointsWon).reduce((s, p) => s + p, 0)

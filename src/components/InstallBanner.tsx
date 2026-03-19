@@ -14,13 +14,26 @@ function isIOSSafari(): boolean {
   return /iP(hone|ad|od)/.test(ua) && /WebKit/.test(ua) && !/(CriOS|FxiOS|OPiOS|EdgiOS)/.test(ua)
 }
 
+function isAndroidChrome(): boolean {
+  const ua = navigator.userAgent
+  return /Android/.test(ua) && /Chrome/.test(ua) && !/OPR|Edge|Samsung/.test(ua)
+}
+
 function isStandalone(): boolean {
   return window.matchMedia('(display-mode: standalone)').matches ||
     (navigator as any).standalone === true
 }
 
+function getPlatform(): 'ios' | 'android' | null {
+  if (isStandalone() || isDismissed()) return null
+  if (isIOSSafari()) return 'ios'
+  if (isAndroidChrome()) return 'android'
+  return null
+}
+
 export function InstallBanner() {
-  const [visible, setVisible] = useState(() => isIOSSafari() && !isStandalone() && !isDismissed())
+  const [platform] = useState(getPlatform)
+  const [visible, setVisible] = useState(() => platform !== null)
 
   if (!visible) return null
 
@@ -35,7 +48,11 @@ export function InstallBanner() {
       <div className="flex-1 min-w-0">
         <p className="font-semibold text-gray-900 text-sm">Add Fore Skins to Home Screen</p>
         <p className="text-xs text-gray-500 mt-0.5">
-          Tap <span className="inline-flex items-center"><svg className="w-4 h-4 inline text-blue-500" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2l3.5 3.5-1.4 1.4L13 5.8V16h-2V5.8L9.9 6.9 8.5 5.5 12 2zm-7 9v11h14V11h-4v2h2v7H7v-7h2v-2H5z"/></svg></span> Share then <strong>"Add to Home Screen"</strong>
+          {platform === 'ios' ? (
+            <>Tap <span className="inline-flex items-center"><svg className="w-4 h-4 inline text-blue-500" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2l3.5 3.5-1.4 1.4L13 5.8V16h-2V5.8L9.9 6.9 8.5 5.5 12 2zm-7 9v11h14V11h-4v2h2v7H7v-7h2v-2H5z"/></svg></span> Share then <strong>"Add to Home Screen"</strong></>
+          ) : (
+            <>Tap the <strong>&#8942;</strong> menu then <strong>"Add to Home screen"</strong> or <strong>"Install app"</strong></>
+          )}
         </p>
       </div>
       <button

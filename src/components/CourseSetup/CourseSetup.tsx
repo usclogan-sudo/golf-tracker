@@ -1,6 +1,7 @@
 import { Fragment, useState } from 'react'
 import { v4 as uuidv4 } from 'uuid'
 import { supabase, courseToRow } from '../../lib/supabase'
+import { ConfirmModal } from '../ConfirmModal'
 import type { Course, Hole, Tee } from '../../types'
 
 // Standard stroke index allocation (odd on front, even on back, hardest first)
@@ -103,9 +104,25 @@ export function CourseSetup({ userId, course: editCourse, onSave, onCancel, init
   const frontPar = holes.slice(0, half).reduce((s, h) => s + h.par, 0)
   const backPar = holes.slice(half).reduce((s, h) => s + h.par, 0)
 
+  const [confirmSwitch, setConfirmSwitch] = useState<9 | 18 | null>(null)
+
   const switchHoleCount = (count: 9 | 18) => {
+    // If holes have been modified (any yardages entered or pars changed from default), confirm first
+    const hasData = holes.some(h => h.par !== 4 || Object.values(h.yardages).some(y => y > 0))
+    if (hasData && count !== holeCount) {
+      setConfirmSwitch(count)
+      return
+    }
     setHoleCount(count)
     setHoles(defaultHoles(count))
+  }
+
+  const doSwitch = () => {
+    if (confirmSwitch) {
+      setHoleCount(confirmSwitch)
+      setHoles(defaultHoles(confirmSwitch))
+      setConfirmSwitch(null)
+    }
   }
 
   return (
@@ -260,6 +277,15 @@ export function CourseSetup({ userId, course: editCourse, onSave, onCancel, init
         </section>
         {errors.save && <p className="text-red-500 text-sm text-center">{errors.save}</p>}
       </div>
+      <ConfirmModal
+        open={!!confirmSwitch}
+        title="Switch Hole Count?"
+        message={`Switching to ${confirmSwitch} holes will reset all hole data. Continue?`}
+        confirmLabel="Reset"
+        destructive
+        onConfirm={doSwitch}
+        onCancel={() => setConfirmSwitch(null)}
+      />
       <div className="fixed bottom-0 inset-x-0 p-4 bg-white/95 dark:bg-gray-800/95 backdrop-blur-sm border-t border-gray-200 dark:border-gray-700">
         <div className="max-w-2xl mx-auto">
           <button onClick={handleSave} disabled={saving}

@@ -1,11 +1,15 @@
 import { useState } from 'react'
 
+const DISMISS_KEY = 'guest-banner-dismissed'
+
 interface Props {
   onUpgrade: () => void
 }
 
 export function GuestBanner({ onUpgrade }: Props) {
-  const [dismissed, setDismissed] = useState(false)
+  const [dismissed, setDismissed] = useState(() => {
+    try { return sessionStorage.getItem(DISMISS_KEY) === '1' } catch { return false }
+  })
 
   if (dismissed) return null
 
@@ -16,7 +20,7 @@ export function GuestBanner({ onUpgrade }: Props) {
         <div>
           <p className="font-semibold text-amber-900 text-sm">You&apos;re playing as a guest</p>
           <p className="text-amber-800 text-sm mt-1">
-            Your data is saved, but tied to this browser session. Clear your cache or switch devices and it&apos;s gone forever.
+            Your data is saved locally but not backed up. Create an account to sync across devices.
           </p>
         </div>
       </div>
@@ -27,7 +31,7 @@ export function GuestBanner({ onUpgrade }: Props) {
         Lock In Your Data &mdash; Create Account
       </button>
       <button
-        onClick={() => setDismissed(true)}
+        onClick={() => { setDismissed(true); try { sessionStorage.setItem(DISMISS_KEY, '1') } catch {} }}
         className="w-full text-center text-gray-400 text-xs underline"
       >
         I&apos;ll risk it

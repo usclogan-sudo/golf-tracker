@@ -315,7 +315,7 @@ export function rowToSettlementRecord(row: any): SettlementRecord {
     toPlayerId: row.to_player_id,
     amountCents: row.amount_cents,
     reason: row.reason ?? undefined,
-    source: row.source as 'game' | 'junk',
+    source: row.source as 'game' | 'junk' | 'side_bet',
     status: row.status as SettlementStatus,
     paidAt: row.paid_at ? new Date(row.paid_at) : undefined,
   }
