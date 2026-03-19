@@ -10,18 +10,20 @@ import {
   calculateNassau,
   calculateWolf,
   calculateBBB,
+  calculateHammer,
   calculateSkinsPayouts,
   calculateBestBallPayouts,
   calculateNassauPayouts,
   calculateWolfPayouts,
   calculateBBBPayouts,
+  calculateHammerPayouts,
   calculateJunks,
   calculateSideBetSettlements,
   buildUnifiedSettlements,
   JUNK_LABELS,
   fmtMoney,
 } from '../../lib/gameLogic'
-import type { PlayerPayout, JunkResult, SideBetSettlement } from '../../lib/gameLogic'
+import type { PlayerPayout, JunkResult, SideBetSettlement, HammerResult } from '../../lib/gameLogic'
 import type {
   Round,
   RoundPlayer,
@@ -34,6 +36,7 @@ import type {
   BestBallConfig,
   NassauConfig,
   WolfConfig,
+  HammerConfig,
   GameType,
   SideBet,
   SettlementRecord,
@@ -55,6 +58,7 @@ const GAME_LABELS: Record<GameType, string> = {
   nassau: 'Nassau',
   wolf: 'Wolf',
   bingo_bango_bongo: 'Bingo Bango Bongo',
+  hammer: 'Hammer',
 }
 
 /** Merge fresh profile payment info over snapshot player data */
@@ -212,6 +216,11 @@ export function SettleUp({ roundId, userId, eventId, onDone, onContinue }: Props
     return calculateBBB(players, bbbPoints)
   }, [game, players, bbbPoints])
 
+  const hammerResult = useMemo((): HammerResult | null => {
+    if (!game || game.type !== 'hammer' || !snapshot) return null
+    return calculateHammer(players, holeScores, snapshot, game.config as HammerConfig, courseHcps)
+  }, [game, players, holeScores, snapshot, courseHcps])
+
   const junkResult = useMemo((): JunkResult | null => {
     if (!round?.junkConfig || junkRecords.length === 0) return null
     return calculateJunks(players, junkRecords, round.junkConfig)
@@ -238,8 +247,11 @@ export function SettleUp({ roundId, userId, eventId, onDone, onContinue }: Props
     if (game.type === 'bingo_bango_bongo' && bbbResult) {
       return calculateBBBPayouts(bbbResult, game, players)
     }
+    if (game.type === 'hammer' && hammerResult) {
+      return calculateHammerPayouts(hammerResult, game, players)
+    }
     return []
-  }, [game, players, snapshot, skinsResult, bestBallResult, nassauResult, wolfResult, bbbResult])
+  }, [game, players, snapshot, skinsResult, bestBallResult, nassauResult, wolfResult, bbbResult, hammerResult])
 
   // Persist settlements: compute + insert on first view, or load from DB
   const persistSettlements = useCallback(async () => {
@@ -646,6 +658,31 @@ export function SettleUp({ roundId, userId, eventId, onDone, onContinue }: Props
                       <span className="font-semibold text-gray-800">{p.name}</span>
                       <span className={`font-bold ${pts > 0 ? 'text-amber-700' : 'text-gray-400'}`}>
                         {pts} point{pts !== 1 ? 's' : ''}
+                      </span>
+                    </div>
+                  )
+                })}
+            </div>
+          </section>
+        )}
+
+        {/* ── Hammer Results ── */}
+        {hammerResult && (
+          <section className="bg-white dark:bg-gray-800 rounded-2xl shadow-sm p-4 space-y-3">
+            <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">
+              Hammer Results — {hammerResult.totalHolesPlayed} hole{hammerResult.totalHolesPlayed !== 1 ? 's' : ''} decided
+            </p>
+            <div className="space-y-2">
+              {players
+                .slice()
+                .sort((a, b) => (hammerResult.netCents[b.id] ?? 0) - (hammerResult.netCents[a.id] ?? 0))
+                .map(p => {
+                  const net = hammerResult.netCents[p.id] ?? 0
+                  return (
+                    <div key={p.id} className={`flex items-center justify-between p-3 rounded-xl ${net > 0 ? 'bg-green-50' : net < 0 ? 'bg-red-50' : 'bg-gray-50'}`}>
+                      <span className="font-semibold text-gray-800">{p.name}</span>
+                      <span className={`font-bold ${net > 0 ? 'text-green-700' : net < 0 ? 'text-red-600' : 'text-gray-400'}`}>
+                        {net > 0 ? '+' : ''}{fmtMoney(Math.abs(net))}
                       </span>
                     </div>
                   )

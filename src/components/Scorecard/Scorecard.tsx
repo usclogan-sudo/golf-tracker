@@ -1,8 +1,11 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useState, useCallback } from 'react'
 import { v4 as uuidv4 } from 'uuid'
+import { useOnlineStatus } from '../../hooks/useOnlineStatus'
+import { enqueue, flush, getPending } from '../../lib/offlineQueue'
 import { supabase, rowToRound, rowToRoundPlayer, rowToHoleScore, rowToBBBPoint, rowToJunkRecord, rowToSideBet, rowToRoundParticipant, rowToEvent, rowToEventParticipant, holeScoreToRow, bbbPointToRow, junkRecordToRow, sideBetToRow, generateInviteCode } from '../../lib/supabase'
 import { getCelebration, CelebrationToast, CelebrationFullscreen } from '../Celebrations'
 import { ConfirmModal } from '../ConfirmModal'
+import { GameRulesModal } from '../GameRulesModal'
 import {
   buildCourseHandicaps,
   calculateSkins,
@@ -10,6 +13,7 @@ import {
   calculateNassau,
   calculateWolf,
   calculateBBB,
+  calculateHammer,
   wolfForHole,
   strokesOnHole,
   fmtMoney,
@@ -28,6 +32,8 @@ import type {
   BestBallConfig,
   NassauConfig,
   WolfConfig,
+  HammerConfig,
+  HammerHoleState,
   GolfEvent,
   EventParticipant,
   ScoreStatus,
@@ -125,6 +131,7 @@ export function Scorecard({ userId, roundId, onEndRound, onHome, readOnly: readO
   const [roundParticipants, setRoundParticipants] = useState<RoundParticipant[]>([])
   const [loading, setLoading] = useState(true)
   const [inviteToast, setInviteToast] = useState<string | null>(null)
+  const [showRulesModal, setShowRulesModal] = useState(false)
   const [saveError, setSaveError] = useState<string | null>(null)
   const [lastFailedSave, setLastFailedSave] = useState<{ playerId: string; grossScore: number } | null>(null)
   const [lastChange, setLastChange] = useState<{ playerId: string; holeNumber: number; previousScore: number } | null>(null)
@@ -136,6 +143,9 @@ export function Scorecard({ userId, roundId, onEndRound, onHome, readOnly: readO
   const [sideBetDesc, setSideBetDesc] = useState('')
   const [sideBetAmount, setSideBetAmount] = useState('5')
   const [sideBetParticipants, setSideBetParticipants] = useState<string[]>([])
+  const { isOnline } = useOnlineStatus()
+  const [syncing, setSyncing] = useState(false)
+  const [pendingCount, setPendingCount] = useState(getPending())
 
   // Event-related state
   const [event, setEvent] = useState<GolfEvent | null>(null)
@@ -252,6 +262,23 @@ export function Scorecard({ userId, roundId, onEndRound, onHome, readOnly: readO
     return () => { supabase.removeChannel(channel) }
   }, [roundId])
 
+  // Flush offline queue when coming back online
+  useEffect(() => {
+    if (isOnline && getPending() > 0) {
+      setSyncing(true)
+      flush().then(({ synced }) => {
+        setPendingCount(getPending())
+        setSyncing(false)
+        if (synced > 0) {
+          // Refetch scores after sync
+          supabase.from('hole_scores').select('*').eq('round_id', roundId).then(({ data }) => {
+            if (data) setHoleScores(data.map(rowToHoleScore))
+          })
+        }
+      })
+    }
+  }, [isOnline, roundId])
+
   const players = round?.players ?? []
   const snapshot = round?.courseSnapshot
   const game = round?.game
@@ -346,8 +373,30 @@ export function Scorecard({ userId, roundId, onEndRound, onHome, readOnly: readO
         if (error) throw error
       }
     } catch {
-      setSaveError('Score failed to save — check your connection')
-      setLastFailedSave({ playerId, grossScore })
+      if (!isOnline) {
+        // Queue for offline sync — local state is already updated optimistically
+        const existing = holeScores.find(s => s.playerId === playerId && s.holeNumber === currentHole)
+        if (existing) {
+          enqueue({
+            table: 'hole_scores',
+            method: 'update',
+            data: { gross_score: grossScore },
+            matchColumn: 'id',
+            matchValue: existing.id,
+          })
+        } else {
+          enqueue({
+            table: 'hole_scores',
+            method: 'insert',
+            data: holeScoreToRow({ id: uuidv4(), roundId, playerId, holeNumber: currentHole, grossScore }, userId),
+          })
+        }
+        setPendingCount(getPending())
+        // No error shown — offline indicator is displayed instead
+      } else {
+        setSaveError('Score failed to save — check your connection')
+        setLastFailedSave({ playerId, grossScore })
+      }
     }
   }
 
@@ -533,6 +582,17 @@ export function Scorecard({ userId, roundId, onEndRound, onHome, readOnly: readO
     return calculateBBB(players, bbbPoints)
   }, [game, players, bbbPoints])
 
+  // Hammer game state
+  const hammerConfig = game?.type === 'hammer' ? game.config as HammerConfig : null
+  const hammerStates = hammerConfig?.hammerStates ?? {}
+
+  const hammerResult = useMemo(() => {
+    if (!game || game.type !== 'hammer' || !snapshot || players.length !== 2) return null
+    return calculateHammer(players, approvedScores, snapshot, game.config as HammerConfig, courseHcps)
+  }, [game, players, approvedScores, snapshot, courseHcps])
+
+  const currentHammerState = hammerStates[currentHole] ?? null
+
   const currentCarry = useMemo(() => {
     if (!skinsResult) return 0
     const prevHole = skinsResult.holeResults.find(h => h.holeNumber === currentHole - 1)
@@ -580,6 +640,58 @@ export function Scorecard({ userId, roundId, onEndRound, onHome, readOnly: readO
   const wolfId = wolfConfig ? wolfForHole(wolfConfig.wolfOrder, currentHole) : null
   const wolfDecision = wolfConfig?.holeDecisions?.[currentHole]
   const currentBBB = bbbPoints.find(p => p.holeNumber === currentHole)
+
+  // Hammer interaction functions
+  const updateHammerState = async (holeNum: number, state: HammerHoleState) => {
+    if (!round || !game || game.type !== 'hammer') return
+    const updatedStates = { ...(game.config as HammerConfig).hammerStates, [holeNum]: state }
+    const updatedConfig = { ...game.config, hammerStates: updatedStates }
+    const updatedGame = { ...game, config: updatedConfig }
+    setRound({ ...round, game: updatedGame })
+    // Persist to DB
+    await supabase.from('rounds').update({
+      game: JSON.stringify(updatedGame),
+    }).eq('id', roundId)
+  }
+
+  const throwHammer = () => {
+    if (!hammerConfig || players.length !== 2) return
+    const current = currentHammerState
+    if (current && current.declined) return // Already resolved
+    const maxPresses = hammerConfig.maxPresses
+    const baseValue = hammerConfig.baseValueCents
+    if (!current) {
+      // First throw on this hole — player 0 starts with hammer
+      const newState: HammerHoleState = {
+        hammerHolder: players[0].id,
+        value: baseValue * 2,
+        presses: 1,
+        declined: false,
+      }
+      updateHammerState(currentHole, newState)
+    } else {
+      if (maxPresses != null && current.presses >= maxPresses) return
+      const newState: HammerHoleState = {
+        ...current,
+        hammerHolder: players.find(p => p.id !== current.hammerHolder)!.id,
+        value: current.value * 2,
+        presses: current.presses + 1,
+        declined: false,
+      }
+      updateHammerState(currentHole, newState)
+    }
+  }
+
+  const declineHammer = () => {
+    if (!currentHammerState || currentHammerState.declined) return
+    const decliner = players.find(p => p.id !== currentHammerState.hammerHolder)!.id
+    const newState: HammerHoleState = {
+      ...currentHammerState,
+      declined: true,
+      declinedBy: decliner,
+    }
+    updateHammerState(currentHole, newState)
+  }
 
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-900 pb-32">
@@ -633,6 +745,32 @@ export function Scorecard({ userId, roundId, onEndRound, onHome, readOnly: readO
                 Invite
               </button>
             )}
+            {!readOnly && (
+              <button
+                onClick={async () => {
+                  let code = (event?.inviteCode) ?? round.inviteCode
+                  if (!code) {
+                    code = generateInviteCode()
+                    setRound(prev => prev ? { ...prev, inviteCode: code! } : prev)
+                    await supabase.from('rounds').update({ invite_code: code }).eq('id', roundId)
+                  }
+                  const url = `${window.location.origin}${window.location.pathname}?spectate=${code}`
+                  const title = 'Watch live leaderboard!'
+                  const text = `Follow the round live on Fore Skins!`
+                  if (navigator.share) {
+                    try { await navigator.share({ title, text, url }) } catch {}
+                  } else {
+                    await navigator.clipboard.writeText(url)
+                  }
+                  setInviteToast('Spectator link copied!')
+                  setTimeout(() => setInviteToast(null), 3000)
+                }}
+                className="text-green-300 text-sm font-medium px-2 min-h-[44px] rounded-lg hover:bg-gray-600"
+              >
+                📡 Live
+              </button>
+            )}
+            {game && <button onClick={() => setShowRulesModal(true)} className="text-cyan-300 text-sm font-medium px-2 min-h-[44px] rounded-lg hover:bg-gray-600">Rules</button>}
             {!readOnly && !selfEntryOnly && <button onClick={confirmEndRound} className="text-yellow-300 text-sm font-medium px-3 min-h-[44px] rounded-lg hover:bg-gray-600">End Round</button>}
             <button onClick={confirmGoHome} className="text-gray-300 text-sm font-medium px-3 min-h-[44px] rounded-lg hover:bg-gray-600">← Back</button>
           </div>
@@ -847,6 +985,24 @@ export function Scorecard({ userId, roundId, onEndRound, onHome, readOnly: readO
 
       {scoreTab === 'scores' && (
       <div className="px-4 py-4 max-w-2xl mx-auto space-y-4">
+        {!isOnline && (
+          <div className="bg-yellow-50 border border-yellow-200 rounded-xl px-4 py-3 flex items-center gap-2">
+            <span className="text-yellow-600 text-lg">📡</span>
+            <div className="flex-1">
+              <p className="text-yellow-800 text-sm font-semibold">You're offline</p>
+              <p className="text-yellow-600 text-xs">Scores are saved locally and will sync when you reconnect</p>
+            </div>
+            {pendingCount > 0 && (
+              <span className="text-yellow-700 text-xs font-bold bg-yellow-100 px-2 py-1 rounded-full">{pendingCount} queued</span>
+            )}
+          </div>
+        )}
+        {syncing && (
+          <div className="bg-blue-50 border border-blue-200 rounded-xl px-4 py-2 flex items-center gap-2">
+            <span className="text-blue-500 animate-spin text-sm">↻</span>
+            <p className="text-blue-700 text-sm font-semibold">Syncing scores...</p>
+          </div>
+        )}
         {saveError && (
           <div className="bg-red-50 border border-red-200 rounded-xl px-4 py-3 flex items-center justify-between gap-2">
             <p className="text-red-700 text-sm font-semibold flex-1">{saveError}</p>
@@ -962,6 +1118,88 @@ export function Scorecard({ userId, roundId, onEndRound, onHome, readOnly: readO
                     : `${wolfPlayer?.name} + ${players.find(p => p.id === wolfDecision.partnerId)?.name}`}
                 </p>
               )}
+            </div>
+          )
+        })()}
+
+        {/* Hammer panel */}
+        {game?.type === 'hammer' && hammerConfig && players.length === 2 && (() => {
+          const baseValue = hammerConfig.baseValueCents
+          const hState = currentHammerState
+          const holeValue = hState ? hState.value : baseValue
+          const holderName = hState ? (players.find(p => p.id === hState.hammerHolder)?.name ?? '?') : players[0].name
+          const receiverName = hState
+            ? (players.find(p => p.id !== hState.hammerHolder)?.name ?? '?')
+            : players[1].name
+          const receiverId = hState
+            ? players.find(p => p.id !== hState.hammerHolder)?.id
+            : players[1].id
+          const holderId = hState ? hState.hammerHolder : players[0].id
+          const canThrow = !readOnly && (!hState || (!hState.declined && (hammerConfig.maxPresses == null || hState.presses < hammerConfig.maxPresses)))
+          const canDecline = !readOnly && hState && !hState.declined && hState.presses > 0
+
+          // Running totals from hammerResult
+          const p1Total = hammerResult?.netCents[players[0].id] ?? 0
+          const p2Total = hammerResult?.netCents[players[1].id] ?? 0
+
+          return (
+            <div className="bg-orange-50 border border-orange-200 rounded-xl p-3 space-y-2">
+              <div className="flex items-center justify-between">
+                <p className="font-bold text-orange-800 text-sm">🔨 Hammer</p>
+                <span className="text-xs font-semibold text-orange-600 bg-orange-100 px-2 py-0.5 rounded-full">
+                  Hole value: {fmtMoney(holeValue)}
+                </span>
+              </div>
+
+              {hState?.declined ? (
+                <div className="bg-red-50 border border-red-200 rounded-lg p-2">
+                  <p className="text-sm text-red-700 font-semibold">
+                    {players.find(p => p.id === hState.declinedBy)?.name} declined — {holderName} wins {fmtMoney(hState.value / 2)}
+                  </p>
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  <p className="text-xs text-orange-600">
+                    {hState
+                      ? `${holderName} threw the hammer (×${hState.presses}) — ${receiverName} to respond`
+                      : `${holderName} holds the hammer`}
+                  </p>
+                  {!readOnly && (
+                    <div className="flex gap-2">
+                      <button
+                        onClick={throwHammer}
+                        disabled={!canThrow}
+                        className="flex-1 py-2 rounded-lg text-sm font-bold bg-orange-500 text-white active:bg-orange-600 disabled:opacity-40"
+                      >
+                        🔨 Throw Hammer
+                      </button>
+                      {canDecline && (
+                        <button
+                          onClick={declineHammer}
+                          className="flex-1 py-2 rounded-lg text-sm font-bold bg-red-100 text-red-700 border border-red-200 active:bg-red-200"
+                        >
+                          Decline
+                        </button>
+                      )}
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Running totals */}
+              <div className="flex gap-2 pt-1 border-t border-orange-200">
+                {players.map(p => {
+                  const net = hammerResult?.netCents[p.id] ?? 0
+                  return (
+                    <div key={p.id} className={`flex-1 text-center rounded-lg py-1 ${net > 0 ? 'bg-green-50' : net < 0 ? 'bg-red-50' : 'bg-gray-50'}`}>
+                      <p className="text-xs text-gray-500">{p.name}</p>
+                      <p className={`text-sm font-bold ${net > 0 ? 'text-green-700' : net < 0 ? 'text-red-700' : 'text-gray-600'}`}>
+                        {net >= 0 ? '+' : ''}{fmtMoney(Math.abs(net))}
+                      </p>
+                    </div>
+                  )
+                })}
+              </div>
             </div>
           )
         })()}
@@ -1402,6 +1640,9 @@ export function Scorecard({ userId, roundId, onEndRound, onHome, readOnly: readO
         onCancel={() => setConfirmModal(null)}
         destructive={confirmModal?.destructive}
       />
+
+      {/* Game rules modal */}
+      {showRulesModal && game && <GameRulesModal gameType={game.type} onClose={() => setShowRulesModal(false)} />}
     </div>
   )
 }

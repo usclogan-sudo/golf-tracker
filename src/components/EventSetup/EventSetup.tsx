@@ -4,6 +4,7 @@ import { supabase, rowToCourse, rowToPlayer, rowToSharedCourse, roundToRow, roun
 import { fmtMoney } from '../../lib/gameLogic'
 import { venturaCourses } from '../../data/venturaCourses'
 import { NearMeCourses } from '../NearMeCourses/NearMeCourses'
+import { GameRulesModal } from '../GameRulesModal'
 import type {
   Course,
   Player,
@@ -15,6 +16,7 @@ import type {
   NassauConfig,
   WolfConfig,
   BBBConfig,
+  HammerConfig,
   JunkConfig,
   JunkType,
   BuyIn,
@@ -73,6 +75,7 @@ export function EventSetup({ userId, onStart, onCancel, onAddCourse }: Props) {
   const [treasurerId, setTreasurerId] = useState<string | null>(null)
   const [customBuyIn, setCustomBuyIn] = useState('')
   const [gameError, setGameError] = useState<string | null>(null)
+  const [rulesModalType, setRulesModalType] = useState<GameType | null>(null)
 
   // Load courses
   useEffect(() => {
@@ -168,7 +171,7 @@ export function EventSetup({ userId, onStart, onCancel, onAddCourse }: Props) {
   const groupNumbers = Array.from({ length: numGroups }, (_, i) => i + 1)
 
   const buildGame = (): Game => {
-    let config: SkinsConfig | BestBallConfig | NassauConfig | WolfConfig | BBBConfig
+    let config: SkinsConfig | BestBallConfig | NassauConfig | WolfConfig | BBBConfig | HammerConfig
     if (gameType === 'skins') config = { mode: skinsMode, carryovers }
     else if (gameType === 'best_ball') {
       const teams: Record<string, 'A' | 'B'> = {}
@@ -177,9 +180,10 @@ export function EventSetup({ userId, onStart, onCancel, onAddCourse }: Props) {
     }
     else if (gameType === 'nassau') config = { mode: nassauMode }
     else if (gameType === 'wolf') config = { mode: wolfMode, wolfOrder: selectedPlayers.map(p => p.id) }
+    else if (gameType === 'hammer') config = { baseValueCents: 100 }
     else config = { mode: bbbMode }
 
-    return { id: uuidv4(), type: gameType, buyInCents, config }
+    return { id: uuidv4(), type: gameType, buyInCents: gameType === 'hammer' ? 0 : buyInCents, config }
   }
 
   const createEvent = async () => {
@@ -303,6 +307,7 @@ export function EventSetup({ userId, onStart, onCancel, onAddCourse }: Props) {
     { type: 'nassau', label: 'Nassau', emoji: '🏳️' },
     { type: 'wolf', label: 'Wolf', emoji: '🐺' },
     { type: 'bingo_bango_bongo', label: 'BBB', emoji: '⭐' },
+    { type: 'hammer', label: 'Hammer', emoji: '🔨' },
   ]
 
   const BUY_IN_PRESETS = [500, 1000, 2000, 5000]
@@ -623,25 +628,38 @@ export function EventSetup({ userId, onStart, onCancel, onAddCourse }: Props) {
             <div className="grid grid-cols-3 gap-2">
               {GAME_OPTIONS.map(opt => {
                 const disabled = (opt.type === 'wolf' && selectedPlayers.length < 3) ||
-                  (opt.type === 'best_ball' && selectedPlayers.length % 2 !== 0)
+                  (opt.type === 'best_ball' && selectedPlayers.length % 2 !== 0) ||
+                  (opt.type === 'hammer' && selectedPlayers.length !== 2)
                 return (
-                  <button
-                    key={opt.type}
-                    onClick={() => { if (!disabled) { setGameType(opt.type); setGameError(null) } }}
-                    disabled={disabled}
-                    className={`py-3 rounded-xl text-sm font-semibold transition-colors ${
-                      gameType === opt.type
-                        ? 'bg-amber-500 text-white'
-                        : disabled
-                          ? 'bg-gray-50 dark:bg-gray-800 text-gray-300 dark:text-gray-600'
-                          : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300'
-                    }`}
-                  >
-                    {opt.emoji} {opt.label}
-                    {disabled && <span className="block text-[10px] font-normal mt-0.5">
-                      {opt.type === 'wolf' ? '3+ players' : 'Even #'}
-                    </span>}
-                  </button>
+                  <div key={opt.type} className="relative">
+                    <button
+                      onClick={() => { if (!disabled) { setGameType(opt.type); setGameError(null) } }}
+                      disabled={disabled}
+                      className={`w-full py-3 rounded-xl text-sm font-semibold transition-colors ${
+                        gameType === opt.type
+                          ? 'bg-amber-500 text-white'
+                          : disabled
+                            ? 'bg-gray-50 dark:bg-gray-800 text-gray-300 dark:text-gray-600'
+                            : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300'
+                      }`}
+                    >
+                      {opt.emoji} {opt.label}
+                      {disabled && <span className="block text-[10px] font-normal mt-0.5">
+                        {opt.type === 'wolf' ? '3+ players' : opt.type === 'hammer' ? '2 players' : 'Even #'}
+                      </span>}
+                    </button>
+                    <button
+                      onClick={() => setRulesModalType(opt.type)}
+                      className={`absolute top-0.5 right-0.5 w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold ${
+                        gameType === opt.type
+                          ? 'bg-white/20 text-white/80'
+                          : 'bg-gray-200 dark:bg-gray-600 text-gray-500 dark:text-gray-400'
+                      }`}
+                      aria-label={`${opt.label} rules`}
+                    >
+                      ?
+                    </button>
+                  </div>
                 )
               })}
             </div>
@@ -740,6 +758,7 @@ export function EventSetup({ userId, onStart, onCancel, onAddCourse }: Props) {
             </button>
           </div>
         </div>
+        {rulesModalType && <GameRulesModal gameType={rulesModalType} onClose={() => setRulesModalType(null)} />}
       </div>
     )
   }
@@ -808,6 +827,7 @@ export function EventSetup({ userId, onStart, onCancel, onAddCourse }: Props) {
     nassau: 'Nassau',
     wolf: 'Wolf',
     bingo_bango_bongo: 'BBB',
+    hammer: 'Hammer',
   }
 
   return (

@@ -4,6 +4,7 @@ import { supabase, courseToRow, playerToRow, roundToRow, roundPlayerToRow, buyIn
 import { fmtMoney, JUNK_LABELS } from '../../lib/gameLogic'
 import { venturaCourses } from '../../data/venturaCourses'
 import { NearMeCourses } from '../NearMeCourses/NearMeCourses'
+import { GameRulesModal } from '../GameRulesModal'
 import type {
   Course,
   Player,
@@ -15,6 +16,7 @@ import type {
   NassauConfig,
   WolfConfig,
   BBBConfig,
+  HammerConfig,
   JunkConfig,
   JunkType,
   BuyIn,
@@ -792,6 +794,17 @@ function GameSetup({
     initialGame?.type === 'bingo_bango_bongo' ? (initialGame.config as any).mode : 'net'
   )
 
+  // Hammer
+  const [hammerBaseValueDollars, setHammerBaseValueDollars] = useState(
+    initialGame?.type === 'hammer' ? String((initialGame.config as any).baseValueCents / 100) : '1'
+  )
+  const [hammerMaxPresses, setHammerMaxPresses] = useState<number | undefined>(
+    initialGame?.type === 'hammer' ? (initialGame.config as any).maxPresses : undefined
+  )
+
+  // Game rules modal
+  const [rulesModalType, setRulesModalType] = useState<GameType | null>(null)
+
   // Junks (side bets, independent of main game)
   const [junksEnabled, setJunksEnabled] = useState(!!initialJunkConfig)
   const [junkValueDollars, setJunkValueDollars] = useState(
@@ -856,6 +869,7 @@ function GameSetup({
 
   const bestBallAllowed = players.length >= 2 && players.length % 2 === 0
   const wolfAllowed = players.length >= 3
+  const hammerAllowed = players.length === 2
 
   const teamCounts = useMemo(() => {
     let a = 0, b = 0
@@ -868,12 +882,13 @@ function GameSetup({
   const teamsValid = teamCounts.a >= 1 && teamCounts.a === teamCounts.b
 
   const canContinue =
-    buyInCents > 0 &&
+    (type === 'hammer' || buyInCents > 0) &&
     (type === 'skins' ||
       type === 'nassau' ||
       type === 'bingo_bango_bongo' ||
       (type === 'best_ball' && bestBallAllowed && teamsValid) ||
-      (type === 'wolf' && wolfAllowed))
+      (type === 'wolf' && wolfAllowed) ||
+      (type === 'hammer' && hammerAllowed))
 
   const moveWolfPlayer = (index: number, dir: -1 | 1) => {
     const next = [...wolfOrder]
@@ -901,6 +916,11 @@ function GameSetup({
       const config: WolfConfig = { mode: wolfMode, wolfOrder }
       return { id, type: 'wolf', buyInCents, stakesMode, config }
     }
+    if (type === 'hammer') {
+      const baseValueCents = Math.max(1, Math.round(parseFloat(hammerBaseValueDollars || '1') * 100))
+      const config: HammerConfig = { baseValueCents, maxPresses: hammerMaxPresses }
+      return { id, type: 'hammer', buyInCents: 0, stakesMode, config }
+    }
     // bingo_bango_bongo
     const config: BBBConfig = { mode: bbbMode }
     return { id, type: 'bingo_bango_bongo', buyInCents, stakesMode, config }
@@ -919,22 +939,35 @@ function GameSetup({
     disabled?: boolean
     fullWidth?: boolean
   }) => (
-    <button
-      onClick={() => !disabled && setType(gameType)}
-      disabled={disabled}
-      className={`h-14 rounded-xl font-semibold text-sm disabled:opacity-40 transition-colors ${fullWidth ? 'col-span-2' : ''} ${
-        type === gameType
-          ? stakesMode === 'high_roller'
-            ? 'text-black'
-            : 'bg-gray-800 text-white'
-          : 'bg-gray-100 text-gray-700'
-      }`}
-      style={type === gameType && stakesMode === 'high_roller'
-        ? { background: 'linear-gradient(135deg,#d97706,#fbbf24)' }
-        : undefined}
-    >
-      {label}
-    </button>
+    <div className={`relative ${fullWidth ? 'col-span-2' : ''}`}>
+      <button
+        onClick={() => !disabled && setType(gameType)}
+        disabled={disabled}
+        className={`w-full h-14 rounded-xl font-semibold text-sm disabled:opacity-40 transition-colors ${
+          type === gameType
+            ? stakesMode === 'high_roller'
+              ? 'text-black'
+              : 'bg-gray-800 text-white'
+            : 'bg-gray-100 text-gray-700'
+        }`}
+        style={type === gameType && stakesMode === 'high_roller'
+          ? { background: 'linear-gradient(135deg,#d97706,#fbbf24)' }
+          : undefined}
+      >
+        {label}
+      </button>
+      <button
+        onClick={(e) => { e.stopPropagation(); setRulesModalType(gameType) }}
+        className={`absolute top-1 right-1 w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold transition-colors ${
+          type === gameType
+            ? 'bg-white/20 text-white/80 active:bg-white/30'
+            : 'bg-gray-200 text-gray-500 active:bg-gray-300'
+        }`}
+        aria-label={`${label} rules`}
+      >
+        ?
+      </button>
+    </div>
   )
 
   return (
@@ -1013,13 +1046,17 @@ function GameSetup({
             <GameButton gameType="best_ball" label="🤝 Best Ball" disabled={!bestBallAllowed} />
             <GameButton gameType="nassau" label="🏳️ Nassau" />
             <GameButton gameType="wolf" label="🐺 Wolf" disabled={!wolfAllowed} />
-            <GameButton gameType="bingo_bango_bongo" label="⭐ Bingo Bango Bongo" fullWidth />
+            <GameButton gameType="bingo_bango_bongo" label="⭐ Bingo Bango Bongo" />
+            <GameButton gameType="hammer" label="🔨 Hammer" disabled={!hammerAllowed} />
           </div>
           {!bestBallAllowed && type === 'best_ball' && (
             <p className="text-sm text-gray-400">Best Ball requires an even number of players (2, 4, 6…).</p>
           )}
           {!wolfAllowed && type === 'wolf' && (
             <p className="text-sm text-gray-400">Wolf requires at least 3 players.</p>
+          )}
+          {!hammerAllowed && type === 'hammer' && (
+            <p className="text-sm text-gray-400">Hammer requires exactly 2 players.</p>
           )}
         </section>
 
@@ -1293,6 +1330,56 @@ function GameSetup({
           </section>
         )}
 
+        {/* Hammer Options */}
+        {type === 'hammer' && (
+          <section className="bg-white dark:bg-gray-800 rounded-2xl shadow-sm p-4 space-y-3">
+            <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Hammer Options</p>
+            <div>
+              <p className="text-sm text-gray-600 mb-2">Base Value Per Hole</p>
+              <div className="flex gap-2">
+                {[0.5, 1, 2, 5].map(dollars => (
+                  <button
+                    key={dollars}
+                    onClick={() => setHammerBaseValueDollars(String(dollars))}
+                    className={`px-3 h-10 rounded-xl font-semibold text-sm transition-colors ${
+                      parseFloat(hammerBaseValueDollars || '0') === dollars
+                        ? 'bg-gray-800 text-white'
+                        : 'bg-gray-100 text-gray-700'
+                    }`}
+                  >
+                    {fmtMoney(dollars * 100)}
+                  </button>
+                ))}
+              </div>
+            </div>
+            <div>
+              <p className="text-sm text-gray-600 mb-2">Max Presses Per Hole</p>
+              <div className="flex gap-2">
+                {[null, 1, 2, 3].map(mp => (
+                  <button
+                    key={mp ?? 'none'}
+                    onClick={() => setHammerMaxPresses(mp)}
+                    className={`px-3 h-10 rounded-xl font-semibold text-sm transition-colors ${
+                      hammerMaxPresses === mp
+                        ? 'bg-gray-800 text-white'
+                        : 'bg-gray-100 text-gray-700'
+                    }`}
+                  >
+                    {mp === null ? 'No limit' : `${mp}×`}
+                  </button>
+                ))}
+              </div>
+            </div>
+            <div className="bg-orange-50 rounded-xl p-3 text-sm text-orange-700 space-y-1">
+              <p className="font-semibold">How Hammer works:</p>
+              <p>• Each hole starts at {fmtMoney(Math.round(parseFloat(hammerBaseValueDollars || '1') * 100))}</p>
+              <p>• The hammer holder can "throw" the hammer to double the stakes</p>
+              <p>• Opponent must accept (value doubles) or decline (lose current value)</p>
+              <p>• After accepting, the hammer passes to the accepter</p>
+            </div>
+          </section>
+        )}
+
         {/* Junk Side Bets */}
         <section className="bg-white dark:bg-gray-800 rounded-2xl shadow-sm p-4 space-y-3">
           <div className="flex items-center justify-between">
@@ -1380,6 +1467,7 @@ function GameSetup({
           </button>
         </div>
       </div>
+      {rulesModalType && <GameRulesModal gameType={rulesModalType} onClose={() => setRulesModalType(null)} />}
     </div>
   )
 }

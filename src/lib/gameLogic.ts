@@ -14,6 +14,8 @@ import type {
   RoundPlayer,
   Press,
   SideBet,
+  HammerConfig,
+  HammerHoleState,
 } from '../types'
 
 // ─── Handicap math ────────────────────────────────────────────────────────────
@@ -598,6 +600,128 @@ export function calculateBBBPayouts(
         reason: `${pts} point${pts !== 1 ? 's' : ''} (Bingo/Bango/Bongo)`,
       }
     })
+}
+
+// ─── Hammer ──────────────────────────────────────────────────────────────────
+
+export interface HammerResult {
+  /** Net cents per player (positive = won, negative = lost) */
+  netCents: Record<string, number>
+  /** Per-hole results */
+  holeResults: HammerHoleResult[]
+  totalHolesPlayed: number
+}
+
+export interface HammerHoleResult {
+  holeNumber: number
+  hammerState: HammerHoleState | null
+  winnerId: string | null
+  amountCents: number
+}
+
+/**
+ * Calculate hammer results from hole scores and hammer states.
+ * Hammer is a 2-player game. Each hole, the hammer holder can "throw" to double.
+ * If declined, thrower wins the current value. If accepted, value doubles and play continues.
+ * If no hammer thrown, the hole winner gets the base value.
+ */
+export function calculateHammer(
+  players: Player[],
+  holeScores: HoleScore[],
+  snapshot: CourseSnapshot,
+  config: HammerConfig,
+  courseHcps: Record<string, number>,
+): HammerResult {
+  const netCents: Record<string, number> = {}
+  const holeResults: HammerHoleResult[] = []
+  players.forEach(p => (netCents[p.id] = 0))
+
+  if (players.length !== 2) {
+    return { netCents, holeResults, totalHolesPlayed: 0 }
+  }
+
+  const [p1, p2] = players
+  const totalHoles = snapshot.holes.length
+
+  for (let holeNum = 1; holeNum <= totalHoles; holeNum++) {
+    const hole = snapshot.holes.find(h => h.number === holeNum)
+    if (!hole) continue
+
+    const hammerState = config.hammerStates?.[holeNum] ?? null
+
+    // Get scores for both players
+    const getNet = (playerId: string): number | null => {
+      const hs = holeScores.find(s => s.playerId === playerId && s.holeNumber === holeNum)
+      if (!hs) return null
+      return hs.grossScore // Hammer is always gross
+    }
+
+    const s1 = getNet(p1.id)
+    const s2 = getNet(p2.id)
+
+    if (s1 === null || s2 === null) {
+      holeResults.push({ holeNumber: holeNum, hammerState, winnerId: null, amountCents: 0 })
+      continue
+    }
+
+    // If hammer was declined, the thrower wins the pre-throw value
+    if (hammerState?.declined) {
+      const thrower = hammerState.hammerHolder
+      const decliner = hammerState.declinedBy ?? (thrower === p1.id ? p2.id : p1.id)
+      // Value before the throw (half the current doubled value)
+      const winAmount = Math.floor(hammerState.value / 2)
+      netCents[thrower] += winAmount
+      netCents[decliner] -= winAmount
+      holeResults.push({ holeNumber: holeNum, hammerState, winnerId: thrower, amountCents: winAmount })
+      continue
+    }
+
+    // Determine hole value
+    const holeValue = hammerState?.value ?? config.baseValueCents
+
+    // Determine winner by score
+    if (s1 < s2) {
+      netCents[p1.id] += holeValue
+      netCents[p2.id] -= holeValue
+      holeResults.push({ holeNumber: holeNum, hammerState, winnerId: p1.id, amountCents: holeValue })
+    } else if (s2 < s1) {
+      netCents[p2.id] += holeValue
+      netCents[p1.id] -= holeValue
+      holeResults.push({ holeNumber: holeNum, hammerState, winnerId: p2.id, amountCents: holeValue })
+    } else {
+      // Tie — push, no money exchanged
+      holeResults.push({ holeNumber: holeNum, hammerState, winnerId: null, amountCents: 0 })
+    }
+  }
+
+  return {
+    netCents,
+    holeResults,
+    totalHolesPlayed: holeResults.filter(h => h.winnerId !== null).length,
+  }
+}
+
+export function calculateHammerPayouts(
+  result: HammerResult,
+  game: Game,
+  players: Player[],
+): PlayerPayout[] {
+  if (players.length !== 2) return []
+
+  // In hammer, there's no traditional pot. Settlements are direct.
+  // But we use the payout structure to show who won/lost net.
+  const payouts: PlayerPayout[] = []
+  for (const p of players) {
+    const net = result.netCents[p.id] ?? 0
+    if (net > 0) {
+      payouts.push({
+        playerId: p.id,
+        amountCents: net,
+        reason: `Hammer winner (${result.totalHolesPlayed} hole${result.totalHolesPlayed !== 1 ? 's' : ''} played)`,
+      })
+    }
+  }
+  return payouts
 }
 
 // ─── Payouts ──────────────────────────────────────────────────────────────────

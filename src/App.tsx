@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import type { Session } from '@supabase/supabase-js'
 import { supabase, rowToCourse, rowToRound, rowToHoleScore, fetchOrCreateProfile } from './lib/supabase'
 import { useNotifications } from './hooks/useNotifications'
+import { flush as flushOfflineQueue, getPending as getOfflinePending } from './lib/offlineQueue'
 import { NotificationToast } from './components/NotificationToast'
 import { NotificationBadge } from './components/NotificationBadge'
 import { Auth } from './components/Auth/Auth'
@@ -31,9 +32,11 @@ import { TournamentSetup } from './components/TournamentSetup/TournamentSetup'
 import { TournamentDetail } from './components/TournamentDetail/TournamentDetail'
 import { EventSetup } from './components/EventSetup/EventSetup'
 import { EventLeaderboard } from './components/EventLeaderboard/EventLeaderboard'
+import { Ledger } from './components/Ledger/Ledger'
+import { LiveLeaderboard } from './components/LiveLeaderboard/LiveLeaderboard'
 import type { Course, Round, HoleScore, UserProfile, GameType, StakesMode } from './types'
 
-type Screen = 'home' | 'course-catalog' | 'course-setup' | 'new-round' | 'scorecard' | 'settle-up' | 'round-history' | 'stats' | 'settings' | 'onboarding' | 'admin' | 'upgrade-account' | 'player-directory' | 'rounds-detail' | 'courses-detail' | 'handicap-detail' | 'join-round' | 'tournament-list' | 'tournament-setup' | 'tournament-detail' | 'personal-dashboard' | 'event-setup' | 'event-leaderboard'
+type Screen = 'home' | 'course-catalog' | 'course-setup' | 'new-round' | 'scorecard' | 'settle-up' | 'round-history' | 'stats' | 'settings' | 'onboarding' | 'admin' | 'upgrade-account' | 'player-directory' | 'rounds-detail' | 'courses-detail' | 'handicap-detail' | 'join-round' | 'tournament-list' | 'tournament-setup' | 'tournament-detail' | 'personal-dashboard' | 'event-setup' | 'event-leaderboard' | 'ledger' | 'spectate'
 
 const GAME_EMOJI: Record<GameType, string> = {
   skins: '🎰 Skins',
@@ -41,6 +44,7 @@ const GAME_EMOJI: Record<GameType, string> = {
   nassau: '🏳️ Nassau',
   wolf: '🐺 Wolf',
   bingo_bango_bongo: '⭐ BBB',
+  hammer: '🔨 Hammer',
 }
 
 function totalPar(course: Course) {
@@ -129,7 +133,9 @@ function Home({
   onTournaments,
   onPersonalDashboard,
   onCreateEvent,
+  onLedger,
 }: {
+
   userId: string
   userProfile: UserProfile | null
   onNewRound: () => void
@@ -157,6 +163,7 @@ function Home({
   onTournaments: () => void
   onPersonalDashboard: () => void
   onCreateEvent: () => void
+  onLedger: () => void
 }) {
   const [courses, setCourses] = useState<Course[]>([])
   const [activeRounds, setActiveRounds] = useState<Round[]>([])
@@ -286,6 +293,9 @@ function Home({
                 </button>
                 <button onClick={onStats} className="text-gray-300 text-sm font-medium flex items-center gap-1.5 hover:text-white transition-colors">
                   <span>📊</span> Leaderboard
+                </button>
+                <button onClick={onLedger} className="text-gray-300 text-sm font-medium flex items-center gap-1.5 hover:text-white transition-colors">
+                  <span>💰</span> Ledger
                 </button>
                 <button onClick={onPlayers} className="text-gray-300 text-sm font-medium flex items-center gap-1.5 hover:text-white transition-colors">
                   <span>🏌️</span> Players
@@ -585,6 +595,7 @@ export default function App() {
   const [appConfirmModal, setAppConfirmModal] = useState<{ title: string; message: string; onConfirm: () => void; destructive?: boolean } | null>(null)
   const [activeTournamentId, setActiveTournamentId] = useState<string | null>(null)
   const [activeEventId, setActiveEventId] = useState<string | null>(null)
+  const [spectateCode, setSpectateCode] = useState<string | null>(null)
   const { unreadCount: notificationCount, latestToast, dismissToast } = useNotifications(session?.user?.id ?? null)
 
   const [pendingJoinCode, setPendingJoinCode] = useState<string | null>(() => {
@@ -593,6 +604,14 @@ export default function App() {
     if (stored) return stored
     // Check URL param
     const params = new URLSearchParams(window.location.search)
+    // Handle ?spectate=CODE
+    const spectateParam = params.get('spectate')
+    if (spectateParam) {
+      window.history.replaceState({}, '', window.location.pathname)
+      // Will be picked up by the effect below
+      setTimeout(() => setSpectateCode(spectateParam), 0)
+      return null
+    }
     const joinCode = params.get('join')
     if (joinCode) {
       sessionStorage.setItem('pendingJoinCode', joinCode)
@@ -601,6 +620,13 @@ export default function App() {
     }
     return null
   })
+
+  // Flush offline queue on app mount if online and items are pending
+  useEffect(() => {
+    if (navigator.onLine && getOfflinePending() > 0) {
+      flushOfflineQueue()
+    }
+  }, [])
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => setSession(session))
@@ -635,6 +661,13 @@ export default function App() {
       setScreen('join-round')
     }
   }, [pendingJoinCode, userProfile?.onboardingComplete])
+
+  // Auto-navigate to spectate when spectate code is set
+  useEffect(() => {
+    if (spectateCode) {
+      setScreen('spectate')
+    }
+  }, [spectateCode])
 
   // Browser back button support: push state on screen change, listen for popstate
   useEffect(() => {
@@ -879,6 +912,12 @@ export default function App() {
       />
     )
   }
+  if (screen === 'ledger') {
+    return <Ledger userId={userId} onBack={goHome} />
+  }
+  if (screen === 'spectate' && spectateCode) {
+    return <LiveLeaderboard inviteCode={spectateCode} onBack={() => { setSpectateCode(null); goHome() }} />
+  }
 
   const handleDeleteCourse = (courseId: string) => {
     setAppConfirmModal({
@@ -964,6 +1003,7 @@ export default function App() {
       onTournaments={() => setScreen('tournament-list')}
       onPersonalDashboard={() => setScreen('personal-dashboard')}
       onCreateEvent={() => setScreen('event-setup')}
+      onLedger={() => setScreen('ledger')}
     />
     {appConfirmModal && (
       <ConfirmModal

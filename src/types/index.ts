@@ -65,7 +65,7 @@ export interface GamePreset {
   gameType: GameType
   buyInCents: number
   stakesMode: StakesMode
-  config: SkinsConfig | BestBallConfig | NassauConfig | WolfConfig | BBBConfig
+  config: SkinsConfig | BestBallConfig | NassauConfig | WolfConfig | BBBConfig | HammerConfig
   description?: string
   sortOrder: number
   createdAt?: Date
@@ -82,7 +82,7 @@ export interface CourseSnapshot {
 
 // ─── Games ────────────────────────────────────────────────────────────────────
 
-export type GameType = 'skins' | 'best_ball' | 'nassau' | 'wolf' | 'bingo_bango_bongo'
+export type GameType = 'skins' | 'best_ball' | 'nassau' | 'wolf' | 'bingo_bango_bongo' | 'hammer'
 
 export type SkinsMode = 'gross' | 'net'
 export interface Press {
@@ -120,6 +120,22 @@ export interface BBBConfig {
   mode: 'gross' | 'net'
 }
 
+export interface HammerConfig {
+  baseValueCents: number
+  maxPresses?: number
+  autoHammer?: boolean
+  /** Hole-by-hole hammer states, keyed by hole number */
+  hammerStates?: Record<number, HammerHoleState>
+}
+
+export interface HammerHoleState {
+  hammerHolder: string  // playerId who currently holds the hammer
+  value: number         // current value in cents for this hole
+  presses: number       // number of presses (doubles) this hole
+  declined: boolean     // whether the opponent declined the hammer
+  declinedBy?: string   // playerId who declined
+}
+
 // ─── Junks (side bets) ─────────────────────────────────────────────────────
 
 export type JunkType = 'sandy' | 'greenie' | 'snake' | 'barkie' | 'ctp'
@@ -153,7 +169,7 @@ export interface Game {
   type: GameType
   buyInCents: number
   stakesMode?: StakesMode
-  config: SkinsConfig | BestBallConfig | NassauConfig | WolfConfig | BBBConfig
+  config: SkinsConfig | BestBallConfig | NassauConfig | WolfConfig | BBBConfig | HammerConfig
 }
 
 // ─── Payments ─────────────────────────────────────────────────────────────────
