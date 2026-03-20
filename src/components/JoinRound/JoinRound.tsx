@@ -33,8 +33,9 @@ interface Props {
 
 export function JoinRound({ userId, initialCode, onJoined, onCancel }: Props) {
   const [code, setCode] = useState(initialCode ?? '')
-  const [step, setStep] = useState<'code' | 'pick'>(initialCode ? 'code' : 'code')
+  const [step, setStep] = useState<'code' | 'pick' | 'joined'>(initialCode ? 'code' : 'code')
   const [loading, setLoading] = useState(false)
+  const [joinedPlayerId, setJoinedPlayerId] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [preview, setPreview] = useState<RoundPreview | null>(null)
   const [eventPreview, setEventPreview] = useState<EventPreview | null>(null)
@@ -117,13 +118,21 @@ export function JoinRound({ userId, initialCode, onJoined, onCancel }: Props) {
     setError(null)
     try {
       if (eventPreview) {
+        // Already-joined users skip the info card
+        const alreadyClaimed = eventPreview.participants.some((p: any) => p.userId === userId && p.playerId === playerId)
         // Join event
         const { data, error: rpcError } = await supabase.rpc('join_event', {
           p_invite_code: code.toUpperCase().trim(),
           p_player_id: playerId,
         })
         if (rpcError) throw rpcError
-        onJoined(eventPreview.roundId)
+        if (alreadyClaimed) {
+          onJoined(eventPreview.roundId)
+          return
+        }
+        // Show info card before going to scorecard
+        setJoinedPlayerId(playerId)
+        setStep('joined')
       } else if (preview) {
         // Join regular round
         const { data, error: rpcError } = await supabase.rpc('join_round', {
@@ -287,6 +296,75 @@ export function JoinRound({ userId, initialCode, onJoined, onCancel }: Props) {
             </button>
           </div>
         )}
+
+        {step === 'joined' && eventPreview && joinedPlayerId && (() => {
+          const playerName = eventPreview.players.find(p => p.id === joinedPlayerId)?.name ?? 'Unknown'
+          const groupNum = eventPreview.groups?.[joinedPlayerId]
+          const groupMembers = groupNum
+            ? eventPreview.players
+                .filter(p => p.id !== joinedPlayerId && eventPreview.groups?.[p.id] === groupNum)
+                .map(p => p.name)
+            : []
+          const scorekeeperPlayerId = groupNum ? eventPreview.groupScorekeepers[groupNum] : undefined
+          const scorekeeperName = scorekeeperPlayerId
+            ? eventPreview.players.find(p => p.id === scorekeeperPlayerId)?.name
+            : undefined
+          const isScorekeeper = scorekeeperPlayerId === joinedPlayerId
+
+          return (
+            <div className="space-y-4">
+              <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700 p-6 space-y-4">
+                <div className="text-center">
+                  <p className="text-4xl mb-2">🎉</p>
+                  <h2 className="font-display font-bold text-2xl text-gray-900 dark:text-gray-100">You're In!</h2>
+                  <p className="text-sm text-gray-500 mt-1">{eventPreview.name}</p>
+                </div>
+
+                <div className="space-y-3">
+                  {groupNum && (
+                    <div className="bg-gray-50 dark:bg-gray-700 rounded-xl px-4 py-3">
+                      <p className="text-xs text-gray-400 uppercase tracking-wide font-semibold">Group</p>
+                      <p className="text-lg font-bold text-gray-800 dark:text-gray-100">Group {groupNum}</p>
+                      {groupMembers.length > 0 && (
+                        <p className="text-sm text-gray-600 dark:text-gray-400 mt-0.5">{groupMembers.join(', ')}</p>
+                      )}
+                    </div>
+                  )}
+
+                  {scorekeeperName && (
+                    <div className="bg-gray-50 dark:bg-gray-700 rounded-xl px-4 py-3">
+                      <p className="text-xs text-gray-400 uppercase tracking-wide font-semibold">Scorekeeper</p>
+                      <p className="text-sm font-semibold text-gray-800 dark:text-gray-100">
+                        {isScorekeeper ? 'You are the scorekeeper for this group' : scorekeeperName}
+                      </p>
+                    </div>
+                  )}
+
+                  <div className="bg-gray-50 dark:bg-gray-700 rounded-xl px-4 py-3">
+                    <p className="text-xs text-gray-400 uppercase tracking-wide font-semibold">Current Hole</p>
+                    <p className="text-sm font-semibold text-gray-800 dark:text-gray-100">Hole {eventPreview.currentHole}</p>
+                  </div>
+
+                  <div className="bg-gray-50 dark:bg-gray-700 rounded-xl px-4 py-3">
+                    <p className="text-xs text-gray-400 uppercase tracking-wide font-semibold">Scoring</p>
+                    <p className="text-sm text-gray-600 dark:text-gray-400">
+                      {isScorekeeper
+                        ? 'You are the scorekeeper — your scores are auto-approved'
+                        : 'Your scores will be submitted for approval'}
+                    </p>
+                  </div>
+                </div>
+
+                <button
+                  onClick={() => onJoined(eventPreview.roundId)}
+                  className="w-full h-14 bg-gray-800 text-white text-lg font-bold rounded-2xl shadow-lg active:bg-gray-900 transition-colors"
+                >
+                  Start Scoring →
+                </button>
+              </div>
+            </div>
+          )
+        })()}
       </main>
     </div>
   )

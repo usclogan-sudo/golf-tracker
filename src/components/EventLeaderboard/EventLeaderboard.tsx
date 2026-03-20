@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { supabase, rowToRound, rowToRoundPlayer, rowToHoleScore, rowToEvent, rowToEventParticipant } from '../../lib/supabase'
 import { buildCourseHandicaps, strokesOnHole, calculateSkins, calculateBestBall, calculateNassau, calculateWolf, calculateBBB, fmtMoney } from '../../lib/gameLogic'
-import type { Round, RoundPlayer, HoleScore, GolfEvent, EventParticipant, SkinsConfig, BestBallConfig, NassauConfig, WolfConfig, Player } from '../../types'
+import type { Round, RoundPlayer, HoleScore, GolfEvent, EventParticipant, SkinsConfig, BestBallConfig, NassauConfig, WolfConfig, Player, ScoreStatus } from '../../types'
 
 interface Props {
   userId: string
@@ -18,6 +18,8 @@ export function EventLeaderboard({ userId, eventId, onBack }: Props) {
   const [loading, setLoading] = useState(true)
   const [activeTab, setActiveTab] = useState<'overall' | number>('overall')
   const [onlineUsers, setOnlineUsers] = useState<Set<string>>(new Set())
+  const [showApproval, setShowApproval] = useState(false)
+  const [approvingId, setApprovingId] = useState<string | null>(null)
 
   // Load data
   useEffect(() => {
@@ -133,6 +135,45 @@ export function EventLeaderboard({ userId, eventId, onBack }: Props) {
     }).sort((a, b) => a.net - b.net)
   }, [players, approvedScores, snapshot, courseHcps, groups, eventParticipants, onlineUsers])
 
+  // Role detection
+  const myParticipant = eventParticipants.find(ep => ep.userId === userId)
+  const isManager = myParticipant?.role === 'manager'
+  const isScorekeeper = myParticipant?.role === 'scorekeeper'
+  const canApprove = isManager || isScorekeeper
+
+  // Pending scores (scorekeepers only see their group's)
+  const pendingScores = useMemo(() => {
+    const pending = holeScores.filter(s => s.scoreStatus === 'pending')
+    if (isManager) return pending
+    if (isScorekeeper && myParticipant?.groupNumber) {
+      const groupPlayerIds = new Set(
+        players.filter(p => groups?.[p.id] === myParticipant.groupNumber).map(p => p.id)
+      )
+      return pending.filter(s => groupPlayerIds.has(s.playerId))
+    }
+    return []
+  }, [holeScores, isManager, isScorekeeper, myParticipant, players, groups])
+
+  // Per-group progress: max hole where ALL group members have an approved score
+  const groupProgress = useMemo(() => {
+    if (!groups || !snapshot) return {}
+    const progress: Record<number, number> = {}
+    for (const gn of groupNumbers) {
+      const groupPlayerIds = players.filter(p => groups[p.id] === gn).map(p => p.id)
+      if (groupPlayerIds.length === 0) { progress[gn] = 0; continue }
+      let maxComplete = 0
+      for (let h = 1; h <= snapshot.holes.length; h++) {
+        const allHaveScore = groupPlayerIds.every(pid =>
+          approvedScores.some(s => s.playerId === pid && s.holeNumber === h)
+        )
+        if (allHaveScore) maxComplete = h
+        else break
+      }
+      progress[gn] = maxComplete
+    }
+    return progress
+  }, [groups, snapshot, groupNumbers, players, approvedScores])
+
   if (loading || !event || !round || !snapshot) {
     return (
       <div className="min-h-screen bg-gray-50 dark:bg-gray-900 flex items-center justify-center">
@@ -206,10 +247,30 @@ export function EventLeaderboard({ userId, eventId, onBack }: Props) {
             <p className="text-xs text-gray-500">Online</p>
             <p className="text-xl font-bold text-green-600">{onlineUsers.size}</p>
           </div>
-          <div className="bg-white dark:bg-gray-800 rounded-xl p-3 text-center">
-            <p className="text-xs text-gray-500">Hole</p>
-            <p className="text-xl font-bold text-gray-800 dark:text-gray-100">{round.currentHole}</p>
-          </div>
+          {groupNumbers.length > 1 ? (
+            <div className="bg-white dark:bg-gray-800 rounded-xl p-3 text-center">
+              <p className="text-xs text-gray-500 mb-1">Group Progress</p>
+              <div className="flex flex-col gap-0.5">
+                {(() => {
+                  const maxHole = Math.max(...Object.values(groupProgress), 0)
+                  return groupNumbers.map(gn => {
+                    const h = groupProgress[gn] ?? 0
+                    const isBehind = h < maxHole
+                    return (
+                      <span key={gn} className={`text-xs font-bold ${isBehind ? 'text-amber-600' : 'text-green-600'}`}>
+                        G{gn}: H{h}
+                      </span>
+                    )
+                  })
+                })()}
+              </div>
+            </div>
+          ) : (
+            <div className="bg-white dark:bg-gray-800 rounded-xl p-3 text-center">
+              <p className="text-xs text-gray-500">Hole</p>
+              <p className="text-xl font-bold text-gray-800 dark:text-gray-100">{round.currentHole}</p>
+            </div>
+          )}
         </div>
 
         {/* Leaderboard table */}
@@ -254,12 +315,92 @@ export function EventLeaderboard({ userId, eventId, onBack }: Props) {
           </table>
         </div>
 
-        {/* Pending scores notice */}
-        {holeScores.some(s => s.scoreStatus === 'pending') && (
-          <div className="bg-yellow-50 border border-yellow-200 rounded-xl px-4 py-3">
-            <p className="text-yellow-800 text-sm font-semibold">
-              {holeScores.filter(s => s.scoreStatus === 'pending').length} pending score{holeScores.filter(s => s.scoreStatus === 'pending').length !== 1 ? 's' : ''} awaiting approval
-            </p>
+        {/* Pending scores / approval panel */}
+        {pendingScores.length > 0 && (
+          <div className="bg-yellow-50 border border-yellow-200 rounded-xl px-4 py-3 space-y-2">
+            <button
+              onClick={() => canApprove && setShowApproval(!showApproval)}
+              className="w-full flex items-center justify-between"
+            >
+              <p className="text-yellow-800 text-sm font-semibold">
+                {pendingScores.length} pending score{pendingScores.length !== 1 ? 's' : ''} awaiting approval
+              </p>
+              {canApprove && (
+                <span className="text-yellow-600 text-xs font-semibold">
+                  {showApproval ? 'Hide' : 'Review'}
+                </span>
+              )}
+            </button>
+            {showApproval && canApprove && (
+              <div className="space-y-2 mt-2">
+                {pendingScores.length > 1 && (
+                  <button
+                    onClick={async () => {
+                      setApprovingId('all')
+                      setHoleScores(prev => prev.map(s =>
+                        s.scoreStatus === 'pending' && pendingScores.some(ps => ps.id === s.id)
+                          ? { ...s, scoreStatus: 'approved' as ScoreStatus }
+                          : s
+                      ))
+                      await Promise.all(pendingScores.map(s =>
+                        supabase.rpc('approve_score', { p_score_id: s.id })
+                      ))
+                      setApprovingId(null)
+                    }}
+                    disabled={approvingId !== null}
+                    className="w-full py-2 bg-green-500 text-white text-sm font-bold rounded-lg active:bg-green-600 disabled:opacity-50"
+                  >
+                    Approve All ({pendingScores.length})
+                  </button>
+                )}
+                {pendingScores.map(score => {
+                  const player = players.find(p => p.id === score.playerId)
+                  const h = snapshot?.holes.find(h => h.number === score.holeNumber)
+                  const groupNum = groups?.[score.playerId]
+                  return (
+                    <div key={score.id} className="flex items-center justify-between bg-white rounded-lg p-2.5">
+                      <div>
+                        <p className="text-sm font-semibold text-gray-800">
+                          {player?.name ?? 'Unknown'}
+                          {groupNum && groupNumbers.length > 1 && (
+                            <span className="ml-1.5 text-[10px] font-bold px-1 py-0.5 rounded bg-gray-100 text-gray-500">G{groupNum}</span>
+                          )}
+                        </p>
+                        <p className="text-xs text-gray-500">
+                          Hole {score.holeNumber} · Par {h?.par ?? '?'} · Shot {score.grossScore}
+                        </p>
+                      </div>
+                      <div className="flex gap-1.5">
+                        <button
+                          onClick={async () => {
+                            setApprovingId(score.id)
+                            setHoleScores(prev => prev.map(s => s.id === score.id ? { ...s, scoreStatus: 'approved' as ScoreStatus } : s))
+                            await supabase.rpc('approve_score', { p_score_id: score.id })
+                            setApprovingId(null)
+                          }}
+                          disabled={approvingId !== null}
+                          className="px-3 py-1.5 bg-green-500 text-white text-xs font-bold rounded-lg active:bg-green-600 disabled:opacity-50"
+                        >
+                          Approve
+                        </button>
+                        <button
+                          onClick={async () => {
+                            setApprovingId(score.id)
+                            setHoleScores(prev => prev.map(s => s.id === score.id ? { ...s, scoreStatus: 'rejected' as ScoreStatus } : s))
+                            await supabase.rpc('reject_score', { p_score_id: score.id })
+                            setApprovingId(null)
+                          }}
+                          disabled={approvingId !== null}
+                          className="px-3 py-1.5 bg-red-500 text-white text-xs font-bold rounded-lg active:bg-red-600 disabled:opacity-50"
+                        >
+                          Reject
+                        </button>
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+            )}
           </div>
         )}
 

@@ -160,6 +160,8 @@ export function Scorecard({ userId, roundId, onEndRound, onHome, readOnly: readO
   const [eventParticipants, setEventParticipants] = useState<EventParticipant[]>([])
   const [localHole, setLocalHole] = useState<number | null>(null)
   const [showApprovalPanel, setShowApprovalPanel] = useState(false)
+  const [showContextBanner, setShowContextBanner] = useState(true)
+  const [scoreToast, setScoreToast] = useState<{ message: string; type: 'info' | 'success' | 'error' } | null>(null)
 
   useEffect(() => {
     Promise.all([
@@ -207,6 +209,15 @@ export function Scorecard({ userId, roundId, onEndRound, onHome, readOnly: readO
           })
         } else if (payload.eventType === 'UPDATE') {
           const row = payload.new as any
+          const oldRow = payload.old as any
+          // Detect score status transitions for toast notifications
+          if (oldRow?.score_status === 'pending' && row.score_status === 'approved') {
+            setScoreToast({ message: `Score approved! Hole ${row.hole_number}`, type: 'success' })
+            setTimeout(() => setScoreToast(null), 3000)
+          } else if (oldRow?.score_status === 'pending' && row.score_status === 'rejected') {
+            setScoreToast({ message: `Score rejected on Hole ${row.hole_number} — re-enter your score`, type: 'error' })
+            setTimeout(() => setScoreToast(null), 3000)
+          }
           setHoleScores(prev => prev.map(s => s.id === row.id ? rowToHoleScore(row) : s))
         } else if (payload.eventType === 'DELETE') {
           const row = payload.old as any
@@ -362,6 +373,11 @@ export function Scorecard({ userId, roundId, onEndRound, onHome, readOnly: readO
               ? { ...s, id: actualId, scoreStatus: actualStatus }
               : s
           ))
+          // Show toast for pending submissions (not auto-approved)
+          if (actualStatus === 'pending') {
+            setScoreToast({ message: 'Score submitted · Pending approval', type: 'info' })
+            setTimeout(() => setScoreToast(null), 3000)
+          }
         }
       // Participant self-entry: use RPC so scores are stored with creator's user_id
       } else if (selfEntryOnly && myParticipant && playerId === myParticipant.playerId) {
@@ -1189,6 +1205,53 @@ export function Scorecard({ userId, roundId, onEndRound, onHome, readOnly: readO
             <p className="text-blue-700 text-sm font-semibold">Syncing scores...</p>
           </div>
         )}
+        {/* Event context banners */}
+        {isEventRound && showContextBanner && (() => {
+          // Scorekeeper banner (manager who IS also scorekeeper shows this)
+          if (isGroupScorekeeper) {
+            const groupMembers = players
+              .filter(p => round.groups?.[p.id] === myEventGroupNumber)
+              .map(p => p.name)
+            return (
+              <div className="bg-blue-50 border border-blue-200 rounded-xl px-4 py-3 flex items-start justify-between">
+                <div className="flex-1">
+                  <p className="text-blue-800 text-sm font-semibold">
+                    Scorekeeper for Group {myEventGroupNumber}
+                  </p>
+                  <p className="text-blue-600 text-xs mt-0.5">
+                    {groupMembers.join(', ')} · Your scores are auto-approved
+                  </p>
+                </div>
+                <button onClick={() => setShowContextBanner(false)} className="text-blue-400 text-lg font-bold ml-2">&times;</button>
+              </div>
+            )
+          }
+          // Manager (not scorekeeper) banner
+          if (isEventManager) {
+            return (
+              <div className="bg-green-50 border border-green-200 rounded-xl px-4 py-3 flex items-start justify-between">
+                <div className="flex-1">
+                  <p className="text-green-800 text-sm font-semibold">Event Manager</p>
+                  <p className="text-green-600 text-xs mt-0.5">All scores auto-approved</p>
+                </div>
+                <button onClick={() => setShowContextBanner(false)} className="text-green-400 text-lg font-bold ml-2">&times;</button>
+              </div>
+            )
+          }
+          // Self-entry player banner
+          if (myEventParticipant && !canApproveScores) {
+            return (
+              <div className="bg-yellow-50 border border-yellow-200 rounded-xl px-4 py-3 flex items-start justify-between">
+                <div className="flex-1">
+                  <p className="text-yellow-800 text-sm font-semibold">Self-Entry Mode</p>
+                  <p className="text-yellow-600 text-xs mt-0.5">Your scores are pending approval from your scorekeeper</p>
+                </div>
+                <button onClick={() => setShowContextBanner(false)} className="text-yellow-400 text-lg font-bold ml-2">&times;</button>
+              </div>
+            )
+          }
+          return null
+        })()}
         {saveError && (
           <div className="bg-red-50 border border-red-200 rounded-xl px-4 py-3 flex items-center justify-between gap-2">
             <p className="text-red-700 text-sm font-semibold flex-1">{saveError}</p>
@@ -1950,6 +2013,19 @@ export function Scorecard({ userId, roundId, onEndRound, onHome, readOnly: readO
         <div className="fixed top-20 inset-x-0 z-50 flex justify-center pointer-events-none">
           <div className="bg-gray-800 text-white px-4 py-2 rounded-xl shadow-lg text-sm font-semibold">
             {inviteToast}
+          </div>
+        </div>
+      )}
+
+      {/* Score status toast */}
+      {scoreToast && (
+        <div className="fixed top-20 inset-x-0 z-50 flex justify-center pointer-events-none">
+          <div className={`px-4 py-2 rounded-xl shadow-lg text-sm font-semibold ${
+            scoreToast.type === 'success' ? 'bg-green-600 text-white' :
+            scoreToast.type === 'error' ? 'bg-red-600 text-white' :
+            'bg-blue-600 text-white'
+          }`}>
+            {scoreToast.message}
           </div>
         </div>
       )}
