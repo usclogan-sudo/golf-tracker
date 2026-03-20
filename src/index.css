@@ -24,9 +24,11 @@
 @layer utilities {
   .app-header {
     background: linear-gradient(160deg, #111827 0%, #1f2937 55%, #374151 100%);
+    padding-top: env(safe-area-inset-top, 0px);
   }
   .hr-header {
     background: linear-gradient(160deg, #1a0e00 0%, #3d2800 55%, #5c3d00 100%);
+    padding-top: env(safe-area-inset-top, 0px);
   }
   .gold-text {
     background: linear-gradient(135deg, #d97706, #fbbf24);
@@ -53,6 +55,11 @@
 }
 
 /* Safe area padding for iPhone notch/home indicator */
+@supports (padding-top: env(safe-area-inset-top)) {
+  .safe-top {
+    padding-top: env(safe-area-inset-top);
+  }
+}
 @supports (padding-bottom: env(safe-area-inset-bottom)) {
   .safe-bottom {
     padding-bottom: env(safe-area-inset-bottom);
