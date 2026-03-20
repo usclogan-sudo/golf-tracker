@@ -318,6 +318,14 @@ export function SettleUp({ roundId, userId, eventId, onDone, onContinue }: Props
     await supabase.from('settlements').update({ status: newStatus, paid_at: newPaidAt }).eq('id', settlement.id)
   }
 
+  const markPlayerSettled = async (settlementIds: string[]) => {
+    const paidAt = new Date().toISOString()
+    setSettlementRecords(prev => prev.map(s =>
+      settlementIds.includes(s.id) ? { ...s, status: 'paid' as SettlementRecord['status'], paidAt: new Date(paidAt) } : s
+    ))
+    await supabase.from('settlements').update({ status: 'paid', paid_at: paidAt }).in('id', settlementIds)
+  }
+
   if (loading || !round || !game || !snapshot) {
     return <div className="min-h-screen bg-gray-50 dark:bg-gray-900 flex items-center justify-center"><p className="text-gray-400">Loading…</p></div>
   }
@@ -329,6 +337,75 @@ export function SettleUp({ roundId, userId, eventId, onDone, onContinue }: Props
   const owedSettlements = settlementRecords.filter(s => s.status === 'owed')
   const paidSettlements = settlementRecords.filter(s => s.status === 'paid')
   const allSettled = settlementRecords.length > 0 && owedSettlements.length === 0
+
+  // Collection Checklist: aggregate settlements by counterparty from treasurer's perspective
+  const collectionChecklist = useMemo(() => {
+    if (!treasurerId || settlementRecords.length === 0) return []
+    // Group settlements by the non-treasurer player
+    const byPlayer = new Map<string, { collectCents: number; payCents: number; owedIds: string[]; totalIds: string[]; paidCount: number }>()
+    for (const s of settlementRecords) {
+      const involvesT = s.fromPlayerId === treasurerId || s.toPlayerId === treasurerId
+      if (!involvesT) {
+        // Direct settlement between non-treasurer players — show as-is
+        // Group under fromPlayer
+        const key = s.fromPlayerId + '→' + s.toPlayerId
+        if (!byPlayer.has(key)) byPlayer.set(key, { collectCents: 0, payCents: 0, owedIds: [], totalIds: [], paidCount: 0 })
+        const entry = byPlayer.get(key)!
+        entry.totalIds.push(s.id)
+        if (s.status === 'paid') entry.paidCount++
+        else entry.owedIds.push(s.id)
+        entry.collectCents += s.amountCents // not really "collect" but track for display
+        continue
+      }
+      const counterpartyId = s.fromPlayerId === treasurerId ? s.toPlayerId : s.fromPlayerId
+      if (!byPlayer.has(counterpartyId)) byPlayer.set(counterpartyId, { collectCents: 0, payCents: 0, owedIds: [], totalIds: [], paidCount: 0 })
+      const entry = byPlayer.get(counterpartyId)!
+      entry.totalIds.push(s.id)
+      if (s.status === 'paid') { entry.paidCount++; continue }
+      entry.owedIds.push(s.id)
+      if (s.toPlayerId === treasurerId) {
+        // They owe the treasurer
+        entry.collectCents += s.amountCents
+      } else {
+        // Treasurer owes them
+        entry.payCents += s.amountCents
+      }
+    }
+    const result: { playerId: string; playerName: string; netCents: number; owedIds: string[]; totalCount: number; paidCount: number; player: Player | undefined; isDirect?: boolean; directLabel?: string }[] = []
+    for (const [key, data] of byPlayer) {
+      if (key.includes('→')) {
+        // Direct settlement between non-treasurer players
+        const [fromId, toId] = key.split('→')
+        const fromP = playerById(fromId)
+        const toP = playerById(toId)
+        if (data.owedIds.length === 0) continue // all paid, skip
+        result.push({
+          playerId: key,
+          playerName: `${fromP?.name ?? '?'} → ${toP?.name ?? '?'}`,
+          netCents: data.collectCents,
+          owedIds: data.owedIds,
+          totalCount: data.totalIds.length,
+          paidCount: data.paidCount,
+          player: fromP,
+          isDirect: true,
+          directLabel: `${fromP?.name ?? '?'} pays ${toP?.name ?? '?'}`,
+        })
+      } else {
+        const net = data.collectCents - data.payCents
+        if (data.owedIds.length === 0) continue // all paid
+        result.push({
+          playerId: key,
+          playerName: playerById(key)?.name ?? key.slice(0, 8),
+          netCents: net,
+          owedIds: data.owedIds,
+          totalCount: data.totalIds.length,
+          paidCount: data.paidCount,
+          player: playerById(key),
+        })
+      }
+    }
+    return result.sort((a, b) => Math.abs(b.netCents) - Math.abs(a.netCents))
+  }, [settlementRecords, treasurerId, enrichedPlayers])
 
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-900 pb-32">
@@ -356,6 +433,66 @@ export function SettleUp({ roundId, userId, eventId, onDone, onContinue }: Props
             <p className="text-amber-800 text-sm font-semibold">Only {treasurer.name} can manage payments</p>
             <p className="text-amber-600 text-xs mt-0.5">You can view results and standings below.</p>
           </div>
+        )}
+
+        {/* Collection Checklist — treasurer's aggregated view */}
+        {isTreasurer && collectionChecklist.length > 0 && (
+          <section className="bg-white dark:bg-gray-800 rounded-2xl shadow-sm p-4 space-y-3">
+            <div>
+              <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Collection Checklist</p>
+              {(() => {
+                const totalItems = collectionChecklist.reduce((s, c) => s + c.totalCount, 0)
+                const paidItems = collectionChecklist.reduce((s, c) => s + c.paidCount, 0)
+                const pct = totalItems > 0 ? Math.round((paidItems / totalItems) * 100) : 0
+                return (
+                  <div className="mt-2">
+                    <div className="flex items-center justify-between text-xs text-gray-500 mb-1">
+                      <span>{paidItems} of {totalItems} settled</span>
+                      <span>{pct}%</span>
+                    </div>
+                    <div className="w-full h-2 bg-gray-100 dark:bg-gray-700 rounded-full overflow-hidden">
+                      <div className="h-full bg-green-500 rounded-full transition-all" style={{ width: `${pct}%` }} />
+                    </div>
+                  </div>
+                )
+              })()}
+            </div>
+            <div className="space-y-2">
+              {collectionChecklist.map(item => {
+                const pref = item.player ? getPreferredPayment(item.player) : null
+                return (
+                  <div key={item.playerId} className="p-3 rounded-xl bg-gray-50 dark:bg-gray-700 space-y-2">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <p className="font-semibold text-gray-800 dark:text-gray-100 text-sm">
+                          {item.isDirect ? item.directLabel : item.netCents > 0
+                            ? `Collect ${fmtMoney(item.netCents)} from ${item.playerName}`
+                            : item.netCents < 0
+                            ? `Pay ${fmtMoney(Math.abs(item.netCents))} to ${item.playerName}`
+                            : `Settle with ${item.playerName}`}
+                        </p>
+                        {pref && !item.isDirect && (
+                          <p className="text-xs text-blue-600 dark:text-blue-400 mt-0.5">via {pref.method} {pref.handle}</p>
+                        )}
+                      </div>
+                      <p className={`text-lg font-bold ${item.netCents > 0 ? 'text-green-600' : item.netCents < 0 ? 'text-red-600' : 'text-gray-500'}`}>
+                        {item.isDirect ? fmtMoney(item.netCents) : fmtMoney(Math.abs(item.netCents))}
+                      </p>
+                    </div>
+                    {!item.isDirect && item.player && item.netCents < 0 && (
+                      <PaymentButtons toPlayer={item.player} amountCents={Math.abs(item.netCents)} note={`Golf — ${snapshot.courseName}`} />
+                    )}
+                    <button
+                      onClick={() => markPlayerSettled(item.owedIds)}
+                      className="w-full h-10 bg-green-600 text-white text-sm font-semibold rounded-xl active:bg-green-700 transition-colors"
+                    >
+                      Mark {item.owedIds.length === 1 ? 'Paid' : `All ${item.owedIds.length} Paid`}
+                    </button>
+                  </div>
+                )
+              })}
+            </div>
+          </section>
         )}
 
         {buyIns.length > 0 && (

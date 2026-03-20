@@ -134,7 +134,8 @@ export function Scorecard({ userId, roundId, onEndRound, onHome, readOnly: readO
   const [showRulesModal, setShowRulesModal] = useState(false)
   const [saveError, setSaveError] = useState<string | null>(null)
   const [lastFailedSave, setLastFailedSave] = useState<{ playerId: string; grossScore: number } | null>(null)
-  const [lastChange, setLastChange] = useState<{ playerId: string; holeNumber: number; previousScore: number } | null>(null)
+  const MAX_UNDO = 5
+  const [undoStack, setUndoStack] = useState<{ playerId: string; holeNumber: number; previousScore: number; playerName: string; newScore: number }[]>([])
   const [activeGroupTab, setActiveGroupTab] = useState<number | 'all'>(1)
   const [celebration, setCelebration] = useState<{ level: 'toast' | 'fullscreen'; title: string; subtitle?: string; emoji: string; playerName: string } | null>(null)
   const [confirmModal, setConfirmModal] = useState<{ title: string; message: string; onConfirm: () => void; destructive?: boolean } | null>(null)
@@ -146,7 +147,9 @@ export function Scorecard({ userId, roundId, onEndRound, onHome, readOnly: readO
   const [editingHcpPlayerId, setEditingHcpPlayerId] = useState<string | null>(null)
   const [editingHcpValue, setEditingHcpValue] = useState('')
   const [showHoleConfirm, setShowHoleConfirm] = useState(false)
-  const [showMiniBoard, setShowMiniBoard] = useState(true)
+  const [confirmParFill, setConfirmParFill] = useState(false)
+  const [showMiniBoard, setShowMiniBoard] = useState(false)
+  const [showGameStatus, setShowGameStatus] = useState(false)
   const { isOnline } = useOnlineStatus()
   const [syncing, setSyncing] = useState(false)
   const [pendingCount, setPendingCount] = useState(getPending())
@@ -323,7 +326,8 @@ export function Scorecard({ userId, roundId, onEndRound, onHome, readOnly: readO
     setSaveError(null)
     const existing = holeScores.find(s => s.playerId === playerId && s.holeNumber === currentHole)
     const previousScore = existing?.grossScore ?? par
-    setLastChange({ playerId, holeNumber: currentHole, previousScore })
+    const playerName = players.find(p => p.id === playerId)?.name ?? ''
+    setUndoStack(prev => [{ playerId, holeNumber: currentHole, previousScore, playerName, newScore: grossScore }, ...prev].slice(0, MAX_UNDO))
 
     // Trigger celebration
     const celeb = getCelebration(grossScore, par)
@@ -413,17 +417,32 @@ export function Scorecard({ userId, roundId, onEndRound, onHome, readOnly: readO
   }
 
   const undoLastChange = async () => {
-    if (!lastChange) return
-    const existing = holeScores.find(s => s.playerId === lastChange.playerId && s.holeNumber === lastChange.holeNumber)
+    if (undoStack.length === 0) return
+    const [top, ...rest] = undoStack
+    setUndoStack(rest)
+    const existing = holeScores.find(s => s.playerId === top.playerId && s.holeNumber === top.holeNumber)
     if (existing) {
-      setHoleScores(prev => prev.map(s => s.id === existing.id ? { ...s, grossScore: lastChange.previousScore } : s))
-      await supabase.from('hole_scores').update({ gross_score: lastChange.previousScore }).eq('id', existing.id)
+      setHoleScores(prev => prev.map(s => s.id === existing.id ? { ...s, grossScore: top.previousScore } : s))
+      try {
+        await supabase.from('hole_scores').update({ gross_score: top.previousScore }).eq('id', existing.id)
+      } catch {
+        if (!isOnline) {
+          enqueue({
+            table: 'hole_scores',
+            method: 'update',
+            data: { gross_score: top.previousScore },
+            matchColumn: 'id',
+            matchValue: existing.id,
+          })
+          setPendingCount(getPending())
+        }
+      }
     }
-    setLastChange(null)
   }
 
   const goToHole = async (holeNum: number) => {
     setSaveError(null)
+    setConfirmParFill(false)
     if (isEventRound) {
       // Event rounds: navigate locally, only event manager updates DB
       setLocalHole(holeNum)
@@ -1184,8 +1203,17 @@ export function Scorecard({ userId, roundId, onEndRound, onHome, readOnly: readO
             <button onClick={() => { setSaveError(null); setLastFailedSave(null) }} className="text-red-400 text-lg font-bold ml-1">&times;</button>
           </div>
         )}
-        {/* Game status bars */}
-        {skinsResult && (
+        {/* Game Status accordion */}
+        {(skinsResult || bestBallResult || nassauResult || (wolfConfig && wolfId) || (game?.type === 'hammer' && hammerConfig) || (game?.type === 'bingo_bango_bongo') || (junkConfig && junkConfig.types.length > 0)) && (
+          <button
+            onClick={() => setShowGameStatus(!showGameStatus)}
+            className="w-full flex items-center justify-between bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl px-4 py-3 active:bg-gray-50 dark:active:bg-gray-700 transition-colors"
+          >
+            <span className="text-sm font-semibold text-gray-700 dark:text-gray-200">Game Status</span>
+            <span className="text-gray-400 text-sm">{showGameStatus ? '▾' : '▸'}</span>
+          </button>
+        )}
+        {showGameStatus && skinsResult && (
           <div className="flex items-center gap-2">
             <div className="flex-1">
               <SkinsStatus carry={currentCarry} potCents={game!.buyInCents * players.length * (1 + ((game!.config as any).presses?.length ?? 0))} />
@@ -1200,10 +1228,10 @@ export function Scorecard({ userId, roundId, onEndRound, onHome, readOnly: readO
             )}
           </div>
         )}
-        {bestBallResult && <BestBallStatus holesWon={bestBallResult.holesWon} />}
+        {showGameStatus && bestBallResult && <BestBallStatus holesWon={bestBallResult.holesWon} />}
 
         {/* Nassau status */}
-        {nassauResult && (() => {
+        {showGameStatus && nassauResult && (() => {
           const getName = (id: string | null) => id ? (players.find(p => p.id === id)?.name ?? '?') : null
           const pressCount = (game!.config as any).presses?.length ?? 0
           const totalHoles = snapshot?.holes.length ?? 18
@@ -1246,7 +1274,7 @@ export function Scorecard({ userId, roundId, onEndRound, onHome, readOnly: readO
         })()}
 
         {/* Wolf panel */}
-        {!readOnly && wolfConfig && wolfId && (() => {
+        {showGameStatus && !readOnly && wolfConfig && wolfId && (() => {
           const wolfPlayer = players.find(p => p.id === wolfId)
           const nonWolfs = players.filter(p => p.id !== wolfId)
           return (
@@ -1290,7 +1318,7 @@ export function Scorecard({ userId, roundId, onEndRound, onHome, readOnly: readO
         })()}
 
         {/* Hammer panel */}
-        {game?.type === 'hammer' && hammerConfig && players.length === 2 && (() => {
+        {showGameStatus && game?.type === 'hammer' && hammerConfig && players.length === 2 && (() => {
           const baseValue = hammerConfig.baseValueCents
           const hState = currentHammerState
           const holeValue = hState ? hState.value : baseValue
@@ -1372,7 +1400,7 @@ export function Scorecard({ userId, roundId, onEndRound, onHome, readOnly: readO
         })()}
 
         {/* BBB panel */}
-        {!readOnly && game?.type === 'bingo_bango_bongo' && (() => {
+        {showGameStatus && !readOnly && game?.type === 'bingo_bango_bongo' && (() => {
           const BBBRow = ({
             category,
             icon,
@@ -1412,7 +1440,7 @@ export function Scorecard({ userId, roundId, onEndRound, onHome, readOnly: readO
         })()}
 
         {/* Merged Hole Bets panel (junks + side bets) */}
-        {!readOnly && (() => {
+        {showGameStatus && !readOnly && (() => {
           const hasJunks = junkConfig && junkConfig.types.length > 0
           const holeJunks = hasJunks ? junkRecords.filter(jr => jr.holeNumber === currentHole) : []
           const holeBets = sideBets.filter(sb => sb.holeNumber === currentHole && sb.status !== 'cancelled')
@@ -1808,9 +1836,39 @@ export function Scorecard({ userId, roundId, onEndRound, onHome, readOnly: readO
         {/* Hole Confirm Panel */}
         {showHoleConfirm && (() => {
           const unscoredPlayers = players.filter(p => !holeScores.some(s => s.playerId === p.id && s.holeNumber === currentHole))
+          const needsParWarning = unscoredPlayers.length > 0 && !confirmParFill
           return (
             <div className="bg-blue-50 border border-blue-200 rounded-2xl p-4 space-y-3">
               <p className="font-bold text-blue-800 text-sm">Confirm Hole {currentHole} Scores</p>
+
+              {/* Par fill warning */}
+              {needsParWarning && (
+                <div className="bg-amber-50 border border-amber-300 rounded-xl p-3 space-y-2">
+                  <p className="text-amber-800 text-sm font-semibold">
+                    {unscoredPlayers.length === 1
+                      ? `${unscoredPlayers[0].name} has no score`
+                      : `${unscoredPlayers.map(p => p.name).join(', ')} have no scores`}
+                  </p>
+                  <p className="text-amber-700 text-xs">
+                    {unscoredPlayers.length === 1 ? 'Score' : 'Scores'} will be recorded as par ({par})
+                  </p>
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => setConfirmParFill(true)}
+                      className="flex-1 h-10 bg-amber-500 text-white font-bold rounded-xl active:bg-amber-600 text-sm"
+                    >
+                      Record as Par & Next
+                    </button>
+                    <button
+                      onClick={() => { setShowHoleConfirm(false); setConfirmParFill(false) }}
+                      className="flex-1 h-10 bg-gray-100 text-gray-700 font-bold rounded-xl active:bg-gray-200 text-sm"
+                    >
+                      Edit Scores
+                    </button>
+                  </div>
+                </div>
+              )}
+
               <div className="space-y-1.5">
                 {players.map(p => {
                   const hs = holeScores.find(s => s.playerId === p.id && s.holeNumber === currentHole)
@@ -1826,27 +1884,30 @@ export function Scorecard({ userId, roundId, onEndRound, onHome, readOnly: readO
                   )
                 })}
               </div>
-              <div className="flex gap-2">
-                <button
-                  onClick={async () => {
-                    // Auto-save par for unscored players
-                    if (unscoredPlayers.length > 0) {
-                      await Promise.all(unscoredPlayers.map(p => setScore(p.id, par)))
-                    }
-                    setShowHoleConfirm(false)
-                    goToHole(currentHole + 1)
-                  }}
-                  className="flex-1 h-12 bg-blue-600 text-white font-bold rounded-xl active:bg-blue-700 text-sm"
-                >
-                  Confirm & Next →
-                </button>
-                <button
-                  onClick={() => setShowHoleConfirm(false)}
-                  className="flex-1 h-12 bg-gray-100 text-gray-700 font-bold rounded-xl active:bg-gray-200 text-sm"
-                >
-                  Edit Scores
-                </button>
-              </div>
+              {!needsParWarning && (
+                <div className="flex gap-2">
+                  <button
+                    onClick={async () => {
+                      // Auto-save par for unscored players
+                      if (unscoredPlayers.length > 0) {
+                        await Promise.all(unscoredPlayers.map(p => setScore(p.id, par)))
+                      }
+                      setShowHoleConfirm(false)
+                      setConfirmParFill(false)
+                      goToHole(currentHole + 1)
+                    }}
+                    className="flex-1 h-12 bg-blue-600 text-white font-bold rounded-xl active:bg-blue-700 text-sm"
+                  >
+                    Confirm & Next →
+                  </button>
+                  <button
+                    onClick={() => { setShowHoleConfirm(false); setConfirmParFill(false) }}
+                    className="flex-1 h-12 bg-gray-100 text-gray-700 font-bold rounded-xl active:bg-gray-200 text-sm"
+                  >
+                    Edit Scores
+                  </button>
+                </div>
+              )}
             </div>
           )
         })()}
@@ -1874,9 +1935,12 @@ export function Scorecard({ userId, roundId, onEndRound, onHome, readOnly: readO
         <div className="p-4 max-w-2xl mx-auto flex gap-3">
           <button onClick={() => goToHole(Math.max(1, currentHole - 1))} disabled={currentHole === 1}
             className="flex-1 h-14 bg-gray-100 rounded-2xl font-bold text-xl text-gray-600 disabled:opacity-30 active:bg-gray-200">&larr; Prev</button>
-          {!readOnly && lastChange && lastChange.holeNumber === currentHole && (
+          {!readOnly && undoStack.length > 0 && (
             <button onClick={undoLastChange}
-              className="flex-1 h-14 bg-amber-100 rounded-2xl text-amber-700 font-bold text-sm active:bg-amber-200" aria-label="Undo">Undo</button>
+              className="flex-1 h-14 bg-amber-100 rounded-2xl text-amber-700 font-bold text-sm active:bg-amber-200 flex flex-col items-center justify-center" aria-label="Undo">
+              <span>Undo</span>
+              <span className="text-[10px] text-amber-500 font-semibold">H{undoStack[0].holeNumber} {undoStack[0].playerName} {undoStack[0].newScore}→{undoStack[0].previousScore}</span>
+            </button>
           )}
         </div>
       </div>

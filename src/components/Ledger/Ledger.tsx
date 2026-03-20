@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { supabase, rowToSettlementRecord, rowToRound } from '../../lib/supabase'
 import { PaymentButtons } from '../PaymentButtons'
+import { ConfirmModal } from '../ConfirmModal'
 import { fmtMoney } from '../../lib/gameLogic'
 import type { SettlementRecord, Round, Player } from '../../types'
 
@@ -31,6 +32,7 @@ export function Ledger({ userId, onBack }: Props) {
   const [balances, setBalances] = useState<OpponentBalance[]>([])
   const [expandedOpponent, setExpandedOpponent] = useState<string | null>(null)
   const [markingSettled, setMarkingSettled] = useState<string | null>(null)
+  const [confirmSettleModal, setConfirmSettleModal] = useState<{ opponentId: string; opponentName: string; count: number } | null>(null)
 
   useEffect(() => {
     loadLedger()
@@ -256,7 +258,10 @@ export function Ledger({ userId, onBack }: Props) {
 
                         {/* Mark all settled */}
                         <button
-                          onClick={() => markAllSettled(b.playerId)}
+                          onClick={() => {
+                            const owedCount = b.rounds.reduce((sum, r) => sum + r.settlements.filter(s => s.status === 'owed').length, 0)
+                            setConfirmSettleModal({ opponentId: b.playerId, opponentName: b.playerName, count: owedCount })
+                          }}
                           disabled={markingSettled === b.playerId}
                           className="w-full h-12 bg-gray-800 dark:bg-gray-600 text-white font-semibold rounded-xl active:bg-gray-900 disabled:opacity-50 transition-colors"
                         >
@@ -277,6 +282,19 @@ export function Ledger({ userId, onBack }: Props) {
           <button onClick={onBack} className="w-full h-14 bg-gray-800 text-white text-lg font-bold rounded-2xl active:bg-gray-900">← Back</button>
         </div>
       </div>
+
+      <ConfirmModal
+        open={!!confirmSettleModal}
+        title="Mark All Settled?"
+        message={confirmSettleModal ? `Mark ${confirmSettleModal.count} settlement${confirmSettleModal.count !== 1 ? 's' : ''} with ${confirmSettleModal.opponentName} as paid? This cannot be undone.` : ''}
+        confirmLabel="Mark All Paid"
+        destructive
+        onConfirm={() => {
+          if (confirmSettleModal) markAllSettled(confirmSettleModal.opponentId)
+          setConfirmSettleModal(null)
+        }}
+        onCancel={() => setConfirmSettleModal(null)}
+      />
     </div>
   )
 }
