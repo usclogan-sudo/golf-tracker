@@ -4,6 +4,7 @@ import { useOnlineStatus } from '../../hooks/useOnlineStatus'
 import { enqueue, flush, getPending } from '../../lib/offlineQueue'
 import { supabase, rowToRound, rowToRoundPlayer, rowToHoleScore, rowToBBBPoint, rowToJunkRecord, rowToSideBet, rowToRoundParticipant, rowToEvent, rowToEventParticipant, holeScoreToRow, bbbPointToRow, junkRecordToRow, sideBetToRow, generateInviteCode } from '../../lib/supabase'
 import { getCelebration, CelebrationToast, CelebrationFullscreen } from '../Celebrations'
+import { Tooltip } from '../ui/Tooltip'
 import { ConfirmModal } from '../ConfirmModal'
 import { GameRulesModal } from '../GameRulesModal'
 import {
@@ -162,6 +163,9 @@ export function Scorecard({ userId, roundId, onEndRound, onHome, readOnly: readO
   const [showApprovalPanel, setShowApprovalPanel] = useState(false)
   const [showContextBanner, setShowContextBanner] = useState(true)
   const [scoreToast, setScoreToast] = useState<{ message: string; type: 'info' | 'success' | 'error' } | null>(null)
+  const [showRoundSummary, setShowRoundSummary] = useState(true)
+  const [showBatchEntry, setShowBatchEntry] = useState(false)
+  const [batchScores, setBatchScores] = useState<Record<string, Record<number, string>>>({})
 
   useEffect(() => {
     Promise.all([
@@ -798,7 +802,7 @@ export function Scorecard({ userId, roundId, onEndRound, onHome, readOnly: readO
             </p>
             <h1 className="text-xl font-bold flex items-center gap-2">
               Hole {currentHole}
-              <span className="text-gray-300 font-normal text-base">Par {par} · SI {strokeIndex}</span>
+              <span className="text-gray-300 font-normal text-base">Par {par} · <Tooltip term="SI">SI {strokeIndex}</Tooltip></span>
               {game?.stakesMode === 'high_roller' && (
                 <span className="text-xs font-bold px-2 py-0.5 rounded-full"
                   style={{ background: 'linear-gradient(135deg,#d97706,#fbbf24)', color: '#000' }}>
@@ -901,6 +905,92 @@ export function Scorecard({ userId, roundId, onEndRound, onHome, readOnly: readO
         </div>
       </div>
 
+      {/* Round Complete Summary */}
+      {showRoundSummary && (() => {
+        const totalHoles = snapshot?.holes.length ?? 18
+        const allHolesScored = players.length > 0 && players.every(p =>
+          Array.from({ length: totalHoles }, (_, i) => i + 1).every(n =>
+            holeScores.some(s => s.playerId === p.id && s.holeNumber === n)
+          )
+        )
+        if (!allHolesScored) return null
+        // Compute stats for the current user's player (or first player)
+        const myPlayer = players.find(p => {
+          const rp = roundParticipants.find(rp2 => rp2.userId === userId)
+          return rp ? p.id === rp.playerId : false
+        }) ?? players[0]
+        const myScores = holeScores.filter(s => s.playerId === myPlayer.id)
+        const totalScore = myScores.reduce((sum, s) => sum + s.grossScore, 0)
+        const totalPar = snapshot!.holes.reduce((sum, h) => sum + h.par, 0)
+        const vsPar = totalScore - totalPar
+        const bestHole = myScores.reduce((best, s) => {
+          const hole = snapshot!.holes.find(h => h.number === s.holeNumber)
+          const diff = s.grossScore - (hole?.par ?? 4)
+          return diff < best.diff ? { holeNum: s.holeNumber, diff, score: s.grossScore, par: hole?.par ?? 4 } : best
+        }, { holeNum: 0, diff: 99, score: 0, par: 0 })
+        const worstHole = myScores.reduce((worst, s) => {
+          const hole = snapshot!.holes.find(h => h.number === s.holeNumber)
+          const diff = s.grossScore - (hole?.par ?? 4)
+          return diff > worst.diff ? { holeNum: s.holeNumber, diff, score: s.grossScore, par: hole?.par ?? 4 } : worst
+        }, { holeNum: 0, diff: -99, score: 0, par: 0 })
+        return (
+          <div className="px-4 pt-4 max-w-2xl mx-auto">
+            <div className="bg-gradient-to-br from-amber-50 to-yellow-50 border-2 border-amber-300 rounded-2xl p-5 space-y-3 relative">
+              <button
+                onClick={() => setShowRoundSummary(false)}
+                className="absolute top-3 right-3 text-amber-400 text-lg font-bold"
+              >&times;</button>
+              <div className="text-center">
+                <p className="text-2xl font-bold text-gray-900">Round Complete!</p>
+                <p className="text-amber-700 text-sm font-medium mt-1">{snapshot!.courseName}</p>
+              </div>
+              <div className="grid grid-cols-3 gap-2 text-center">
+                <div className="bg-white/70 rounded-xl p-2">
+                  <p className="text-xs text-gray-500">Total</p>
+                  <p className="text-xl font-bold text-gray-900">{totalScore}</p>
+                </div>
+                <div className="bg-white/70 rounded-xl p-2">
+                  <p className="text-xs text-gray-500">vs Par</p>
+                  <p className={`text-xl font-bold ${vsPar > 0 ? 'text-red-600' : vsPar < 0 ? 'text-green-600' : 'text-gray-600'}`}>
+                    {vsPar > 0 ? '+' : ''}{vsPar === 0 ? 'E' : vsPar}
+                  </p>
+                </div>
+                <div className="bg-white/70 rounded-xl p-2">
+                  <p className="text-xs text-gray-500">Holes</p>
+                  <p className="text-xl font-bold text-gray-900">{totalHoles}</p>
+                </div>
+              </div>
+              <div className="flex gap-2 text-center">
+                <div className="flex-1 bg-green-50 border border-green-200 rounded-xl p-2">
+                  <p className="text-xs text-green-600">Best Hole</p>
+                  <p className="text-sm font-bold text-green-800">#{bestHole.holeNum} ({bestHole.score}, {bestHole.diff > 0 ? '+' : ''}{bestHole.diff === 0 ? 'E' : bestHole.diff})</p>
+                </div>
+                <div className="flex-1 bg-red-50 border border-red-200 rounded-xl p-2">
+                  <p className="text-xs text-red-600">Worst Hole</p>
+                  <p className="text-sm font-bold text-red-800">#{worstHole.holeNum} ({worstHole.score}, +{worstHole.diff})</p>
+                </div>
+              </div>
+              <div className="flex gap-2 pt-1">
+                {!readOnly && (
+                  <button
+                    onClick={confirmEndRound}
+                    className="flex-1 h-12 bg-amber-500 text-white font-bold rounded-xl active:bg-amber-600 text-sm"
+                  >
+                    Settle Up
+                  </button>
+                )}
+                <button
+                  onClick={confirmGoHome}
+                  className="flex-1 h-12 bg-gray-100 text-gray-700 font-bold rounded-xl active:bg-gray-200 text-sm"
+                >
+                  ← Home
+                </button>
+              </div>
+            </div>
+          </div>
+        )
+      })()}
+
       {/* Mini-leaderboard on Scores tab */}
       {scoreTab === 'scores' && miniBoard.length > 0 && (
         <div className="px-4 pt-3 max-w-2xl mx-auto">
@@ -933,7 +1023,7 @@ export function Scorecard({ userId, roundId, onEndRound, onHome, readOnly: readO
                     <tr className="text-xs text-gray-400 uppercase">
                       <th className="text-left py-1 px-1 font-medium w-6">Pos</th>
                       <th className="text-left py-1 px-1 font-medium">Player</th>
-                      <th className="text-center py-1 px-1 font-medium">Net</th>
+                      <th className="text-center py-1 px-1 font-medium"><Tooltip term="Net">Net</Tooltip></th>
                       <th className="text-center py-1 px-1 font-medium">vs Par</th>
                     </tr>
                   </thead>
@@ -1053,8 +1143,8 @@ export function Scorecard({ userId, roundId, onEndRound, onHome, readOnly: readO
                   <th className="text-left py-2 px-1 font-medium w-8">Pos</th>
                   <th className="text-left py-2 px-1 font-medium">Player</th>
                   <th className="text-center py-2 px-1 font-medium">Thru</th>
-                  <th className="text-center py-2 px-1 font-medium">Gross</th>
-                  <th className="text-center py-2 px-1 font-medium">Net</th>
+                  <th className="text-center py-2 px-1 font-medium"><Tooltip term="Gross">Gross</Tooltip></th>
+                  <th className="text-center py-2 px-1 font-medium"><Tooltip term="Net">Net</Tooltip></th>
                   <th className="text-center py-2 px-1 font-medium">vs Par</th>
                 </tr>
               </thead>
@@ -1739,8 +1829,115 @@ export function Scorecard({ userId, roundId, onEndRound, onHome, readOnly: readO
           </div>
         )}
 
+        {/* Batch Entry Toggle */}
+        {!readOnly && isScoremasterRole && players.length > 1 && (
+          <button
+            onClick={() => setShowBatchEntry(!showBatchEntry)}
+            className={`w-full py-2.5 rounded-xl text-sm font-semibold transition-colors ${
+              showBatchEntry ? 'bg-blue-600 text-white' : 'bg-blue-50 border border-blue-200 text-blue-700'
+            }`}
+          >
+            {showBatchEntry ? '← Standard Entry' : '⊞ Batch Entry'}
+          </button>
+        )}
+
+        {/* Batch Entry Grid */}
+        {showBatchEntry && !readOnly && snapshot && (() => {
+          const totalHoles = snapshot.holes.length
+          const half = Math.ceil(totalHoles / 2)
+          const isBack = currentHole > half
+          const rangeStart = isBack ? half + 1 : 1
+          const rangeEnd = isBack ? totalHoles : half
+          const holeRange = Array.from({ length: rangeEnd - rangeStart + 1 }, (_, i) => rangeStart + i)
+
+          const getBatchValue = (playerId: string, holeNum: number): string => {
+            const override = batchScores[playerId]?.[holeNum]
+            if (override !== undefined) return override
+            const existing = holeScores.find(s => s.playerId === playerId && s.holeNumber === holeNum)
+            return existing ? String(existing.grossScore) : ''
+          }
+
+          const saveBatch = async () => {
+            for (const playerId of Object.keys(batchScores)) {
+              for (const [holeStr, valStr] of Object.entries(batchScores[playerId])) {
+                const holeNum = Number(holeStr)
+                const val = parseInt(valStr)
+                if (isNaN(val) || val < 1 || val > 15) continue
+                const existing = holeScores.find(s => s.playerId === playerId && s.holeNumber === holeNum)
+                if (existing && existing.grossScore === val) continue
+                if (existing) {
+                  setHoleScores(prev => prev.map(s => s.id === existing.id ? { ...s, grossScore: val } : s))
+                  await supabase.from('hole_scores').update({ gross_score: val }).eq('id', existing.id)
+                } else {
+                  const newScore: HoleScore = { id: uuidv4(), roundId, playerId, holeNumber: holeNum, grossScore: val }
+                  setHoleScores(prev => [...prev, newScore])
+                  await supabase.from('hole_scores').insert(holeScoreToRow(newScore, userId))
+                }
+              }
+            }
+            setBatchScores({})
+            setShowBatchEntry(false)
+          }
+
+          return (
+            <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700 p-3 space-y-3">
+              <p className="text-xs font-semibold text-gray-500 uppercase">
+                {isBack ? 'Back 9' : 'Front 9'} — Holes {rangeStart}–{rangeEnd}
+              </p>
+              <div className="overflow-x-auto -mx-1">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="text-xs text-gray-400">
+                      <th className="text-left py-1 px-1.5 font-medium sticky left-0 bg-white dark:bg-gray-800">Hole</th>
+                      <th className="text-center py-1 px-1 font-medium text-gray-300">Par</th>
+                      {players.map(p => (
+                        <th key={p.id} className="text-center py-1 px-1 font-medium max-w-[60px] truncate">{p.name.split(' ')[0]}</th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {holeRange.map(holeNum => {
+                      const hole = snapshot.holes.find(h => h.number === holeNum)
+                      return (
+                        <tr key={holeNum} className="border-t border-gray-50">
+                          <td className="py-1 px-1.5 font-bold text-gray-600 sticky left-0 bg-white dark:bg-gray-800">{holeNum}</td>
+                          <td className="py-1 px-1 text-center text-gray-400">{hole?.par ?? 4}</td>
+                          {players.map(p => (
+                            <td key={p.id} className="py-1 px-0.5 text-center">
+                              <input
+                                type="number"
+                                inputMode="numeric"
+                                min={1}
+                                max={15}
+                                value={getBatchValue(p.id, holeNum)}
+                                onChange={e => {
+                                  setBatchScores(prev => ({
+                                    ...prev,
+                                    [p.id]: { ...prev[p.id], [holeNum]: e.target.value },
+                                  }))
+                                }}
+                                className="w-12 h-10 text-center text-sm font-semibold rounded-lg border border-gray-200 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                              />
+                            </td>
+                          ))}
+                        </tr>
+                      )
+                    })}
+                  </tbody>
+                </table>
+              </div>
+              <button
+                onClick={saveBatch}
+                className="w-full h-12 bg-blue-600 text-white font-bold rounded-xl active:bg-blue-700 text-sm"
+              >
+                Save All Scores
+              </button>
+            </div>
+          )
+        })()}
+
         {/* Score cards */}
-        {players.map(player => {
+        {!showBatchEntry && players.map(player => {
           const grossScore = getScore(player.id)
           const courseHcp = courseHcps[player.id] ?? 0
           const strokesGiven = strokesOnHole(courseHcp, strokeIndex)
@@ -1796,7 +1993,7 @@ export function Scorecard({ userId, roundId, onEndRound, onHome, readOnly: readO
                   {isRejected && <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-red-200 text-red-700">REJECTED</span>}
                 </div>
                 <div className="flex items-center gap-3 text-right">
-                  <span className={`text-sm font-bold px-1.5 py-0.5 rounded ${isPending ? 'opacity-50' : ''} ${isRejected ? 'line-through opacity-40' : ''} ${getScoreClass(grossScore, par)}`}>{grossScore}</span>
+                  <span className={`text-base font-bold px-2 py-1 rounded ${isPending ? 'opacity-50' : ''} ${isRejected ? 'line-through opacity-40' : ''} ${getScoreClass(grossScore, par)}`}>{grossScore}</span>
                   {strokesGiven > 0 && <span className="text-xs text-amber-600 font-semibold">Net {netScore}</span>}
                   {holesPlayed > 0 && (
                     <span className={`text-xs font-semibold ${runningVsPar > 0 ? 'text-red-500' : runningVsPar < 0 ? 'text-green-600' : 'text-gray-400'}`}>
@@ -1875,7 +2072,7 @@ export function Scorecard({ userId, roundId, onEndRound, onHome, readOnly: readO
         })}
 
         {/* Hole result callout for Skins */}
-        {skinsResult && skinsResult.holeResults.length >= currentHole && (() => {
+        {!showBatchEntry && skinsResult && skinsResult.holeResults.length >= currentHole && (() => {
           const hr = skinsResult.holeResults[currentHole - 1]
           if (!hr || hr.winnerId === null) return null
           const winner = players.find(p => p.id === hr.winnerId)
@@ -1887,7 +2084,7 @@ export function Scorecard({ userId, roundId, onEndRound, onHome, readOnly: readO
         })()}
 
         {/* Next Hole / End Round — in scrollable content */}
-        {!readOnly && !showHoleConfirm && (() => {
+        {!showBatchEntry && !readOnly && !showHoleConfirm && (() => {
           const missingPlayers = players.filter(p => !holeScores.some(s => s.playerId === p.id && s.holeNumber === currentHole))
           return missingPlayers.length > 0 ? (
             <p className="text-amber-600 text-xs font-medium text-center py-1.5 bg-amber-50 rounded-xl">
@@ -1897,7 +2094,7 @@ export function Scorecard({ userId, roundId, onEndRound, onHome, readOnly: readO
         })()}
 
         {/* Hole Confirm Panel */}
-        {showHoleConfirm && (() => {
+        {!showBatchEntry && showHoleConfirm && (() => {
           const unscoredPlayers = players.filter(p => !holeScores.some(s => s.playerId === p.id && s.holeNumber === currentHole))
           const needsParWarning = unscoredPlayers.length > 0 && !confirmParFill
           return (
@@ -1975,9 +2172,11 @@ export function Scorecard({ userId, roundId, onEndRound, onHome, readOnly: readO
           )
         })()}
 
-        {!showHoleConfirm && (currentHole < (snapshot?.holes.length ?? 18) ? (
+        {!showBatchEntry && !showHoleConfirm && (currentHole < (snapshot?.holes.length ?? 18) ? (
           <button onClick={() => {
-            if (!readOnly && !selfEntryOnly && isScoremasterRole) {
+            // Small groups (1-2 players) in non-event rounds: skip confirm
+            const isSmallCasual = players.length <= 2 && !isEventRound
+            if (!readOnly && !selfEntryOnly && isScoremasterRole && !isSmallCasual) {
               setShowHoleConfirm(true)
             } else {
               goToHole(currentHole + 1)

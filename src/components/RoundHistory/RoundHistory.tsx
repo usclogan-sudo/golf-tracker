@@ -8,6 +8,7 @@ interface Props {
   userId: string
   onBack: () => void
   onViewSettlements?: (roundId: string) => void
+  onPlayAgain?: (round: Round) => void
 }
 
 const GAME_EMOJI: Record<GameType, string> = {
@@ -18,7 +19,7 @@ const GAME_EMOJI: Record<GameType, string> = {
   bingo_bango_bongo: '⭐ BBB',
 }
 
-export function RoundHistory({ userId, onBack, onViewSettlements }: Props) {
+export function RoundHistory({ userId, onBack, onViewSettlements, onPlayAgain }: Props) {
   const [rounds, setRounds] = useState<Round[]>([])
   const [loading, setLoading] = useState(true)
   const [expandedId, setExpandedId] = useState<string | null>(null)
@@ -244,12 +245,20 @@ export function RoundHistory({ userId, onBack, onViewSettlements }: Props) {
                         {sStatus.owed > 0 ? '💰 Settle Up' : 'View Settlements'}
                       </button>
                     )}
+                    {onPlayAgain && (
+                      <button
+                        onClick={() => onPlayAgain(round)}
+                        className="flex-1 h-10 bg-blue-500 text-white text-sm font-semibold rounded-xl active:bg-blue-600 shadow-sm"
+                      >
+                        Play Again
+                      </button>
+                    )}
                     <button
                       onClick={() => confirmDelete(round.id)}
                       disabled={deleting === round.id}
-                      className={`${onViewSettlements && sStatus ? 'flex-1' : 'w-full'} h-10 border border-red-200 text-red-600 text-sm font-semibold rounded-xl active:bg-red-50 disabled:opacity-50`}
+                      className="h-10 px-3 border border-red-200 text-red-600 text-sm font-semibold rounded-xl active:bg-red-50 disabled:opacity-50"
                     >
-                      {deleting === round.id ? 'Deleting...' : 'Delete Round'}
+                      {deleting === round.id ? '...' : 'Delete'}
                     </button>
                   </div>
                 </div>

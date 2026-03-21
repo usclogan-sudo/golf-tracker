@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState, useCallback } from 'react'
 import { v4 as uuidv4 } from 'uuid'
 import { supabase, rowToRound, rowToRoundPlayer, rowToHoleScore, rowToBuyIn, rowToBBBPoint, rowToJunkRecord, rowToSideBet, rowToSettlementRecord, settlementRecordToRow, rowToUserProfile, rowToEvent } from '../../lib/supabase'
 import { PaymentButtons, getPreferredPayment } from '../PaymentButtons'
+import { Tooltip } from '../ui/Tooltip'
 import {
   buildCourseHandicaps,
   strokesOnHole,
@@ -110,6 +111,7 @@ export function SettleUp({ roundId, userId, eventId, onDone, onContinue }: Props
   const [loading, setLoading] = useState(true)
   const [settlementsInitialized, setSettlementsInitialized] = useState(false)
   const [eventData, setEventData] = useState<GolfEvent | null>(null)
+  const [expandedSettlement, setExpandedSettlement] = useState<string | null>(null)
 
   useEffect(() => {
     Promise.all([
@@ -475,7 +477,7 @@ export function SettleUp({ roundId, userId, eventId, onDone, onContinue }: Props
                           <p className="text-xs text-blue-600 dark:text-blue-400 mt-0.5">via {pref.method} {pref.handle}</p>
                         )}
                       </div>
-                      <p className={`text-lg font-bold ${item.netCents > 0 ? 'text-green-600' : item.netCents < 0 ? 'text-red-600' : 'text-gray-500'}`}>
+                      <p className={`text-2xl font-bold ${item.netCents > 0 ? 'text-green-600' : item.netCents < 0 ? 'text-red-600' : 'text-gray-500'}`}>
                         {item.isDirect ? fmtMoney(item.netCents) : fmtMoney(Math.abs(item.netCents))}
                       </p>
                     </div>
@@ -641,8 +643,8 @@ export function SettleUp({ roundId, userId, eventId, onDone, onContinue }: Props
                   <thead>
                     <tr className="text-xs text-gray-400 uppercase border-b border-gray-200">
                       <th className="text-left py-2 px-2 font-medium">Player</th>
-                      <th className="text-center py-2 px-2 font-medium">Gross</th>
-                      <th className="text-center py-2 px-2 font-medium">Net</th>
+                      <th className="text-center py-2 px-2 font-medium"><Tooltip term="Gross">Gross</Tooltip></th>
+                      <th className="text-center py-2 px-2 font-medium"><Tooltip term="Net">Net</Tooltip></th>
                       <th className="text-center py-2 px-2 font-medium">vs Par</th>
                     </tr>
                   </thead>
@@ -673,7 +675,7 @@ export function SettleUp({ roundId, userId, eventId, onDone, onContinue }: Props
         {skinsResult && (
           <section className="bg-white dark:bg-gray-800 rounded-2xl shadow-sm p-4 space-y-3">
             <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">
-              Skins Results · {skinsResult.totalSkins} skin{skinsResult.totalSkins !== 1 ? 's' : ''} won
+              <Tooltip term="Skins">Skins</Tooltip> Results · {skinsResult.totalSkins} skin{skinsResult.totalSkins !== 1 ? 's' : ''} won
             </p>
             {skinsResult.totalSkins === 0 ? (
               <p className="text-gray-500 text-sm">No skins won — all holes tied. Pot refunded.</p>
@@ -696,7 +698,7 @@ export function SettleUp({ roundId, userId, eventId, onDone, onContinue }: Props
         {/* ── Best Ball Results ── */}
         {bestBallResult && (
           <section className="bg-white dark:bg-gray-800 rounded-2xl shadow-sm p-4 space-y-3">
-            <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Best Ball Results</p>
+            <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide"><Tooltip term="Best Ball">Best Ball</Tooltip> Results</p>
             <div className="grid grid-cols-3 gap-2 text-center">
               <div className="bg-blue-50 rounded-xl p-3"><p className="text-xs text-blue-600 font-medium">Team A</p><p className="text-2xl font-bold text-blue-800">{bestBallResult.holesWon.A}</p><p className="text-xs text-blue-500">holes</p></div>
               <div className="bg-gray-50 rounded-xl p-3"><p className="text-xs text-gray-500 font-medium">Tied</p><p className="text-2xl font-bold text-gray-600">{bestBallResult.holesWon.tied}</p><p className="text-xs text-gray-400">holes</p></div>
@@ -724,7 +726,7 @@ export function SettleUp({ roundId, userId, eventId, onDone, onContinue }: Props
         {/* ── Nassau Results ── */}
         {nassauResult && (
           <section className="bg-white dark:bg-gray-800 rounded-2xl shadow-sm p-4 space-y-3">
-            <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Nassau Results</p>
+            <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide"><Tooltip term="Nassau">Nassau</Tooltip> Results</p>
             {[
               { label: `Front (${nassauResult.front.holeRange})`, seg: nassauResult.front },
               { label: `Back (${nassauResult.back.holeRange})`, seg: nassauResult.back },
@@ -903,13 +905,71 @@ export function SettleUp({ roundId, userId, eventId, onDone, onContinue }: Props
                 return (
                   <div key={payout.playerId} className="bg-green-50 rounded-xl p-3 flex items-center justify-between">
                     <div><p className="font-bold text-gray-800">{winner?.name}</p><p className="text-xs text-gray-500">{payout.reason}</p></div>
-                    <p className="text-xl font-bold text-green-700">{fmtMoney(payout.amountCents)}</p>
+                    <p className="text-2xl font-bold text-green-700">{fmtMoney(payout.amountCents)}</p>
                   </div>
                 )
               })}
             </div>
           </section>
         )}
+
+        {/* ── You Owe / You Collect Summary ── */}
+        {settlementRecords.length > 0 && userId && (() => {
+          // Find which player the current user is
+          const myPlayerId = Array.from(participantMap.entries()).find(([, uid]) => uid === userId)?.[0]
+            ?? (treasurerId && (userId === round?.createdBy) ? treasurerId : null)
+          if (!myPlayerId) {
+            // Spectator — show overall summary
+            const totalOwed = owedSettlements.reduce((s, r) => s + r.amountCents, 0)
+            return (
+              <section className="bg-gray-50 dark:bg-gray-700 rounded-2xl p-4 text-center">
+                <p className="text-sm text-gray-500">Total in play</p>
+                <p className="text-2xl font-bold text-gray-800 dark:text-gray-100">{fmtMoney(totalOwed)}</p>
+                <p className="text-xs text-gray-400 mt-1">{owedSettlements.length} settlement{owedSettlements.length !== 1 ? 's' : ''} remaining</p>
+              </section>
+            )
+          }
+          // Calculate net for the current user
+          let collectCents = 0
+          let oweCents = 0
+          const collectFrom: { name: string; cents: number }[] = []
+          const oweTo: { name: string; cents: number }[] = []
+          for (const s of settlementRecords.filter(r => r.status === 'owed')) {
+            if (s.toPlayerId === myPlayerId) {
+              collectCents += s.amountCents
+              const from = playerById(s.fromPlayerId)
+              collectFrom.push({ name: from?.name ?? '?', cents: s.amountCents })
+            } else if (s.fromPlayerId === myPlayerId) {
+              oweCents += s.amountCents
+              const to = playerById(s.toPlayerId)
+              oweTo.push({ name: to?.name ?? '?', cents: s.amountCents })
+            }
+          }
+          const net = collectCents - oweCents
+          return (
+            <section className={`rounded-2xl p-4 text-center space-y-2 ${
+              net > 0 ? 'bg-green-50 border-2 border-green-200' :
+              net < 0 ? 'bg-red-50 border-2 border-red-200' :
+              'bg-gray-50 border border-gray-200'
+            }`}>
+              <p className={`text-2xl font-bold ${
+                net > 0 ? 'text-green-700' : net < 0 ? 'text-red-700' : 'text-gray-600'
+              }`}>
+                {net > 0 ? `You collect ${fmtMoney(net)}` : net < 0 ? `You owe ${fmtMoney(Math.abs(net))}` : "You're even"}
+              </p>
+              {collectFrom.length > 0 && (
+                <p className="text-sm text-green-600">
+                  {collectFrom.map(c => `From ${c.name}: ${fmtMoney(c.cents)}`).join(' · ')}
+                </p>
+              )}
+              {oweTo.length > 0 && (
+                <p className="text-sm text-red-600">
+                  {oweTo.map(c => `To ${c.name}: ${fmtMoney(c.cents)}`).join(' · ')}
+                </p>
+              )}
+            </section>
+          )
+        })()}
 
         {/* ── Unified Settlements (game + junk) with Mark Paid ── */}
         {settlementRecords.length > 0 && (
@@ -945,11 +1005,19 @@ export function SettleUp({ roundId, userId, eventId, onDone, onContinue }: Props
               return (
                 <div key={s.id} className={`space-y-2 p-3 rounded-xl ${isPaid ? 'bg-green-50' : 'bg-gray-50'}`}>
                   <div className="flex items-center justify-between">
-                    <div>
-                      <p className="font-bold text-gray-800">{fromPlayer.name} → {toPlayer.name}</p>
+                    <div className="flex-1 min-w-0">
+                      <button
+                        onClick={() => setExpandedSettlement(expandedSettlement === s.id ? null : s.id)}
+                        className="flex items-center gap-1 text-left"
+                      >
+                        <p className="font-bold text-gray-800">{fromPlayer.name} → {toPlayer.name}</p>
+                        <svg className={`w-3.5 h-3.5 text-gray-400 transition-transform flex-shrink-0 ${expandedSettlement === s.id ? 'rotate-90' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                        </svg>
+                      </button>
                       <div className="flex items-center gap-2 mt-0.5">
-                        {s.reason && <p className="text-xs text-gray-500">{s.reason}</p>}
-                        <span className={`text-xs font-semibold px-1.5 py-0.5 rounded ${
+                        {s.reason && <p className="text-xs text-gray-500 truncate">{s.reason}</p>}
+                        <span className={`text-xs font-semibold px-1.5 py-0.5 rounded flex-shrink-0 ${
                           s.source === 'side_bet' ? 'bg-amber-100 text-amber-700' : s.source === 'junk' ? 'bg-indigo-100 text-indigo-700' : 'bg-blue-100 text-blue-700'
                         }`}>
                           {s.source === 'side_bet' ? 'Side Bet' : s.source === 'junk' ? 'Junk' : 'Game'}
@@ -963,7 +1031,7 @@ export function SettleUp({ roundId, userId, eventId, onDone, onContinue }: Props
                       })()}
                     </div>
                     <div className="flex items-center gap-2">
-                      <p className={`text-xl font-bold ${isPaid ? 'text-green-700' : 'text-gray-800'}`}>{fmtMoney(s.amountCents)}</p>
+                      <p className={`text-2xl font-bold ${isPaid ? 'text-green-700' : 'text-gray-800'}`}>{fmtMoney(s.amountCents)}</p>
                       {isTreasurer ? (
                         <button
                           onClick={() => toggleSettlementPaid(s)}
@@ -987,6 +1055,24 @@ export function SettleUp({ roundId, userId, eventId, onDone, onContinue }: Props
                   )}
                   {!isPaid && isTreasurer && (
                     <NudgeButton playerName={fromPlayer.name} amountCents={s.amountCents} toPlayer={toPlayer} />
+                  )}
+                  {expandedSettlement === s.id && s.reason && (
+                    <div className="border-t border-gray-200 dark:border-gray-600 pt-2 mt-1 space-y-1">
+                      <p className="text-xs font-semibold text-gray-500 uppercase">Breakdown</p>
+                      {s.reason.split(/[,;]/).map((item, i) => {
+                        const trimmed = item.trim()
+                        if (!trimmed) return null
+                        return (
+                          <div key={i} className="flex items-center justify-between text-xs text-gray-600 dark:text-gray-300 pl-2">
+                            <span>{trimmed}</span>
+                          </div>
+                        )
+                      })}
+                      <div className="flex items-center justify-between text-xs font-bold text-gray-800 dark:text-gray-100 pl-2 pt-1 border-t border-gray-100 dark:border-gray-600">
+                        <span>Total</span>
+                        <span>{fmtMoney(s.amountCents)}</span>
+                      </div>
+                    </div>
                   )}
                 </div>
               )

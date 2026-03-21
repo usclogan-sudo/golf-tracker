@@ -138,6 +138,22 @@ export function Settings({ userId, email, onBack, onSignOut, isAdmin, onAdmin, i
           <p className="text-gray-800 dark:text-gray-100 font-medium">{isAnonymous ? 'Guest (no account)' : email}</p>
         </section>
 
+        {/* Prominent upgrade card for anonymous users */}
+        {isAnonymous && onUpgrade && (
+          <section className="bg-gradient-to-br from-amber-50 to-yellow-50 border-2 border-amber-300 rounded-2xl p-5 space-y-3">
+            <div className="text-center">
+              <p className="text-lg font-bold text-gray-900">Your scores are saved!</p>
+              <p className="text-amber-800 text-sm mt-1">Create an account to keep them forever and sync across devices.</p>
+            </div>
+            <button
+              onClick={onUpgrade}
+              className="w-full h-12 bg-gray-800 text-white font-bold rounded-xl active:bg-gray-900 transition-colors"
+            >
+              Create Account
+            </button>
+          </section>
+        )}
+
         {/* Dark Mode */}
         <section className="bg-white dark:bg-gray-800 rounded-2xl shadow-sm p-4 flex items-center justify-between">
           <div>

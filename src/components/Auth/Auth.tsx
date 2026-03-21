@@ -121,6 +121,7 @@ export function Auth({ inviteCode }: AuthProps = {}) {
               value={email}
               onChange={e => setEmail(e.target.value)}
               onKeyDown={e => e.key === 'Enter' && (password ? handleSignIn() : undefined)}
+              autoComplete="email"
               className="w-full h-12 px-4 rounded-xl border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 text-base focus:outline-none focus:ring-2 focus:ring-amber-500"
               autoFocus
             />
@@ -130,6 +131,7 @@ export function Auth({ inviteCode }: AuthProps = {}) {
               value={password}
               onChange={e => setPassword(e.target.value)}
               onKeyDown={e => e.key === 'Enter' && handleSignIn()}
+              autoComplete="current-password"
               className="w-full h-12 px-4 rounded-xl border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 text-base focus:outline-none focus:ring-2 focus:ring-amber-500"
             />
             {error && <p className="text-red-500 text-sm">{error}</p>}
@@ -212,6 +214,7 @@ export function Auth({ inviteCode }: AuthProps = {}) {
                 value={email}
                 onChange={e => setEmail(e.target.value)}
                 onKeyDown={e => e.key === 'Enter' && handleSubmit()}
+                autoComplete="email"
                 className="w-full h-12 px-4 rounded-xl border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 text-base focus:outline-none focus:ring-2 focus:ring-amber-500"
                 autoFocus
               />
@@ -228,6 +231,7 @@ export function Auth({ inviteCode }: AuthProps = {}) {
                   value={password}
                   onChange={e => setPassword(e.target.value)}
                   onKeyDown={e => e.key === 'Enter' && handleSubmit()}
+                  autoComplete={mode === 'sign-up' ? 'new-password' : 'current-password'}
                   className="w-full h-12 px-4 rounded-xl border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 text-base focus:outline-none focus:ring-2 focus:ring-amber-500"
                 />
               </div>

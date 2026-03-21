@@ -804,7 +804,7 @@ export default function App() {
     )
   }
   if (screen === 'round-history') {
-    return <RoundHistory userId={userId} onBack={goHome} onViewSettlements={(id) => { setActiveRoundId(id); setScreen('settle-up') }} />
+    return <RoundHistory userId={userId} onBack={goHome} onViewSettlements={(id) => { setActiveRoundId(id); setScreen('settle-up') }} onPlayAgain={(round) => { setPlayAgainRound(round); setScreen('new-round') }} />
   }
   if (screen === 'stats') {
     return <Stats userId={userId} onBack={goHome} />
