@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { supabase } from '../../lib/supabase'
 
-type AuthMode = 'splash' | 'sign-in' | 'sign-up' | 'forgot-password'
+type AuthMode = 'splash' | 'sign-in' | 'sign-up'
 
 interface AuthProps {
   inviteCode?: string
@@ -67,21 +67,6 @@ export function Auth({ inviteCode }: AuthProps = {}) {
     setLoading(false)
   }
 
-  const handleForgotPassword = async () => {
-    if (!email.trim()) { setError('Enter your email address'); return }
-    if (!isValidEmail(email.trim())) { setError('Enter a valid email address'); return }
-    setLoading(true)
-    setError(null)
-    const { error: err } = await supabase.auth.resetPasswordForEmail(email.trim(), {
-      redirectTo: window.location.origin + '/golf-tracker/',
-    })
-    if (err) {
-      setError(friendlyError(err.message))
-    } else {
-      setMessage('If an account exists with that email, a reset link has been sent. (Note: email delivery may be delayed while we set up our domain.)')
-    }
-    setLoading(false)
-  }
 
   const handleGuestLogin = async () => {
     setLoading(true)
@@ -94,21 +79,18 @@ export function Auth({ inviteCode }: AuthProps = {}) {
   const handleSubmit = () => {
     if (mode === 'sign-in') handleSignIn()
     else if (mode === 'sign-up') handleSignUp()
-    else if (mode === 'forgot-password') handleForgotPassword()
   }
 
   const title = {
     'splash': '',
     'sign-in': 'Sign In',
     'sign-up': 'Create Account',
-    'forgot-password': 'Reset Password',
   }[mode]
 
   const buttonLabel = {
     'splash': '',
     'sign-in': 'Sign In',
     'sign-up': 'Create Account',
-    'forgot-password': 'Send Reset Link',
   }[mode]
 
   const showPassword = mode === 'sign-in' || mode === 'sign-up'
@@ -158,11 +140,9 @@ export function Auth({ inviteCode }: AuthProps = {}) {
             >
               {loading ? 'Loading...' : 'Sign In'}
             </button>
-            <div className="text-sm text-center">
-              <button onClick={() => resetState('forgot-password')} className="text-amber-600 underline">
-                Forgot password?
-              </button>
-            </div>
+            <p className="text-xs text-gray-400 text-center">
+              Forgot password? Contact the app admin to reset it.
+            </p>
           </div>
 
           <div className="space-y-3">
@@ -266,14 +246,14 @@ export function Auth({ inviteCode }: AuthProps = {}) {
             <div className="space-y-2 text-center text-sm">
               {mode === 'sign-in' && (
                 <>
-                  <button onClick={() => resetState('forgot-password')} className="text-amber-600 underline block w-full">
-                    Forgot password?
-                  </button>
-                  <p className="text-gray-400 pt-1">
+                  <p className="text-gray-400">
                     No account?{' '}
                     <button onClick={() => resetState('sign-up')} className="text-amber-600 underline">
                       Create one
                     </button>
+                  </p>
+                  <p className="text-xs text-gray-400">
+                    Forgot password? Contact the app admin to reset it.
                   </p>
                 </>
               )}
@@ -284,11 +264,6 @@ export function Auth({ inviteCode }: AuthProps = {}) {
                     Sign in
                   </button>
                 </p>
-              )}
-              {mode === 'forgot-password' && (
-                <button onClick={() => resetState('sign-in')} className="text-amber-600 underline">
-                  Back to Sign In
-                </button>
               )}
             </div>
           </div>
