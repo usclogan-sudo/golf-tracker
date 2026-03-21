@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { supabase } from '../../lib/supabase'
 
-type AuthMode = 'splash' | 'sign-in' | 'sign-up' | 'forgot-password' | 'magic-link'
+type AuthMode = 'splash' | 'sign-in' | 'sign-up' | 'forgot-password'
 
 interface AuthProps {
   inviteCode?: string
@@ -62,9 +62,8 @@ export function Auth({ inviteCode }: AuthProps = {}) {
     })
     if (err) {
       setError(friendlyError(err.message))
-    } else {
-      setMessage('Check your email to confirm your account, then sign in.')
     }
+    // With autoconfirm enabled, signUp auto-signs in — no message needed
     setLoading(false)
   }
 
@@ -79,27 +78,7 @@ export function Auth({ inviteCode }: AuthProps = {}) {
     if (err) {
       setError(friendlyError(err.message))
     } else {
-      setMessage('Check your email for a password reset link.')
-    }
-    setLoading(false)
-  }
-
-  const handleMagicLink = async () => {
-    if (!email.trim()) { setError('Enter your email address'); return }
-    if (!isValidEmail(email.trim())) { setError('Enter a valid email address'); return }
-    setLoading(true)
-    setError(null)
-    const { error: err } = await supabase.auth.signInWithOtp({
-      email: email.trim(),
-      options: {
-        shouldCreateUser: true,
-        emailRedirectTo: window.location.origin + '/golf-tracker/',
-      },
-    })
-    if (err) {
-      setError(friendlyError(err.message))
-    } else {
-      setMessage('Check your email for a sign-in link.')
+      setMessage('If an account exists with that email, a reset link has been sent. (Note: email delivery may be delayed while we set up our domain.)')
     }
     setLoading(false)
   }
@@ -116,7 +95,6 @@ export function Auth({ inviteCode }: AuthProps = {}) {
     if (mode === 'sign-in') handleSignIn()
     else if (mode === 'sign-up') handleSignUp()
     else if (mode === 'forgot-password') handleForgotPassword()
-    else if (mode === 'magic-link') handleMagicLink()
   }
 
   const title = {
@@ -124,7 +102,6 @@ export function Auth({ inviteCode }: AuthProps = {}) {
     'sign-in': 'Sign In',
     'sign-up': 'Create Account',
     'forgot-password': 'Reset Password',
-    'magic-link': 'Magic Link',
   }[mode]
 
   const buttonLabel = {
@@ -132,7 +109,6 @@ export function Auth({ inviteCode }: AuthProps = {}) {
     'sign-in': 'Sign In',
     'sign-up': 'Create Account',
     'forgot-password': 'Send Reset Link',
-    'magic-link': 'Send Magic Link',
   }[mode]
 
   const showPassword = mode === 'sign-in' || mode === 'sign-up'
@@ -182,12 +158,9 @@ export function Auth({ inviteCode }: AuthProps = {}) {
             >
               {loading ? 'Loading...' : 'Sign In'}
             </button>
-            <div className="flex items-center justify-between text-sm">
+            <div className="text-sm text-center">
               <button onClick={() => resetState('forgot-password')} className="text-amber-600 underline">
                 Forgot password?
-              </button>
-              <button onClick={() => resetState('magic-link')} className="text-gray-500 underline">
-                Magic link
               </button>
             </div>
           </div>
@@ -296,9 +269,6 @@ export function Auth({ inviteCode }: AuthProps = {}) {
                   <button onClick={() => resetState('forgot-password')} className="text-amber-600 underline block w-full">
                     Forgot password?
                   </button>
-                  <button onClick={() => resetState('magic-link')} className="text-gray-500 underline block w-full">
-                    Sign in with magic link instead
-                  </button>
                   <p className="text-gray-400 pt-1">
                     No account?{' '}
                     <button onClick={() => resetState('sign-up')} className="text-amber-600 underline">
@@ -315,7 +285,7 @@ export function Auth({ inviteCode }: AuthProps = {}) {
                   </button>
                 </p>
               )}
-              {(mode === 'forgot-password' || mode === 'magic-link') && (
+              {mode === 'forgot-password' && (
                 <button onClick={() => resetState('sign-in')} className="text-amber-600 underline">
                   Back to Sign In
                 </button>
