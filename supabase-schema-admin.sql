@@ -106,3 +106,81 @@ BEGIN
     (SELECT count(*) FROM rounds WHERE status = 'complete') AS total_completed_rounds;
 END;
 $$;
+
+-- Delete a user and all their data (admin only)
+CREATE OR REPLACE FUNCTION admin_delete_user(target_user_id uuid)
+RETURNS void
+LANGUAGE plpgsql
+SECURITY DEFINER
+AS $$
+DECLARE
+  round_ids uuid[];
+BEGIN
+  -- Verify caller is admin
+  IF NOT EXISTS (
+    SELECT 1 FROM user_profiles
+    WHERE user_id = auth.uid() AND is_admin = true
+  ) THEN
+    RAISE EXCEPTION 'Not authorized';
+  END IF;
+
+  -- Cannot delete yourself
+  IF target_user_id = auth.uid() THEN
+    RAISE EXCEPTION 'Cannot delete your own account from admin panel';
+  END IF;
+
+  -- Collect round IDs owned by this user
+  SELECT array_agg(id) INTO round_ids FROM rounds WHERE user_id = target_user_id;
+
+  -- Delete round-related data
+  IF round_ids IS NOT NULL THEN
+    DELETE FROM hole_scores WHERE round_id = ANY(round_ids);
+    DELETE FROM round_players WHERE round_id = ANY(round_ids);
+    DELETE FROM buy_ins WHERE round_id = ANY(round_ids);
+    DELETE FROM bbb_points WHERE round_id = ANY(round_ids);
+    DELETE FROM settlements WHERE round_id = ANY(round_ids);
+    DELETE FROM junk_records WHERE round_id = ANY(round_ids);
+    DELETE FROM side_bets WHERE round_id = ANY(round_ids);
+    DELETE FROM round_participants WHERE round_id = ANY(round_ids);
+    DELETE FROM notifications WHERE round_id = ANY(round_ids);
+    DELETE FROM rounds WHERE user_id = target_user_id;
+  END IF;
+
+  -- Delete user's own data
+  DELETE FROM courses WHERE user_id = target_user_id;
+  DELETE FROM players WHERE user_id = target_user_id;
+  DELETE FROM notifications WHERE user_id = target_user_id;
+  DELETE FROM user_profiles WHERE user_id = target_user_id;
+
+  -- Delete from auth.users
+  DELETE FROM auth.users WHERE id = target_user_id;
+END;
+$$;
+
+-- Delete a round and all associated data (admin only)
+CREATE OR REPLACE FUNCTION admin_delete_round(target_round_id uuid)
+RETURNS void
+LANGUAGE plpgsql
+SECURITY DEFINER
+AS $$
+BEGIN
+  -- Verify caller is admin
+  IF NOT EXISTS (
+    SELECT 1 FROM user_profiles
+    WHERE user_id = auth.uid() AND is_admin = true
+  ) THEN
+    RAISE EXCEPTION 'Not authorized';
+  END IF;
+
+  DELETE FROM hole_scores WHERE round_id = target_round_id;
+  DELETE FROM round_players WHERE round_id = target_round_id;
+  DELETE FROM buy_ins WHERE round_id = target_round_id;
+  DELETE FROM bbb_points WHERE round_id = target_round_id;
+  DELETE FROM settlements WHERE round_id = target_round_id;
+  DELETE FROM junk_records WHERE round_id = target_round_id;
+  DELETE FROM side_bets WHERE round_id = target_round_id;
+  DELETE FROM round_participants WHERE round_id = target_round_id;
+  DELETE FROM notifications WHERE round_id = target_round_id;
+  DELETE FROM rounds WHERE id = target_round_id;
+END;
+$$;

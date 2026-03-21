@@ -3,6 +3,7 @@ import { v4 as uuidv4 } from 'uuid'
 import { supabase, rowToSharedCourse, sharedCourseToRow, rowToGamePreset, gamePresetToRow } from '../../lib/supabase'
 import { fmtMoney } from '../../lib/gameLogic'
 import { venturaCourses } from '../../data/venturaCourses'
+import { ConfirmModal } from '../ConfirmModal'
 import type { Course, Tee, Hole, GamePreset, GameType, StakesMode } from '../../types'
 
 interface Props {
@@ -571,6 +572,8 @@ function UsersTab({ currentUserId }: { currentUserId: string }) {
   const [users, setUsers] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
   const [toggling, setToggling] = useState<string | null>(null)
+  const [deleteTarget, setDeleteTarget] = useState<{ id: string; name: string } | null>(null)
+  const [deleting, setDeleting] = useState(false)
 
   useEffect(() => {
     supabase.rpc('admin_get_all_users').then(({ data, error }) => {
@@ -599,6 +602,19 @@ function UsersTab({ currentUserId }: { currentUserId: string }) {
       ))
     }
     setToggling(null)
+  }
+
+  const deleteUser = async (targetUserId: string) => {
+    setDeleting(true)
+    const { error } = await supabase.rpc('admin_delete_user', { target_user_id: targetUserId })
+    if (error) {
+      console.error('Delete user error:', error)
+      alert('Failed to delete user. Make sure the admin_delete_user RPC is deployed.')
+    } else {
+      setUsers(prev => prev.filter(u => u.user_id !== targetUserId))
+    }
+    setDeleting(false)
+    setDeleteTarget(null)
   }
 
   if (loading) {
@@ -634,17 +650,25 @@ function UsersTab({ currentUserId }: { currentUserId: string }) {
               <div className="flex items-center gap-2 flex-shrink-0">
                 {u.is_admin && <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-amber-100 text-amber-700">Admin</span>}
                 {!isSelf && (
-                  <button
-                    onClick={() => toggleAdmin(u.user_id, u.is_admin)}
-                    disabled={toggling === u.user_id}
-                    className={`text-xs font-semibold px-2.5 py-1.5 rounded-lg transition-colors disabled:opacity-50 ${
-                      u.is_admin
-                        ? 'text-red-600 border border-red-200 active:bg-red-50'
-                        : 'text-blue-600 border border-blue-200 active:bg-blue-50'
-                    }`}
-                  >
-                    {toggling === u.user_id ? '...' : u.is_admin ? 'Remove Admin' : 'Make Admin'}
-                  </button>
+                  <>
+                    <button
+                      onClick={() => toggleAdmin(u.user_id, u.is_admin)}
+                      disabled={toggling === u.user_id}
+                      className={`text-xs font-semibold px-2.5 py-1.5 rounded-lg transition-colors disabled:opacity-50 ${
+                        u.is_admin
+                          ? 'text-red-600 border border-red-200 active:bg-red-50'
+                          : 'text-blue-600 border border-blue-200 active:bg-blue-50'
+                      }`}
+                    >
+                      {toggling === u.user_id ? '...' : u.is_admin ? 'Remove Admin' : 'Make Admin'}
+                    </button>
+                    <button
+                      onClick={() => setDeleteTarget({ id: u.user_id, name: u.display_name || 'this user' })}
+                      className="text-xs font-semibold px-2.5 py-1.5 rounded-lg text-red-600 border border-red-200 active:bg-red-50"
+                    >
+                      Delete
+                    </button>
+                  </>
                 )}
                 {isSelf && <span className="text-[10px] text-gray-400">You</span>}
               </div>
@@ -652,6 +676,15 @@ function UsersTab({ currentUserId }: { currentUserId: string }) {
           </div>
         )
       })}
+      <ConfirmModal
+        open={!!deleteTarget}
+        title="Delete User?"
+        message={`Permanently delete ${deleteTarget?.name} and all their rounds, scores, and data? This cannot be undone.`}
+        confirmLabel={deleting ? 'Deleting...' : 'Delete User'}
+        destructive
+        onConfirm={() => { if (deleteTarget) deleteUser(deleteTarget.id) }}
+        onCancel={() => setDeleteTarget(null)}
+      />
     </div>
   )
 }
@@ -661,6 +694,8 @@ function UsersTab({ currentUserId }: { currentUserId: string }) {
 function RoundsTab() {
   const [rounds, setRounds] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
+  const [deleteTarget, setDeleteTarget] = useState<{ id: string; name: string } | null>(null)
+  const [deleting, setDeleting] = useState(false)
 
   useEffect(() => {
     supabase.rpc('admin_get_all_rounds').then(({ data, error }) => {
@@ -673,6 +708,19 @@ function RoundsTab() {
       setLoading(false)
     })
   }, [])
+
+  const deleteRound = async (roundId: string) => {
+    setDeleting(true)
+    const { error } = await supabase.rpc('admin_delete_round', { target_round_id: roundId })
+    if (error) {
+      console.error('Delete round error:', error)
+      alert('Failed to delete round. Make sure the admin_delete_round RPC is deployed.')
+    } else {
+      setRounds(prev => prev.filter(r => r.id !== roundId))
+    }
+    setDeleting(false)
+    setDeleteTarget(null)
+  }
 
   if (loading) {
     return <div className="flex justify-center py-8"><div className="w-8 h-8 border-2 border-amber-500 border-t-transparent rounded-full animate-spin" /></div>
@@ -698,24 +746,41 @@ function RoundsTab() {
         return (
           <div key={r.id} className="bg-white rounded-xl border border-gray-200 p-3">
             <div className="flex items-center justify-between">
-              <div>
+              <div className="min-w-0 flex-1">
                 <p className="font-semibold text-gray-800">{courseName}</p>
                 <p className="text-xs text-gray-500">
                   {date} · {playerCount} players
                   {gameType && ` · ${gameType.replace(/_/g, ' ')}`}
                 </p>
               </div>
-              <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${
-                r.status === 'active' ? 'bg-green-100 text-green-700' :
-                r.status === 'complete' ? 'bg-blue-100 text-blue-700' :
-                'bg-gray-100 text-gray-500'
-              }`}>
-                {r.status}
-              </span>
+              <div className="flex items-center gap-2 flex-shrink-0">
+                <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${
+                  r.status === 'active' ? 'bg-green-100 text-green-700' :
+                  r.status === 'complete' ? 'bg-blue-100 text-blue-700' :
+                  'bg-gray-100 text-gray-500'
+                }`}>
+                  {r.status}
+                </span>
+                <button
+                  onClick={() => setDeleteTarget({ id: r.id, name: `${courseName} (${date})` })}
+                  className="text-xs font-semibold px-2.5 py-1.5 rounded-lg text-red-600 border border-red-200 active:bg-red-50"
+                >
+                  Delete
+                </button>
+              </div>
             </div>
           </div>
         )
       })}
+      <ConfirmModal
+        open={!!deleteTarget}
+        title="Delete Round?"
+        message={`Permanently delete ${deleteTarget?.name} and all associated scores, settlements, and data? This cannot be undone.`}
+        confirmLabel={deleting ? 'Deleting...' : 'Delete Round'}
+        destructive
+        onConfirm={() => { if (deleteTarget) deleteRound(deleteTarget.id) }}
+        onCancel={() => setDeleteTarget(null)}
+      />
     </div>
   )
 }
