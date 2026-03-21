@@ -21,8 +21,10 @@ export function Onboarding({ userId, onComplete }: Props) {
   const handleNextStep = () => {
     setError('')
     if (!displayName.trim()) { setError('Name is required'); return }
-    const hcp = parseFloat(handicapIndex)
-    if (isNaN(hcp) || hcp < -10 || hcp > 54) { setError('Handicap must be between -10 and 54'); return }
+    if (handicapIndex.trim()) {
+      const hcp = parseFloat(handicapIndex)
+      if (isNaN(hcp) || hcp < -10 || hcp > 54) { setError('Handicap must be between -10 and 54'); return }
+    }
     setStep('payment')
   }
 
@@ -30,7 +32,7 @@ export function Onboarding({ userId, onComplete }: Props) {
     setSaving(true)
     setError('')
     try {
-      const hcp = parseFloat(handicapIndex)
+      const hcp = handicapIndex.trim() ? parseFloat(handicapIndex) : null
       const { error: err } = await supabase
         .from('user_profiles')
         .update({
@@ -97,7 +99,7 @@ export function Onboarding({ userId, onComplete }: Props) {
                 />
               </div>
               <div>
-                <label className="block text-sm font-semibold text-gray-700 mb-1">Handicap Index</label>
+                <label className="block text-sm font-semibold text-gray-700 mb-1">Handicap Index <span className="font-normal text-gray-400">(optional)</span></label>
                 <input
                   type="number"
                   inputMode="decimal"

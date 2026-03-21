@@ -398,15 +398,21 @@ export function Scorecard({ userId, roundId, onEndRound, onHome, readOnly: readO
           p_gross_score: grossScore,
         })
         if (error) throw error
+        setScoreToast({ message: 'Score saved', type: 'success' })
+        setTimeout(() => setScoreToast(null), 2000)
       } else if (existing) {
         setHoleScores(prev => prev.map(s => s.id === existing.id ? { ...s, grossScore } : s))
         const { error } = await supabase.from('hole_scores').update({ gross_score: grossScore }).eq('id', existing.id)
         if (error) throw error
+        setScoreToast({ message: 'Score saved', type: 'success' })
+        setTimeout(() => setScoreToast(null), 2000)
       } else {
         const newScore: HoleScore = { id: uuidv4(), roundId, playerId, holeNumber: currentHole, grossScore }
         setHoleScores(prev => [...prev, newScore])
         const { error } = await supabase.from('hole_scores').insert(holeScoreToRow(newScore, userId))
         if (error) throw error
+        setScoreToast({ message: 'Score saved', type: 'success' })
+        setTimeout(() => setScoreToast(null), 2000)
       }
     } catch {
       if (!isOnline) {
@@ -1886,6 +1892,8 @@ export function Scorecard({ userId, roundId, onEndRound, onHome, readOnly: readO
             }
             setBatchScores({})
             setShowBatchEntry(false)
+            setScoreToast({ message: 'All scores saved', type: 'success' })
+            setTimeout(() => setScoreToast(null), 2000)
           }
 
           return (

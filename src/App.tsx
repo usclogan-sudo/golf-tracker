@@ -671,13 +671,6 @@ export default function App() {
     }
   }, [pendingJoinCode, userProfile?.onboardingComplete])
 
-  // Auto-navigate to spectate when spectate code is set
-  useEffect(() => {
-    if (spectateCode) {
-      setScreen('spectate')
-    }
-  }, [spectateCode])
-
   // Browser back button support: push state on screen change, listen for popstate
   useEffect(() => {
     const handlePopState = (e: PopStateEvent) => {
@@ -704,6 +697,11 @@ export default function App() {
       }
     }
   }, [screen])
+
+  // Spectate mode — no auth required (read-only leaderboard)
+  if (spectateCode) {
+    return <LiveLeaderboard inviteCode={spectateCode} onBack={() => { setSpectateCode(null); window.location.reload() }} />
+  }
 
   // Still checking auth state
   if (session === undefined) {
@@ -736,14 +734,20 @@ export default function App() {
   const userId = session.user.id
   const isAnonymous = session.user.is_anonymous ?? false
 
-  // Onboarding gate (admin-only accounts skip onboarding)
+  // Onboarding gate (admin-only accounts and invited users skip onboarding)
   if (userProfile && !userProfile.onboardingComplete && !userProfile.adminOnly) {
-    return (
-      <Onboarding
-        userId={userId}
-        onComplete={() => setUserProfile(prev => prev ? { ...prev, onboardingComplete: true } : prev)}
-      />
-    )
+    // If user has a pending invite, skip onboarding — let them join the round first
+    if (pendingJoinCode) {
+      supabase.from('user_profiles').update({ onboarding_complete: true }).eq('user_id', userId)
+      setUserProfile(prev => prev ? { ...prev, onboardingComplete: true } : prev)
+    } else {
+      return (
+        <Onboarding
+          userId={userId}
+          onComplete={() => setUserProfile(prev => prev ? { ...prev, onboardingComplete: true } : prev)}
+        />
+      )
+    }
   }
 
   const goHome = () => {
@@ -937,10 +941,6 @@ export default function App() {
   if (screen === 'ledger') {
     return <Ledger userId={userId} onBack={goHome} />
   }
-  if (screen === 'spectate' && spectateCode) {
-    return <LiveLeaderboard inviteCode={spectateCode} onBack={() => { setSpectateCode(null); goHome() }} />
-  }
-
   const handleDeleteCourse = (courseId: string) => {
     setAppConfirmModal({
       title: 'Remove Course?',
