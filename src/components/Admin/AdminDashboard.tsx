@@ -567,14 +567,14 @@ function GamePresetsTab({ userId }: { userId: string }) {
 
 // ─── Users Tab (Admin) ────────────────────────────────────────────────────────
 
-function UsersTab() {
+function UsersTab({ currentUserId }: { currentUserId: string }) {
   const [users, setUsers] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
+  const [toggling, setToggling] = useState<string | null>(null)
 
   useEffect(() => {
     supabase.rpc('admin_get_all_users').then(({ data, error }) => {
       if (error) {
-        // Fallback: if RPC doesn't exist yet, show message
         console.error('admin_get_all_users RPC error:', error)
         setLoading(false)
         return
@@ -583,6 +583,23 @@ function UsersTab() {
       setLoading(false)
     })
   }, [])
+
+  const toggleAdmin = async (targetUserId: string, currentlyAdmin: boolean) => {
+    setToggling(targetUserId)
+    const { error } = await supabase.rpc('admin_set_user_admin', {
+      target_user_id: targetUserId,
+      make_admin: !currentlyAdmin,
+    })
+    if (error) {
+      console.error('Toggle admin error:', error)
+      alert('Failed to update admin status. Make sure the admin_set_user_admin RPC is deployed.')
+    } else {
+      setUsers(prev => prev.map(u =>
+        u.user_id === targetUserId ? { ...u, is_admin: !currentlyAdmin } : u
+      ))
+    }
+    setToggling(null)
+  }
 
   if (loading) {
     return <div className="flex justify-center py-8"><div className="w-8 h-8 border-2 border-amber-500 border-t-transparent rounded-full animate-spin" /></div>
@@ -600,24 +617,41 @@ function UsersTab() {
   return (
     <div className="space-y-2">
       <p className="text-xs text-gray-500">{users.length} registered users</p>
-      {users.map((u: any) => (
-        <div key={u.user_id} className="bg-white rounded-xl border border-gray-200 p-3">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="font-semibold text-gray-800">{u.display_name || 'No name'}</p>
-              <p className="text-xs text-gray-500">
-                HCP: {u.handicap_index ?? '—'}
-                {u.venmo_username && ` · Venmo: @${u.venmo_username}`}
-                {u.zelle_identifier && ` · Zelle: ${u.zelle_identifier}`}
-                {u.cashapp_username && ` · Cash App: $${u.cashapp_username}`}
-              </p>
-            </div>
-            <div className="flex items-center gap-1.5">
-              {u.is_admin && <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-amber-100 text-amber-700">Admin</span>}
+      {users.map((u: any) => {
+        const isSelf = u.user_id === currentUserId
+        return (
+          <div key={u.user_id} className="bg-white rounded-xl border border-gray-200 p-3">
+            <div className="flex items-center justify-between">
+              <div className="min-w-0 flex-1">
+                <p className="font-semibold text-gray-800">{u.display_name || 'No name'}</p>
+                <p className="text-xs text-gray-500 truncate">
+                  HCP: {u.handicap_index ?? '—'}
+                  {u.venmo_username && ` · Venmo: @${u.venmo_username}`}
+                  {u.zelle_identifier && ` · Zelle: ${u.zelle_identifier}`}
+                  {u.cashapp_username && ` · Cash App: $${u.cashapp_username}`}
+                </p>
+              </div>
+              <div className="flex items-center gap-2 flex-shrink-0">
+                {u.is_admin && <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-amber-100 text-amber-700">Admin</span>}
+                {!isSelf && (
+                  <button
+                    onClick={() => toggleAdmin(u.user_id, u.is_admin)}
+                    disabled={toggling === u.user_id}
+                    className={`text-xs font-semibold px-2.5 py-1.5 rounded-lg transition-colors disabled:opacity-50 ${
+                      u.is_admin
+                        ? 'text-red-600 border border-red-200 active:bg-red-50'
+                        : 'text-blue-600 border border-blue-200 active:bg-blue-50'
+                    }`}
+                  >
+                    {toggling === u.user_id ? '...' : u.is_admin ? 'Remove Admin' : 'Make Admin'}
+                  </button>
+                )}
+                {isSelf && <span className="text-[10px] text-gray-400">You</span>}
+              </div>
             </div>
           </div>
-        </div>
-      ))}
+        )
+      })}
     </div>
   )
 }
@@ -785,7 +819,7 @@ export function AdminDashboard({ userId, onBack }: Props) {
 
         {tab === 'courses' && <SharedCoursesTab userId={userId} />}
         {tab === 'presets' && <GamePresetsTab userId={userId} />}
-        {tab === 'users' && <UsersTab />}
+        {tab === 'users' && <UsersTab currentUserId={userId} />}
         {tab === 'rounds' && <RoundsTab />}
         {tab === 'system' && <SystemTab />}
       </div>
