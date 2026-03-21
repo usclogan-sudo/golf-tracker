@@ -13,6 +13,11 @@ const GAME_EMOJI: Record<GameType, string> = {
   wolf: '🐺',
   bingo_bango_bongo: '⭐',
   hammer: '🔨',
+  vegas: '🎲',
+  stableford: '📊',
+  dots: '🔴',
+  banker: '🏦',
+  quota: '📋',
 }
 
 export function GameRulesModal({ gameType, onClose }: Props) {

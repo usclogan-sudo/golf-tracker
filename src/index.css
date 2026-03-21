@@ -54,6 +54,16 @@
   :is(.dark .score-double) { background: #991b1b; color: #fecaca; }
 }
 
+/* Animations */
+@keyframes slide-up {
+  from { transform: translateY(100%); }
+  to   { transform: translateY(0); }
+}
+@keyframes scale-in {
+  from { transform: scale(0.95); opacity: 0; }
+  to   { transform: scale(1); opacity: 1; }
+}
+
 /* Safe area padding for iPhone notch/home indicator */
 @supports (padding-top: env(safe-area-inset-top)) {
   .safe-top {

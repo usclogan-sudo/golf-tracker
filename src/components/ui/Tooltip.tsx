@@ -12,6 +12,19 @@ const GOLF_TERMS: Record<string, string> = {
   BBB: 'Bingo Bango Bongo — points for first on green, closest to pin, first to hole out',
   Hammer: 'Two-player game where you can "throw the hammer" to double the hole\'s value',
   HCP: 'Handicap — a number representing your average strokes over par',
+  Vegas: 'Team game where scores are combined into 2-digit numbers — difference = points',
+  Stableford: 'Point-based scoring: bogey=1, par=2, birdie=3 — highest points wins',
+  Dots: 'Side bet game awarding dots for achievements (sandies, greenies, etc.)',
+  Banker: 'Rotating banker takes on all other players each hole',
+  Quota: 'Each player gets a target based on handicap — beat your quota to win',
+  'Buy-in': 'The amount each player puts into the pot before the round',
+  Pot: 'The total prize pool made up of all players\' buy-ins',
+  Carry: 'When a skin is tied, its value carries forward to the next hole',
+  'Lone Wolf': 'When the wolf plays alone against all others — double stakes',
+  'Course Handicap': 'Your handicap adjusted for the specific course difficulty (slope & rating)',
+  'Stroke Index': 'Ranking of hole difficulty (1 = hardest) — determines where handicap strokes are given',
+  Differential: 'The adjusted score used to calculate your handicap index',
+  'Handicap Index': 'A portable number representing your playing ability — lower is better',
 }
 
 interface TooltipProps {
@@ -56,7 +69,7 @@ export function Tooltip({ term, children }: TooltipProps) {
       {children}
       <button
         onClick={handleToggle}
-        className="inline-flex items-center justify-center w-4 h-4 rounded-full bg-gray-200 text-gray-500 text-[10px] font-bold leading-none flex-shrink-0 active:bg-gray-300"
+        className="inline-flex items-center justify-center w-4 h-4 rounded-full bg-amber-100 text-amber-600 text-[10px] font-bold leading-none flex-shrink-0 active:bg-amber-200"
         aria-label={`What is ${term}?`}
       >
         ?

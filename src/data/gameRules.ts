@@ -125,6 +125,121 @@ export const GAME_RULES: Record<GameType, GameRuleEntry> = {
     ],
   },
 
+  vegas: {
+    title: 'Vegas',
+    summary: 'A 2v2 team game where each team combines their individual scores into a 2-digit number. The difference between team numbers determines points. Low score goes first — 4 and 5 becomes 45, not 54.',
+    howToPlay: [
+      'Players are split into Team A and Team B (2 per team).',
+      'On each hole, both players on a team play their own ball.',
+      'Each team\'s scores are combined into a 2-digit number: lowest score first.',
+      'Example: if Team A scores 4 and 5 → 45. If Team B scores 3 and 6 → 36.',
+      'The difference between the two numbers is the points for that hole.',
+    ],
+    scoring: [
+      'Lower team number wins the hole.',
+      'Points = the absolute difference between team numbers.',
+      'Example: Team A has 45, Team B has 36 → Team B wins 9 points (45-36).',
+      'Total points are accumulated across all holes.',
+      'Team with more total points wins the pot.',
+    ],
+    tips: [
+      'Pair consistent players together — two 5s (55) beats a 3 and 8 (38) but loses to a 4 and 4 (44).',
+      'A blow-up hole can be devastating since it creates a high second digit.',
+      'Requires exactly 4 players (2 per team).',
+    ],
+  },
+
+  stableford: {
+    title: 'Stableford',
+    summary: 'Point-based scoring that rewards good holes and minimizes the penalty for bad ones. Popular worldwide, especially in handicap play.',
+    howToPlay: [
+      'Each hole earns points based on your score relative to par.',
+      'Double bogey or worse = 0 pts, Bogey = 1, Par = 2, Birdie = 3, Eagle = 4, Albatross = 5.',
+      'Total your points across all holes.',
+      'Highest total points wins.',
+      'Pick up your ball after double bogey to speed up play (you get 0 pts either way).',
+    ],
+    scoring: [
+      'Points are awarded per hole based on score vs. par.',
+      'Pot is distributed proportionally based on total points.',
+      'Net mode applies handicap strokes, making it very fair for mixed groups.',
+      'Typical 18-hole scores: 20-25 (amateur), 36+ (scratch).',
+    ],
+    tips: [
+      'Stableford rewards aggressive play — going for birdie has upside with limited downside.',
+      'A blow-up hole only costs 2 points (par value) rather than ruining your round.',
+      'Great for groups with widely different skill levels when using net scoring.',
+    ],
+  },
+
+  dots: {
+    title: 'Dots / Trash',
+    summary: 'Award "dots" for achievements during the round — sandies, greenies, one-putts, and more. Each dot is worth a set value. Snakes (3-putts) cost you!',
+    howToPlay: [
+      'Before the round, choose which dot types are active and the value per dot.',
+      'During play, mark dots as they happen on each hole.',
+      'Positive dots (sandy, greenie, etc.) earn you money from each opponent.',
+      'Snake (3-putt) costs you — you pay each opponent.',
+      'Settle up at the end based on net dots.',
+    ],
+    scoring: [
+      'Each positive dot: you earn the dot value from each other player.',
+      'Snake: you pay the dot value to each other player.',
+      'Net settlement at the end of the round.',
+      'More dot types = more action (and more money changing hands).',
+    ],
+    tips: [
+      'Start with just sandies and greenies if the group is new to dots.',
+      'Snakes add a fun penalty — think twice before that aggressive lag putt.',
+      'Works great as a side game alongside skins or Nassau.',
+    ],
+  },
+
+  banker: {
+    title: 'Banker',
+    summary: 'A rotating "banker" takes on all other players each hole. Beat the banker and they pay you; lose and you pay the banker. High risk, high reward on your banking holes.',
+    howToPlay: [
+      'Players rotate as the "banker" each hole in a set order.',
+      'The banker plays against every other player individually.',
+      'If a player beats the banker, the banker pays 1 unit.',
+      'If the banker beats a player, that player pays 1 unit.',
+      'Ties push (no money changes hands).',
+    ],
+    scoring: [
+      'Units are tracked per hole. Net units determine pot distribution.',
+      'The banker has the most at stake — they could win or lose multiple units per hole.',
+      'With 4 players, the banker can win or lose up to 3 units per hole.',
+      'Gross or net scoring available.',
+    ],
+    tips: [
+      'As banker, play conservatively — you\'re playing against everyone.',
+      'Works best with 3-4 players.',
+      'Banking holes on par 3s are less risky (less variance).',
+    ],
+  },
+
+  quota: {
+    title: 'Quota',
+    summary: 'Each player gets a target (quota) based on their handicap. Score Stableford points and try to exceed your quota. The player who beats their quota by the most wins.',
+    howToPlay: [
+      'Before the round, each player\'s quota is set (typically 36 minus handicap).',
+      'Scoring uses the Stableford system: Double bogey+=0, Bogey=1, Par=2, Birdie=3, Eagle=4.',
+      'Your net score = Stableford points minus your quota.',
+      'The player with the highest net score (most over quota) wins.',
+    ],
+    scoring: [
+      'Quota is auto-calculated: 36 minus course handicap.',
+      'A scratch golfer needs 36 points (all pars). A 20-handicap needs only 16.',
+      'Pot is distributed proportionally among players who exceeded their quota.',
+      'If no one exceeds their quota, buy-ins are refunded.',
+    ],
+    tips: [
+      'Quota is the fairest game for mixed-handicap groups.',
+      'Everyone competes against their own target, not each other directly.',
+      'Pick up after double bogey — no points lost, saves time.',
+    ],
+  },
+
   hammer: {
     title: 'Hammer',
     summary: 'A 2-player press game where you "throw the hammer" to double the stakes. Your opponent must accept (doubling the value) or decline (losing the current value). Pure psychological warfare.',

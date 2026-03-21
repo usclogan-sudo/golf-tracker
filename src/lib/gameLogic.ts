@@ -16,6 +16,12 @@ import type {
   SideBet,
   HammerConfig,
   HammerHoleState,
+  VegasConfig,
+  StablefordConfig,
+  DotsConfig,
+  DotType,
+  BankerConfig,
+  QuotaConfig,
 } from '../types'
 
 // ─── Handicap math ────────────────────────────────────────────────────────────
@@ -743,6 +749,432 @@ export function calculateHammerPayouts(
       })
     }
   }
+  return payouts
+}
+
+// ─── Vegas ────────────────────────────────────────────────────────────────────
+
+export interface VegasHoleResult {
+  holeNumber: number
+  teamAScore: number | null  // 2-digit combo (e.g. 45)
+  teamBScore: number | null
+  diff: number               // positive = Team A wins
+}
+
+export interface VegasResult {
+  holeResults: VegasHoleResult[]
+  netPoints: { A: number; B: number }
+  winner: 'A' | 'B' | 'tie'
+}
+
+export function calculateVegas(
+  players: Player[],
+  holeScores: HoleScore[],
+  snapshot: CourseSnapshot,
+  config: VegasConfig,
+  courseHcps: Record<string, number>,
+): VegasResult {
+  const holeResults: VegasHoleResult[] = []
+  const netPoints = { A: 0, B: 0 }
+  const totalHoles = snapshot.holes.length
+
+  for (let holeNum = 1; holeNum <= totalHoles; holeNum++) {
+    const hole = snapshot.holes.find(h => h.number === holeNum)
+    if (!hole) continue
+
+    const teamScores: { A: number[]; B: number[] } = { A: [], B: [] }
+    let incomplete = false
+
+    for (const p of players) {
+      const team = config.teams[p.id]
+      if (!team) continue
+      const hs = holeScores.find(s => s.playerId === p.id && s.holeNumber === holeNum)
+      if (!hs) { incomplete = true; continue }
+      const score = config.mode === 'net'
+        ? hs.grossScore - strokesOnHole(courseHcps[p.id] ?? 0, hole.strokeIndex, totalHoles)
+        : hs.grossScore
+      teamScores[team].push(score)
+    }
+
+    if (incomplete || teamScores.A.length === 0 || teamScores.B.length === 0) {
+      holeResults.push({ holeNumber: holeNum, teamAScore: null, teamBScore: null, diff: 0 })
+      continue
+    }
+
+    // Vegas scoring: sort each team's scores low-high, combine as digits
+    const sortedA = teamScores.A.sort((a, b) => a - b)
+    const sortedB = teamScores.B.sort((a, b) => a - b)
+    const comboA = sortedA.length >= 2 ? sortedA[0] * 10 + sortedA[1] : sortedA[0]
+    const comboB = sortedB.length >= 2 ? sortedB[0] * 10 + sortedB[1] : sortedB[0]
+    const diff = comboB - comboA // positive = Team A wins
+
+    netPoints.A += Math.max(0, diff)
+    netPoints.B += Math.max(0, -diff)
+
+    holeResults.push({ holeNumber: holeNum, teamAScore: comboA, teamBScore: comboB, diff })
+  }
+
+  const winner = netPoints.A > netPoints.B ? 'A' : netPoints.B > netPoints.A ? 'B' : 'tie'
+  return { holeResults, netPoints, winner }
+}
+
+export function calculateVegasPayouts(
+  result: VegasResult,
+  config: VegasConfig,
+  game: Game,
+  players: Player[],
+): PlayerPayout[] {
+  const potCents = game.buyInCents * players.length
+
+  if (result.winner === 'tie') {
+    const perPlayer = Math.floor(potCents / players.length)
+    return players.map(p => ({ playerId: p.id, amountCents: perPlayer, reason: 'Vegas — tie, refund' }))
+  }
+
+  const winTeam = result.winner
+  const winnerIds = players.filter(p => config.teams[p.id] === winTeam).map(p => p.id)
+  const perWinner = Math.floor(potCents / winnerIds.length)
+  let remainder = potCents - perWinner * winnerIds.length
+
+  return winnerIds.map(pid => {
+    const extra = remainder > 0 ? 1 : 0
+    remainder = Math.max(0, remainder - extra)
+    return { playerId: pid, amountCents: perWinner + extra, reason: `Vegas winner (Team ${winTeam})` }
+  })
+}
+
+// ─── Stableford ──────────────────────────────────────────────────────────────
+
+export interface StablefordResult {
+  points: Record<string, number>  // playerId → total stableford points
+  holePoints: Record<string, Record<number, number>>  // playerId → holeNum → points
+  winner: string | null
+}
+
+/**
+ * Stableford scoring:
+ * Double bogey or worse = 0, Bogey = 1, Par = 2, Birdie = 3, Eagle = 4, Double Eagle = 5
+ */
+export function calculateStableford(
+  players: Player[],
+  holeScores: HoleScore[],
+  snapshot: CourseSnapshot,
+  config: StablefordConfig,
+  courseHcps: Record<string, number>,
+): StablefordResult {
+  const points: Record<string, number> = {}
+  const holePoints: Record<string, Record<number, number>> = {}
+  players.forEach(p => { points[p.id] = 0; holePoints[p.id] = {} })
+  const totalHoles = snapshot.holes.length
+
+  for (let holeNum = 1; holeNum <= totalHoles; holeNum++) {
+    const hole = snapshot.holes.find(h => h.number === holeNum)
+    if (!hole) continue
+
+    for (const p of players) {
+      const hs = holeScores.find(s => s.playerId === p.id && s.holeNumber === holeNum)
+      if (!hs) continue
+      const score = config.mode === 'net'
+        ? hs.grossScore - strokesOnHole(courseHcps[p.id] ?? 0, hole.strokeIndex, totalHoles)
+        : hs.grossScore
+      const diff = score - hole.par
+      let pts = 0
+      if (diff <= -3) pts = 5      // albatross+
+      else if (diff === -2) pts = 4 // eagle
+      else if (diff === -1) pts = 3 // birdie
+      else if (diff === 0) pts = 2  // par
+      else if (diff === 1) pts = 1  // bogey
+      // double bogey or worse = 0
+
+      holePoints[p.id][holeNum] = pts
+      points[p.id] += pts
+    }
+  }
+
+  const maxPts = Math.max(...Object.values(points))
+  const leaders = Object.entries(points).filter(([, p]) => p === maxPts)
+  const winner = leaders.length === 1 ? leaders[0][0] : null
+
+  return { points, holePoints, winner }
+}
+
+export function calculateStablefordPayouts(
+  result: StablefordResult,
+  game: Game,
+  players: Player[],
+): PlayerPayout[] {
+  const totalPot = game.buyInCents * players.length
+  const totalPoints = Object.values(result.points).reduce((s, p) => s + p, 0)
+
+  if (totalPoints === 0) {
+    return players.map(p => ({ playerId: p.id, amountCents: Math.floor(totalPot / players.length), reason: 'Stableford — no points, refund' }))
+  }
+
+  let remainder = totalPot
+  const payouts = Object.entries(result.points)
+    .filter(([, pts]) => pts > 0)
+    .sort((a, b) => b[1] - a[1])
+    .map(([playerId, pts]) => {
+      const share = Math.floor((pts / totalPoints) * totalPot)
+      remainder -= share
+      return { playerId, amountCents: share, reason: `${pts} Stableford point${pts !== 1 ? 's' : ''}` }
+    })
+
+  for (let i = 0; i < payouts.length && remainder > 0; i++) {
+    payouts[i].amountCents++
+    remainder--
+  }
+
+  return payouts
+}
+
+// ─── Dots ────────────────────────────────────────────────────────────────────
+
+export const DOT_LABELS: Record<DotType, { emoji: string; name: string; description: string }> = {
+  sandy: { emoji: '🏖️', name: 'Sandy', description: 'Par or better from a bunker' },
+  greenie: { emoji: '🟢', name: 'Greenie', description: 'On the green in regulation (par 3s)' },
+  snake: { emoji: '🐍', name: 'Snake', description: '3-putt (pays others)' },
+  barkie: { emoji: '🌳', name: 'Barkie', description: 'Hit a tree, still make par' },
+  ctp: { emoji: '🎯', name: 'CTP', description: 'Closest to the pin' },
+  fairway_hit: { emoji: '🏌️', name: 'Fairway Hit', description: 'Tee shot on the fairway' },
+  up_and_down: { emoji: '⬆️', name: 'Up & Down', description: 'Get up and down from off the green' },
+  one_putt: { emoji: '1️⃣', name: 'One Putt', description: 'Hole out in a single putt' },
+  longest_drive: { emoji: '💪', name: 'Longest Drive', description: 'Longest drive on the hole' },
+  par_save: { emoji: '💾', name: 'Par Save', description: 'Save par after being in trouble' },
+}
+
+export interface DotsResult {
+  netCents: Record<string, number>
+  tallies: Record<string, Record<DotType, number>>
+}
+
+export function calculateDots(
+  players: Player[],
+  junkRecords: JunkRecord[],
+  config: DotsConfig,
+): DotsResult {
+  const netCents: Record<string, number> = {}
+  const tallies: Record<string, Record<DotType, number>> = {}
+  const others = players.length - 1
+
+  for (const p of players) {
+    netCents[p.id] = 0
+    const t: any = {}
+    for (const dt of config.activeDots) t[dt] = 0
+    tallies[p.id] = t
+  }
+
+  for (const jr of junkRecords) {
+    const dt = jr.junkType as DotType
+    if (!config.activeDots.includes(dt)) continue
+    if (!tallies[jr.playerId]) continue
+
+    tallies[jr.playerId][dt] = (tallies[jr.playerId][dt] ?? 0) + 1
+
+    if (dt === 'snake') {
+      netCents[jr.playerId] -= config.valueCentsPerDot * others
+      for (const p of players) {
+        if (p.id !== jr.playerId) netCents[p.id] += config.valueCentsPerDot
+      }
+    } else {
+      netCents[jr.playerId] += config.valueCentsPerDot * others
+      for (const p of players) {
+        if (p.id !== jr.playerId) netCents[p.id] -= config.valueCentsPerDot
+      }
+    }
+  }
+
+  return { netCents, tallies }
+}
+
+export function calculateDotsPayouts(
+  result: DotsResult,
+  game: Game,
+  players: Player[],
+): PlayerPayout[] {
+  // Dots is direct settlement, not pot-based. Use net cents directly.
+  return Object.entries(result.netCents)
+    .filter(([, net]) => net > 0)
+    .map(([playerId, net]) => ({
+      playerId,
+      amountCents: net,
+      reason: `Dots net winnings`,
+    }))
+}
+
+// ─── Banker ──────────────────────────────────────────────────────────────────
+
+export interface BankerHoleResult {
+  holeNumber: number
+  bankerId: string
+  netCents: Record<string, number>  // per-player net for this hole
+}
+
+export interface BankerResult {
+  holeResults: BankerHoleResult[]
+  netCents: Record<string, number>
+}
+
+export function calculateBanker(
+  players: Player[],
+  holeScores: HoleScore[],
+  snapshot: CourseSnapshot,
+  config: BankerConfig,
+  courseHcps: Record<string, number>,
+): BankerResult {
+  const holeResults: BankerHoleResult[] = []
+  const netCents: Record<string, number> = {}
+  players.forEach(p => (netCents[p.id] = 0))
+  const totalHoles = snapshot.holes.length
+
+  for (let holeNum = 1; holeNum <= totalHoles; holeNum++) {
+    const hole = snapshot.holes.find(h => h.number === holeNum)
+    if (!hole) continue
+
+    const bankerId = config.bankerOrder[(holeNum - 1) % config.bankerOrder.length]
+    const holeNet: Record<string, number> = {}
+    players.forEach(p => (holeNet[p.id] = 0))
+
+    const bankerScore = (() => {
+      const hs = holeScores.find(s => s.playerId === bankerId && s.holeNumber === holeNum)
+      if (!hs) return null
+      return config.mode === 'net'
+        ? hs.grossScore - strokesOnHole(courseHcps[bankerId] ?? 0, hole.strokeIndex, totalHoles)
+        : hs.grossScore
+    })()
+
+    if (bankerScore === null) {
+      holeResults.push({ holeNumber: holeNum, bankerId, netCents: holeNet })
+      continue
+    }
+
+    for (const p of players) {
+      if (p.id === bankerId) continue
+      const hs = holeScores.find(s => s.playerId === p.id && s.holeNumber === holeNum)
+      if (!hs) continue
+      const score = config.mode === 'net'
+        ? hs.grossScore - strokesOnHole(courseHcps[p.id] ?? 0, hole.strokeIndex, totalHoles)
+        : hs.grossScore
+
+      if (score < bankerScore) {
+        // Player beats banker: banker pays 1 unit
+        holeNet[p.id] += 1
+        holeNet[bankerId] -= 1
+      } else if (score > bankerScore) {
+        // Banker beats player: player pays 1 unit
+        holeNet[p.id] -= 1
+        holeNet[bankerId] += 1
+      }
+      // tie = push
+    }
+
+    for (const id of Object.keys(holeNet)) {
+      netCents[id] = (netCents[id] ?? 0) + holeNet[id]
+    }
+    holeResults.push({ holeNumber: holeNum, bankerId, netCents: holeNet })
+  }
+
+  return { holeResults, netCents }
+}
+
+export function calculateBankerPayouts(
+  result: BankerResult,
+  game: Game,
+  players: Player[],
+): PlayerPayout[] {
+  const totalPot = game.buyInCents * players.length
+  const positiveUnits = Object.values(result.netCents).filter(u => u > 0).reduce((s, u) => s + u, 0)
+
+  if (positiveUnits === 0) {
+    return players.map(p => ({
+      playerId: p.id,
+      amountCents: Math.floor(totalPot / players.length),
+      reason: 'Banker — all square, refund',
+    }))
+  }
+
+  const centsPerUnit = Math.floor(totalPot / positiveUnits)
+  let remainder = totalPot - centsPerUnit * positiveUnits
+
+  return Object.entries(result.netCents)
+    .filter(([, u]) => u > 0)
+    .sort((a, b) => b[1] - a[1])
+    .map(([playerId, u]) => {
+      const extra = remainder > 0 ? 1 : 0
+      remainder = Math.max(0, remainder - extra)
+      return { playerId, amountCents: u * centsPerUnit + extra, reason: `Banker +${u} unit${u !== 1 ? 's' : ''}` }
+    })
+}
+
+// ─── Quota ───────────────────────────────────────────────────────────────────
+
+export interface QuotaResult {
+  stablefordPoints: Record<string, number>
+  quotas: Record<string, number>
+  netPoints: Record<string, number>  // stableford - quota (positive = over quota)
+  winner: string | null
+}
+
+export function calculateQuota(
+  players: Player[],
+  holeScores: HoleScore[],
+  snapshot: CourseSnapshot,
+  config: QuotaConfig,
+  courseHcps: Record<string, number>,
+): QuotaResult {
+  // First calculate stableford points
+  const stablefordResult = calculateStableford(players, holeScores, snapshot, { mode: config.mode }, courseHcps)
+
+  const netPoints: Record<string, number> = {}
+  for (const p of players) {
+    const quota = config.quotas[p.id] ?? 0
+    netPoints[p.id] = stablefordResult.points[p.id] - quota
+  }
+
+  const maxNet = Math.max(...Object.values(netPoints))
+  const leaders = Object.entries(netPoints).filter(([, n]) => n === maxNet)
+  const winner = leaders.length === 1 ? leaders[0][0] : null
+
+  return {
+    stablefordPoints: stablefordResult.points,
+    quotas: config.quotas,
+    netPoints,
+    winner,
+  }
+}
+
+export function calculateQuotaPayouts(
+  result: QuotaResult,
+  game: Game,
+  players: Player[],
+): PlayerPayout[] {
+  const totalPot = game.buyInCents * players.length
+  const positiveNet = Object.values(result.netPoints).filter(n => n > 0)
+  const totalPositive = positiveNet.reduce((s, n) => s + n, 0)
+
+  if (totalPositive === 0) {
+    return players.map(p => ({
+      playerId: p.id,
+      amountCents: Math.floor(totalPot / players.length),
+      reason: 'Quota — no one over quota, refund',
+    }))
+  }
+
+  let remainder = totalPot
+  const payouts = Object.entries(result.netPoints)
+    .filter(([, n]) => n > 0)
+    .sort((a, b) => b[1] - a[1])
+    .map(([playerId, n]) => {
+      const share = Math.floor((n / totalPositive) * totalPot)
+      remainder -= share
+      return { playerId, amountCents: share, reason: `Quota +${n} over target` }
+    })
+
+  for (let i = 0; i < payouts.length && remainder > 0; i++) {
+    payouts[i].amountCents++
+    remainder--
+  }
+
   return payouts
 }
 

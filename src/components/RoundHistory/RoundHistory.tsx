@@ -18,6 +18,11 @@ const GAME_EMOJI: Record<GameType, string> = {
   wolf: '🐺 Wolf',
   bingo_bango_bongo: '⭐ BBB',
   hammer: '🔨 Hammer',
+  vegas: '🎲 Vegas',
+  stableford: '📊 Stableford',
+  dots: '🔴 Dots',
+  banker: '🏦 Banker',
+  quota: '📋 Quota',
 }
 
 export function RoundHistory({ userId, onBack, onViewSettlements, onPlayAgain }: Props) {

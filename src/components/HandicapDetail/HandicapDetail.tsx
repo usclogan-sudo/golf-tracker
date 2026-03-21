@@ -2,6 +2,7 @@ import { useEffect, useState, useMemo } from 'react'
 import { supabase, rowToRound, rowToHoleScore, rowToRoundPlayer } from '../../lib/supabase'
 import { calcScoreDifferential, calcHandicapIndex } from '../../lib/handicap'
 import { HandicapChart } from '../HandicapChart'
+import { Tooltip } from '../ui/Tooltip'
 import type { Round, HoleScore, RoundPlayer, UserProfile } from '../../types'
 
 interface Props {
@@ -155,7 +156,7 @@ export function HandicapDetail({ userId, userProfile, onBack }: Props) {
         {/* Current Handicap Index */}
         <section className="bg-white dark:bg-gray-800 rounded-2xl shadow-sm p-4 text-center">
           <p className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-2">
-            {hasManualOverride ? 'Manual Handicap Index' : 'Calculated Handicap Index'}
+            <Tooltip term="Handicap Index">{hasManualOverride ? 'Manual Handicap Index' : 'Calculated Handicap Index'}</Tooltip>
           </p>
           <p className="text-5xl font-bold gold-text font-display">
             {displayIndex != null ? displayIndex.toFixed(1) : '—'}
@@ -258,9 +259,11 @@ export function HandicapDetail({ userId, userProfile, onBack }: Props) {
                           {vsPar > 0 ? '+' : ''}{vsPar}
                         </p>
                         {entry.differential != null && (
-                          <p className="text-xs text-gray-500 font-mono">
-                            {entry.differential.toFixed(1)}
-                          </p>
+                          <Tooltip term="Differential">
+                            <p className="text-xs text-gray-500 font-mono">
+                              {entry.differential.toFixed(1)}
+                            </p>
+                          </Tooltip>
                         )}
                       </div>
                     </div>

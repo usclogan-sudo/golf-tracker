@@ -12,12 +12,22 @@ import {
   calculateWolf,
   calculateBBB,
   calculateHammer,
+  calculateVegas,
+  calculateStableford,
+  calculateDots,
+  calculateBanker,
+  calculateQuota,
   calculateSkinsPayouts,
   calculateBestBallPayouts,
   calculateNassauPayouts,
   calculateWolfPayouts,
   calculateBBBPayouts,
   calculateHammerPayouts,
+  calculateVegasPayouts,
+  calculateStablefordPayouts,
+  calculateDotsPayouts,
+  calculateBankerPayouts,
+  calculateQuotaPayouts,
   calculateJunks,
   calculateSideBetSettlements,
   buildUnifiedSettlements,
@@ -38,6 +48,11 @@ import type {
   NassauConfig,
   WolfConfig,
   HammerConfig,
+  VegasConfig,
+  StablefordConfig,
+  DotsConfig,
+  BankerConfig,
+  QuotaConfig,
   GameType,
   SideBet,
   SettlementRecord,
@@ -60,6 +75,11 @@ const GAME_LABELS: Record<GameType, string> = {
   wolf: 'Wolf',
   bingo_bango_bongo: 'Bingo Bango Bongo',
   hammer: 'Hammer',
+  vegas: 'Vegas',
+  stableford: 'Stableford',
+  dots: 'Dots',
+  banker: 'Banker',
+  quota: 'Quota',
 }
 
 /** Merge fresh profile payment info over snapshot player data */
@@ -223,6 +243,31 @@ export function SettleUp({ roundId, userId, eventId, onDone, onContinue }: Props
     return calculateHammer(players, holeScores, snapshot, game.config as HammerConfig, courseHcps)
   }, [game, players, holeScores, snapshot, courseHcps])
 
+  const vegasResult = useMemo(() => {
+    if (!game || game.type !== 'vegas' || !snapshot) return null
+    return calculateVegas(players, holeScores, snapshot, game.config as VegasConfig, courseHcps)
+  }, [game, players, holeScores, snapshot, courseHcps])
+
+  const stablefordResult = useMemo(() => {
+    if (!game || game.type !== 'stableford' || !snapshot) return null
+    return calculateStableford(players, holeScores, snapshot, game.config as StablefordConfig, courseHcps)
+  }, [game, players, holeScores, snapshot, courseHcps])
+
+  const dotsResult = useMemo(() => {
+    if (!game || game.type !== 'dots') return null
+    return calculateDots(players, junkRecords, game.config as DotsConfig)
+  }, [game, players, junkRecords])
+
+  const bankerResult = useMemo(() => {
+    if (!game || game.type !== 'banker' || !snapshot) return null
+    return calculateBanker(players, holeScores, snapshot, game.config as BankerConfig, courseHcps)
+  }, [game, players, holeScores, snapshot, courseHcps])
+
+  const quotaResult = useMemo(() => {
+    if (!game || game.type !== 'quota' || !snapshot) return null
+    return calculateQuota(players, holeScores, snapshot, game.config as QuotaConfig, courseHcps)
+  }, [game, players, holeScores, snapshot, courseHcps])
+
   const junkResult = useMemo((): JunkResult | null => {
     if (!round?.junkConfig || junkRecords.length === 0) return null
     return calculateJunks(players, junkRecords, round.junkConfig)
@@ -252,8 +297,23 @@ export function SettleUp({ roundId, userId, eventId, onDone, onContinue }: Props
     if (game.type === 'hammer' && hammerResult) {
       return calculateHammerPayouts(hammerResult, game, players)
     }
+    if (game.type === 'vegas' && vegasResult) {
+      return calculateVegasPayouts(vegasResult, game.config as VegasConfig, game, players)
+    }
+    if (game.type === 'stableford' && stablefordResult) {
+      return calculateStablefordPayouts(stablefordResult, game, players)
+    }
+    if (game.type === 'dots' && dotsResult) {
+      return calculateDotsPayouts(dotsResult, game, players)
+    }
+    if (game.type === 'banker' && bankerResult) {
+      return calculateBankerPayouts(bankerResult, game, players)
+    }
+    if (game.type === 'quota' && quotaResult) {
+      return calculateQuotaPayouts(quotaResult, game, players)
+    }
     return []
-  }, [game, players, snapshot, skinsResult, bestBallResult, nassauResult, wolfResult, bbbResult, hammerResult])
+  }, [game, players, snapshot, skinsResult, bestBallResult, nassauResult, wolfResult, bbbResult, hammerResult, vegasResult, stablefordResult, dotsResult, bankerResult, quotaResult])
 
   // Persist settlements: compute + insert on first view, or load from DB
   const persistSettlements = useCallback(async () => {

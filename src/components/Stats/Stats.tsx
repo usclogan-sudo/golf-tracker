@@ -44,6 +44,11 @@ const GAME_EMOJIS: Record<GameType, string> = {
   wolf: '🐺',
   bingo_bango_bongo: '⭐',
   hammer: '🔨',
+  vegas: '🎲',
+  stableford: '📊',
+  dots: '🔴',
+  banker: '🏦',
+  quota: '📋',
 }
 
 export function Stats({ userId, onBack }: Props) {

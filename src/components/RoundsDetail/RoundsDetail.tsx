@@ -13,6 +13,12 @@ const GAME_LABELS: Record<GameType, string> = {
   nassau: 'Nassau',
   wolf: 'Wolf',
   bingo_bango_bongo: 'BBB',
+  hammer: 'Hammer',
+  vegas: 'Vegas',
+  stableford: 'Stableford',
+  dots: 'Dots',
+  banker: 'Banker',
+  quota: 'Quota',
 }
 
 export function RoundsDetail({ userId, onBack }: Props) {

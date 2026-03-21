@@ -5,6 +5,7 @@ import { fmtMoney, JUNK_LABELS } from '../../lib/gameLogic'
 import { venturaCourses } from '../../data/venturaCourses'
 import { NearMeCourses } from '../NearMeCourses/NearMeCourses'
 import { GameRulesModal } from '../GameRulesModal'
+import { Tooltip } from '../ui/Tooltip'
 import type {
   Course,
   Player,
@@ -17,6 +18,12 @@ import type {
   WolfConfig,
   BBBConfig,
   HammerConfig,
+  VegasConfig,
+  StablefordConfig,
+  DotsConfig,
+  DotType,
+  BankerConfig,
+  QuotaConfig,
   JunkConfig,
   JunkType,
   BuyIn,
@@ -802,6 +809,40 @@ function GameSetup({
     initialGame?.type === 'hammer' ? (initialGame.config as any).maxPresses : undefined
   )
 
+  // Vegas
+  const [vegasMode, setVegasMode] = useState<'gross' | 'net'>(
+    initialGame?.type === 'vegas' ? (initialGame.config as any).mode : 'net'
+  )
+  const [vegasTeams, setVegasTeams] = useState<Record<string, 'A' | 'B'>>(() => {
+    if (initialGame?.type === 'vegas') return (initialGame.config as any).teams ?? {}
+    const t: Record<string, 'A' | 'B'> = {}
+    players.forEach((p, i) => (t[p.id] = i % 2 === 0 ? 'A' : 'B'))
+    return t
+  })
+
+  // Stableford
+  const [stablefordMode, setStablefordMode] = useState<'gross' | 'net'>(
+    initialGame?.type === 'stableford' ? (initialGame.config as any).mode : 'net'
+  )
+
+  // Dots
+  const [dotsValueDollars, setDotsValueDollars] = useState(
+    initialGame?.type === 'dots' ? String((initialGame.config as any).valueCentsPerDot / 100) : '1'
+  )
+
+  // Banker
+  const [bankerMode, setBankerMode] = useState<'gross' | 'net'>(
+    initialGame?.type === 'banker' ? (initialGame.config as any).mode : 'net'
+  )
+  const [bankerOrder, setBankerOrder] = useState<string[]>(() =>
+    initialGame?.type === 'banker' ? (initialGame.config as any).bankerOrder : players.map(p => p.id)
+  )
+
+  // Quota
+  const [quotaMode, setQuotaMode] = useState<'gross' | 'net'>(
+    initialGame?.type === 'quota' ? (initialGame.config as any).mode : 'net'
+  )
+
   // Game rules modal
   const [rulesModalType, setRulesModalType] = useState<GameType | null>(null)
 
@@ -847,6 +888,14 @@ function GameSetup({
       setWolfMode(cfg.mode ?? 'net')
     } else if (preset.gameType === 'bingo_bango_bongo') {
       setBbbMode(cfg.mode ?? 'net')
+    } else if (preset.gameType === 'vegas') {
+      setVegasMode(cfg.mode ?? 'net')
+    } else if (preset.gameType === 'stableford') {
+      setStablefordMode(cfg.mode ?? 'net')
+    } else if (preset.gameType === 'banker') {
+      setBankerMode(cfg.mode ?? 'net')
+    } else if (preset.gameType === 'quota') {
+      setQuotaMode(cfg.mode ?? 'net')
     }
   }
 
@@ -870,6 +919,8 @@ function GameSetup({
   const bestBallAllowed = players.length >= 2 && players.length % 2 === 0
   const wolfAllowed = players.length >= 3
   const hammerAllowed = players.length === 2
+  const vegasAllowed = players.length >= 2 && players.length % 2 === 0
+  const bankerAllowed = players.length >= 3
 
   const teamCounts = useMemo(() => {
     let a = 0, b = 0
@@ -881,14 +932,29 @@ function GameSetup({
   }, [players, teams])
   const teamsValid = teamCounts.a >= 1 && teamCounts.a === teamCounts.b
 
+  const vegasTeamCounts = useMemo(() => {
+    let a = 0, b = 0
+    for (const p of players) {
+      if (vegasTeams[p.id] === 'A') a++
+      else b++
+    }
+    return { a, b }
+  }, [players, vegasTeams])
+  const vegasTeamsValid = vegasTeamCounts.a >= 1 && vegasTeamCounts.a === vegasTeamCounts.b
+
   const canContinue =
-    (type === 'hammer' || buyInCents > 0) &&
+    (type === 'hammer' || type === 'dots' || buyInCents > 0) &&
     (type === 'skins' ||
       type === 'nassau' ||
       type === 'bingo_bango_bongo' ||
+      type === 'stableford' ||
+      type === 'quota' ||
+      type === 'dots' ||
       (type === 'best_ball' && bestBallAllowed && teamsValid) ||
       (type === 'wolf' && wolfAllowed) ||
-      (type === 'hammer' && hammerAllowed))
+      (type === 'hammer' && hammerAllowed) ||
+      (type === 'vegas' && vegasAllowed && vegasTeamsValid) ||
+      (type === 'banker' && bankerAllowed))
 
   const moveWolfPlayer = (index: number, dir: -1 | 1) => {
     const next = [...wolfOrder]
@@ -896,6 +962,14 @@ function GameSetup({
     if (target < 0 || target >= next.length) return
     ;[next[index], next[target]] = [next[target], next[index]]
     setWolfOrder(next)
+  }
+
+  const moveBankerPlayer = (index: number, dir: -1 | 1) => {
+    const next = [...bankerOrder]
+    const target = index + dir
+    if (target < 0 || target >= next.length) return
+    ;[next[index], next[target]] = [next[target], next[index]]
+    setBankerOrder(next)
   }
 
   const makeGame = (): Game => {
@@ -920,6 +994,33 @@ function GameSetup({
       const baseValueCents = Math.max(1, Math.round(parseFloat(hammerBaseValueDollars || '1') * 100))
       const config: HammerConfig = { baseValueCents, maxPresses: hammerMaxPresses }
       return { id, type: 'hammer', buyInCents: 0, stakesMode, config }
+    }
+    if (type === 'vegas') {
+      const config: VegasConfig = { mode: vegasMode, teams: vegasTeams }
+      return { id, type: 'vegas', buyInCents, stakesMode, config }
+    }
+    if (type === 'stableford') {
+      const config: StablefordConfig = { mode: stablefordMode }
+      return { id, type: 'stableford', buyInCents, stakesMode, config }
+    }
+    if (type === 'dots') {
+      const valueCentsPerDot = Math.max(1, Math.round(parseFloat(dotsValueDollars || '1') * 100))
+      const activeDots: DotType[] = Array.from(junkTypes) as DotType[]
+      const config: DotsConfig = { activeDots, valueCentsPerDot }
+      return { id, type: 'dots', buyInCents: 0, stakesMode, config }
+    }
+    if (type === 'banker') {
+      const config: BankerConfig = { mode: bankerMode, bankerOrder }
+      return { id, type: 'banker', buyInCents, stakesMode, config }
+    }
+    if (type === 'quota') {
+      // Auto-calculate quotas: 36 minus handicap index (clamped to 0-36)
+      const quotas: Record<string, number> = {}
+      for (const p of players) {
+        quotas[p.id] = Math.max(0, Math.min(36, Math.round(36 - p.handicapIndex)))
+      }
+      const config: QuotaConfig = { mode: quotaMode, quotas }
+      return { id, type: 'quota', buyInCents, stakesMode, config }
     }
     // bingo_bango_bongo
     const config: BBBConfig = { mode: bbbMode }
@@ -1046,14 +1147,25 @@ function GameSetup({
             <GameButton gameType="best_ball" label="🤝 Best Ball" disabled={!bestBallAllowed} />
             <GameButton gameType="nassau" label="🏳️ Nassau" />
             <GameButton gameType="wolf" label="🐺 Wolf" disabled={!wolfAllowed} />
-            <GameButton gameType="bingo_bango_bongo" label="⭐ Bingo Bango Bongo" />
+            <GameButton gameType="bingo_bango_bongo" label="⭐ BBB" />
             <GameButton gameType="hammer" label="🔨 Hammer" disabled={!hammerAllowed} />
+            <GameButton gameType="vegas" label="🎲 Vegas" disabled={!vegasAllowed} />
+            <GameButton gameType="stableford" label="📊 Stableford" />
+            <GameButton gameType="dots" label="🔴 Dots" />
+            <GameButton gameType="banker" label="🏦 Banker" disabled={!bankerAllowed} />
+            <GameButton gameType="quota" label="📋 Quota" />
           </div>
           {!bestBallAllowed && type === 'best_ball' && (
             <p className="text-sm text-gray-400">Best Ball requires an even number of players (2, 4, 6…).</p>
           )}
+          {!vegasAllowed && type === 'vegas' && (
+            <p className="text-sm text-gray-400">Vegas requires an even number of players (4 recommended).</p>
+          )}
           {!wolfAllowed && type === 'wolf' && (
             <p className="text-sm text-gray-400">Wolf requires at least 3 players.</p>
+          )}
+          {!bankerAllowed && type === 'banker' && (
+            <p className="text-sm text-gray-400">Banker requires at least 3 players.</p>
           )}
           {!hammerAllowed && type === 'hammer' && (
             <p className="text-sm text-gray-400">Hammer requires exactly 2 players.</p>
@@ -1063,7 +1175,7 @@ function GameSetup({
         {/* Buy-in */}
         <section className="bg-white dark:bg-gray-800 rounded-2xl shadow-sm p-4 space-y-3">
           <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">
-            Buy-in Per Player{type === 'nassau' ? ' (covers all 3 bets)' : ''}
+            <Tooltip term="Buy-in">Buy-in Per Player</Tooltip>{type === 'nassau' ? ' (covers all 3 bets)' : ''}
           </p>
 
           <div className="flex gap-2 flex-wrap">
@@ -1376,6 +1488,214 @@ function GameSetup({
               <p>• The hammer holder can "throw" the hammer to double the stakes</p>
               <p>• Opponent must accept (value doubles) or decline (lose current value)</p>
               <p>• After accepting, the hammer passes to the accepter</p>
+            </div>
+          </section>
+        )}
+
+        {/* Vegas Options */}
+        {type === 'vegas' && (
+          <section className="bg-white dark:bg-gray-800 rounded-2xl shadow-sm p-4 space-y-4">
+            <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Vegas Options</p>
+            <div>
+              <p className="text-sm text-gray-600 mb-2">Scoring</p>
+              <div className="grid grid-cols-2 gap-2">
+                <button onClick={() => setVegasMode('net')}
+                  className={`h-12 rounded-xl font-semibold ${vegasMode === 'net' ? 'bg-gray-800 text-white' : 'bg-gray-100 text-gray-700'}`}>
+                  Net (handicap)
+                </button>
+                <button onClick={() => setVegasMode('gross')}
+                  className={`h-12 rounded-xl font-semibold ${vegasMode === 'gross' ? 'bg-gray-800 text-white' : 'bg-gray-100 text-gray-700'}`}>
+                  Gross (raw)
+                </button>
+              </div>
+            </div>
+            <div>
+              <p className="text-sm text-gray-600 mb-2">Teams (tap to assign)</p>
+              <div className="grid grid-cols-2 gap-2">
+                {(['A', 'B'] as const).map(team => (
+                  <div key={team} className={`rounded-xl border-2 p-3 ${team === 'A' ? 'border-blue-200 bg-blue-50' : 'border-orange-200 bg-orange-50'}`}>
+                    <p className={`text-xs font-bold uppercase tracking-wide mb-2 ${team === 'A' ? 'text-blue-700' : 'text-orange-700'}`}>Team {team}</p>
+                    <div className="space-y-1.5">
+                      {players.map(p => (
+                        <button key={p.id}
+                          onClick={() => setVegasTeams(prev => ({ ...prev, [p.id]: team }))}
+                          className={`w-full text-left px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
+                            vegasTeams[p.id] === team
+                              ? team === 'A' ? 'bg-blue-600 text-white' : 'bg-orange-600 text-white'
+                              : 'bg-white text-gray-600 border border-gray-200'
+                          }`}
+                        >
+                          {p.name}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                ))}
+              </div>
+              {!vegasTeamsValid && (
+                <p className="text-red-600 text-sm mt-2">Teams must be equal size. ({vegasTeamCounts.a} / {vegasTeamCounts.b})</p>
+              )}
+            </div>
+            <div className="bg-green-50 rounded-xl p-3 text-sm text-green-700 space-y-1">
+              <p className="font-semibold">How Vegas works:</p>
+              <p>• Each team combines scores into a 2-digit number (low digit first)</p>
+              <p>• Example: scores of 4 and 5 become 45</p>
+              <p>• Difference between team numbers = points for that hole</p>
+            </div>
+          </section>
+        )}
+
+        {/* Stableford Options */}
+        {type === 'stableford' && (
+          <section className="bg-white dark:bg-gray-800 rounded-2xl shadow-sm p-4 space-y-3">
+            <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Stableford Options</p>
+            <div>
+              <p className="text-sm text-gray-600 mb-2">Scoring</p>
+              <div className="grid grid-cols-2 gap-2">
+                <button onClick={() => setStablefordMode('net')}
+                  className={`h-12 rounded-xl font-semibold ${stablefordMode === 'net' ? 'bg-gray-800 text-white' : 'bg-gray-100 text-gray-700'}`}>
+                  Net (handicap)
+                </button>
+                <button onClick={() => setStablefordMode('gross')}
+                  className={`h-12 rounded-xl font-semibold ${stablefordMode === 'gross' ? 'bg-gray-800 text-white' : 'bg-gray-100 text-gray-700'}`}>
+                  Gross (raw)
+                </button>
+              </div>
+            </div>
+            <div className="bg-indigo-50 rounded-xl p-3 text-sm text-indigo-700 space-y-1">
+              <p className="font-semibold">Point values per hole:</p>
+              <p>• Double bogey+ = 0 pts, Bogey = 1, Par = 2</p>
+              <p>• Birdie = 3, Eagle = 4, Albatross = 5</p>
+              <p>• Highest total points wins the pot</p>
+            </div>
+          </section>
+        )}
+
+        {/* Dots Options */}
+        {type === 'dots' && (
+          <section className="bg-white dark:bg-gray-800 rounded-2xl shadow-sm p-4 space-y-3">
+            <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Dots / Trash Options</p>
+            <div>
+              <p className="text-sm text-gray-600 mb-2">Value Per Dot</p>
+              <div className="flex gap-2">
+                {[0.5, 1, 2, 5].map(dollars => (
+                  <button
+                    key={dollars}
+                    onClick={() => setDotsValueDollars(String(dollars))}
+                    className={`px-3 h-10 rounded-xl font-semibold text-sm transition-colors ${
+                      parseFloat(dotsValueDollars || '0') === dollars
+                        ? 'bg-gray-800 text-white'
+                        : 'bg-gray-100 text-gray-700'
+                    }`}
+                  >
+                    {fmtMoney(dollars * 100)}
+                  </button>
+                ))}
+              </div>
+            </div>
+            <p className="text-xs text-gray-500">Configure active dot types in the Junk Side Bets section below.</p>
+            <div className="bg-red-50 rounded-xl p-3 text-sm text-red-700 space-y-1">
+              <p className="font-semibold">How Dots work:</p>
+              <p>• Each dot earned = value from each other player</p>
+              <p>• Snake (3-putt) = you pay each other player</p>
+              <p>• Direct settlement — no buy-in needed</p>
+            </div>
+          </section>
+        )}
+
+        {/* Banker Options */}
+        {type === 'banker' && (
+          <section className="bg-white dark:bg-gray-800 rounded-2xl shadow-sm p-4 space-y-4">
+            <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Banker Options</p>
+            <div>
+              <p className="text-sm text-gray-600 mb-2">Scoring</p>
+              <div className="grid grid-cols-2 gap-2">
+                <button onClick={() => setBankerMode('net')}
+                  className={`h-12 rounded-xl font-semibold ${bankerMode === 'net' ? 'bg-gray-800 text-white' : 'bg-gray-100 text-gray-700'}`}>
+                  Net (handicap)
+                </button>
+                <button onClick={() => setBankerMode('gross')}
+                  className={`h-12 rounded-xl font-semibold ${bankerMode === 'gross' ? 'bg-gray-800 text-white' : 'bg-gray-100 text-gray-700'}`}>
+                  Gross (raw)
+                </button>
+              </div>
+            </div>
+            <div>
+              <p className="text-sm text-gray-600 mb-2">Banker Rotation Order</p>
+              <p className="text-xs text-gray-400 mb-2">Player 1 is banker on hole 1, Player 2 on hole 2, etc.</p>
+              <div className="space-y-2">
+                {bankerOrder.map((playerId, index) => {
+                  const player = players.find(p => p.id === playerId)
+                  return (
+                    <div key={playerId} className="flex items-center gap-3 bg-gray-50 rounded-xl px-3 py-2.5">
+                      <span className="w-6 h-6 rounded-full bg-emerald-600 text-white text-xs font-bold flex items-center justify-center flex-shrink-0">
+                        {index + 1}
+                      </span>
+                      <span className="flex-1 font-medium text-gray-800">{player?.name}</span>
+                      <div className="flex gap-1">
+                        <button
+                          onClick={() => moveBankerPlayer(index, -1)}
+                          disabled={index === 0}
+                          className="w-8 h-8 rounded-lg bg-white border border-gray-200 text-gray-600 disabled:opacity-30 flex items-center justify-center text-sm"
+                        >
+                          ↑
+                        </button>
+                        <button
+                          onClick={() => moveBankerPlayer(index, 1)}
+                          disabled={index === bankerOrder.length - 1}
+                          className="w-8 h-8 rounded-lg bg-white border border-gray-200 text-gray-600 disabled:opacity-30 flex items-center justify-center text-sm"
+                        >
+                          ↓
+                        </button>
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+            </div>
+            <div className="bg-emerald-50 rounded-xl p-3 text-sm text-emerald-700 space-y-1">
+              <p className="font-semibold">How Banker works:</p>
+              <p>• Rotating banker takes on all other players each hole</p>
+              <p>• Beat the banker = banker pays you 1 unit</p>
+              <p>• Lose to banker = you pay the banker 1 unit</p>
+            </div>
+          </section>
+        )}
+
+        {/* Quota Options */}
+        {type === 'quota' && (
+          <section className="bg-white dark:bg-gray-800 rounded-2xl shadow-sm p-4 space-y-3">
+            <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Quota Options</p>
+            <div>
+              <p className="text-sm text-gray-600 mb-2">Scoring</p>
+              <div className="grid grid-cols-2 gap-2">
+                <button onClick={() => setQuotaMode('net')}
+                  className={`h-12 rounded-xl font-semibold ${quotaMode === 'net' ? 'bg-gray-800 text-white' : 'bg-gray-100 text-gray-700'}`}>
+                  Net (handicap)
+                </button>
+                <button onClick={() => setQuotaMode('gross')}
+                  className={`h-12 rounded-xl font-semibold ${quotaMode === 'gross' ? 'bg-gray-800 text-white' : 'bg-gray-100 text-gray-700'}`}>
+                  Gross (raw)
+                </button>
+              </div>
+            </div>
+            <div className="bg-gray-50 rounded-xl p-3 space-y-2">
+              <p className="text-xs font-semibold text-gray-500 uppercase">Player Quotas (auto-calculated)</p>
+              {players.map(p => {
+                const quota = Math.max(0, Math.min(36, Math.round(36 - p.handicapIndex)))
+                return (
+                  <div key={p.id} className="flex items-center justify-between text-sm">
+                    <span className="text-gray-700 font-medium">{p.name}</span>
+                    <span className="text-gray-500">Target: <strong className="text-gray-800">{quota} pts</strong> (HCP {p.handicapIndex})</span>
+                  </div>
+                )
+              })}
+            </div>
+            <div className="bg-blue-50 rounded-xl p-3 text-sm text-blue-700 space-y-1">
+              <p className="font-semibold">How Quota works:</p>
+              <p>• Each player gets a target based on handicap (36 - HCP)</p>
+              <p>• Earn Stableford points: Par=2, Birdie=3, Eagle=4</p>
+              <p>• Beat your quota by the most to win</p>
             </div>
           </section>
         )}

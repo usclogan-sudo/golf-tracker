@@ -7,6 +7,7 @@ import { getCelebration, CelebrationToast, CelebrationFullscreen } from '../Cele
 import { Tooltip } from '../ui/Tooltip'
 import { ConfirmModal } from '../ConfirmModal'
 import { GameRulesModal } from '../GameRulesModal'
+import { NumberPad } from './NumberPad'
 import {
   buildCourseHandicaps,
   calculateSkins,
@@ -15,6 +16,10 @@ import {
   calculateWolf,
   calculateBBB,
   calculateHammer,
+  calculateVegas,
+  calculateStableford,
+  calculateBanker,
+  calculateQuota,
   wolfForHole,
   strokesOnHole,
   fmtMoney,
@@ -35,6 +40,10 @@ import type {
   WolfConfig,
   HammerConfig,
   HammerHoleState,
+  VegasConfig,
+  StablefordConfig,
+  BankerConfig,
+  QuotaConfig,
   GolfEvent,
   EventParticipant,
   ScoreStatus,
@@ -64,11 +73,13 @@ function ScoreStepper({
   min,
   max,
   onChange,
+  onTapValue,
 }: {
   value: number
   min: number
   max: number
   onChange: (v: number) => void
+  onTapValue?: () => void
 }) {
   return (
     <div className="flex items-center gap-3">
@@ -80,7 +91,17 @@ function ScoreStepper({
       >
         −
       </button>
-      <span className="w-10 text-center text-2xl font-bold text-gray-900">{value}</span>
+      {onTapValue ? (
+        <button
+          onClick={onTapValue}
+          className="w-10 text-center text-2xl font-bold text-gray-900 dark:text-gray-100 active:text-amber-600 transition-colors"
+          aria-label="Open number pad"
+        >
+          {value}
+        </button>
+      ) : (
+        <span className="w-10 text-center text-2xl font-bold text-gray-900">{value}</span>
+      )}
       <button
         onClick={() => onChange(Math.min(max, value + 1))}
         disabled={value >= max}
@@ -105,7 +126,7 @@ function SkinsStatus({ carry, potCents }: { carry: number; potCents: number }) {
   }
   return (
     <div className="bg-yellow-50 border border-yellow-200 rounded-xl px-3 py-2 flex items-center gap-2">
-      <span className="text-yellow-600 font-bold text-sm">🔥 Carry ×{carry + 1}</span>
+      <Tooltip term="Carry"><span className="text-yellow-600 font-bold text-sm">🔥 Carry ×{carry + 1}</span></Tooltip>
       <span className="text-yellow-700 text-sm">{fmtMoney(valueCents)} on the line</span>
     </div>
   )
@@ -166,6 +187,7 @@ export function Scorecard({ userId, roundId, onEndRound, onHome, readOnly: readO
   const [showRoundSummary, setShowRoundSummary] = useState(true)
   const [showBatchEntry, setShowBatchEntry] = useState(false)
   const [batchScores, setBatchScores] = useState<Record<string, Record<number, string>>>({})
+  const [numberPadTarget, setNumberPadTarget] = useState<{ playerId: string; playerName: string } | null>(null)
 
   useEffect(() => {
     Promise.all([
@@ -693,6 +715,26 @@ export function Scorecard({ userId, roundId, onEndRound, onHome, readOnly: readO
   const hammerResult = useMemo(() => {
     if (!game || game.type !== 'hammer' || !snapshot || players.length !== 2) return null
     return calculateHammer(players, approvedScores, snapshot, game.config as HammerConfig, courseHcps)
+  }, [game, players, approvedScores, snapshot, courseHcps])
+
+  const vegasResult = useMemo(() => {
+    if (!game || game.type !== 'vegas' || !snapshot) return null
+    return calculateVegas(players, approvedScores, snapshot, game.config as VegasConfig, courseHcps)
+  }, [game, players, approvedScores, snapshot, courseHcps])
+
+  const stablefordResult = useMemo(() => {
+    if (!game || game.type !== 'stableford' || !snapshot) return null
+    return calculateStableford(players, approvedScores, snapshot, game.config as StablefordConfig, courseHcps)
+  }, [game, players, approvedScores, snapshot, courseHcps])
+
+  const bankerResult = useMemo(() => {
+    if (!game || game.type !== 'banker' || !snapshot) return null
+    return calculateBanker(players, approvedScores, snapshot, game.config as BankerConfig, courseHcps)
+  }, [game, players, approvedScores, snapshot, courseHcps])
+
+  const quotaResult = useMemo(() => {
+    if (!game || game.type !== 'quota' || !snapshot) return null
+    return calculateQuota(players, approvedScores, snapshot, game.config as QuotaConfig, courseHcps)
   }, [game, players, approvedScores, snapshot, courseHcps])
 
   const currentHammerState = hammerStates[currentHole] ?? null
@@ -2079,7 +2121,7 @@ export function Scorecard({ userId, roundId, onEndRound, onHome, readOnly: readO
               </div>
               <div className="flex items-center justify-between">
                 <p className="text-sm text-gray-500 font-medium">Gross score</p>
-                <ScoreStepper value={grossScore} min={1} max={15} onChange={v => setScore(player.id, v)} />
+                <ScoreStepper value={grossScore} min={1} max={15} onChange={v => setScore(player.id, v)} onTapValue={readOnly ? undefined : () => setNumberPadTarget({ playerId: player.id, playerName: player.name })} />
               </div>
               {warnings.map((w, i) => (
                 <p key={i} className="text-amber-600 text-xs font-medium mt-2 bg-amber-50 rounded-lg px-3 py-1.5">{w}</p>
@@ -2266,6 +2308,18 @@ export function Scorecard({ userId, roundId, onEndRound, onHome, readOnly: readO
 
       {/* Game rules modal */}
       {showRulesModal && game && <GameRulesModal gameType={game.type} onClose={() => setShowRulesModal(false)} />}
+
+      {/* Number pad for quick score entry */}
+      {numberPadTarget && (
+        <NumberPad
+          playerName={numberPadTarget.playerName}
+          holeNumber={currentHole}
+          par={par}
+          currentValue={holeScores.find(s => s.playerId === numberPadTarget.playerId && s.holeNumber === currentHole)?.grossScore ?? par}
+          onSelect={v => setScore(numberPadTarget.playerId, v)}
+          onClose={() => setNumberPadTarget(null)}
+        />
+      )}
     </div>
   )
 }

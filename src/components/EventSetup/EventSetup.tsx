@@ -308,6 +308,11 @@ export function EventSetup({ userId, onStart, onCancel, onAddCourse }: Props) {
     { type: 'wolf', label: 'Wolf', emoji: '🐺' },
     { type: 'bingo_bango_bongo', label: 'BBB', emoji: '⭐' },
     { type: 'hammer', label: 'Hammer', emoji: '🔨' },
+    { type: 'vegas', label: 'Vegas', emoji: '🎲' },
+    { type: 'stableford', label: 'Stableford', emoji: '📊' },
+    { type: 'dots', label: 'Dots', emoji: '🔴' },
+    { type: 'banker', label: 'Banker', emoji: '🏦' },
+    { type: 'quota', label: 'Quota', emoji: '📋' },
   ]
 
   const BUY_IN_PRESETS = [500, 1000, 2000, 5000]
@@ -828,6 +833,11 @@ export function EventSetup({ userId, onStart, onCancel, onAddCourse }: Props) {
     wolf: 'Wolf',
     bingo_bango_bongo: 'BBB',
     hammer: 'Hammer',
+    vegas: 'Vegas',
+    stableford: 'Stableford',
+    dots: 'Dots',
+    banker: 'Banker',
+    quota: 'Quota',
   }
 
   return (

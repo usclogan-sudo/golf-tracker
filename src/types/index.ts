@@ -66,7 +66,7 @@ export interface GamePreset {
   gameType: GameType
   buyInCents: number
   stakesMode: StakesMode
-  config: SkinsConfig | BestBallConfig | NassauConfig | WolfConfig | BBBConfig | HammerConfig
+  config: SkinsConfig | BestBallConfig | NassauConfig | WolfConfig | BBBConfig | HammerConfig | VegasConfig | StablefordConfig | DotsConfig | BankerConfig | QuotaConfig
   description?: string
   sortOrder: number
   createdAt?: Date
@@ -83,7 +83,7 @@ export interface CourseSnapshot {
 
 // ─── Games ────────────────────────────────────────────────────────────────────
 
-export type GameType = 'skins' | 'best_ball' | 'nassau' | 'wolf' | 'bingo_bango_bongo' | 'hammer'
+export type GameType = 'skins' | 'best_ball' | 'nassau' | 'wolf' | 'bingo_bango_bongo' | 'hammer' | 'vegas' | 'stableford' | 'dots' | 'banker' | 'quota'
 
 export type SkinsMode = 'gross' | 'net'
 export interface Press {
@@ -137,6 +137,32 @@ export interface HammerHoleState {
   declinedBy?: string   // playerId who declined
 }
 
+export interface VegasConfig {
+  mode: 'gross' | 'net'
+  teams: Record<string, 'A' | 'B'>
+}
+
+export interface StablefordConfig {
+  mode: 'gross' | 'net'
+}
+
+export type DotType = JunkType | 'fairway_hit' | 'up_and_down' | 'one_putt' | 'longest_drive' | 'par_save'
+
+export interface DotsConfig {
+  activeDots: DotType[]
+  valueCentsPerDot: number
+}
+
+export interface BankerConfig {
+  mode: 'gross' | 'net'
+  bankerOrder: string[]
+}
+
+export interface QuotaConfig {
+  mode: 'gross' | 'net'
+  quotas: Record<string, number>
+}
+
 // ─── Junks (side bets) ─────────────────────────────────────────────────────
 
 export type JunkType = 'sandy' | 'greenie' | 'snake' | 'barkie' | 'ctp'
@@ -170,7 +196,7 @@ export interface Game {
   type: GameType
   buyInCents: number
   stakesMode?: StakesMode
-  config: SkinsConfig | BestBallConfig | NassauConfig | WolfConfig | BBBConfig | HammerConfig
+  config: SkinsConfig | BestBallConfig | NassauConfig | WolfConfig | BBBConfig | HammerConfig | VegasConfig | StablefordConfig | DotsConfig | BankerConfig | QuotaConfig
 }
 
 // ─── Payments ─────────────────────────────────────────────────────────────────

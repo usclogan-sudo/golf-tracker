@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useMemo } from 'react'
 import { supabase, rowToSettlementRecord, rowToRound } from '../../lib/supabase'
 import { PaymentButtons } from '../PaymentButtons'
 import { ConfirmModal } from '../ConfirmModal'
@@ -27,12 +27,24 @@ interface OpponentBalance {
   player: Player | null
 }
 
+type FilterMode = 'all' | 'season' | 'custom'
+
 export function Ledger({ userId, onBack }: Props) {
   const [loading, setLoading] = useState(true)
-  const [balances, setBalances] = useState<OpponentBalance[]>([])
+  const [allSettlements, setAllSettlements] = useState<SettlementRecord[]>([])
+  const [allRounds, setAllRounds] = useState<Round[]>([])
+  const [userPlayerIds, setUserPlayerIds] = useState<Set<string>>(new Set())
+  const [playerMap, setPlayerMap] = useState<Map<string, Player>>(new Map())
   const [expandedOpponent, setExpandedOpponent] = useState<string | null>(null)
   const [markingSettled, setMarkingSettled] = useState<string | null>(null)
   const [confirmSettleModal, setConfirmSettleModal] = useState<{ opponentId: string; opponentName: string; count: number } | null>(null)
+
+  // Filter state
+  const [filterMode, setFilterMode] = useState<FilterMode>('all')
+  const [seasonYear, setSeasonYear] = useState(new Date().getFullYear())
+  const [customFrom, setCustomFrom] = useState('')
+  const [customTo, setCustomTo] = useState('')
+  const [showSettled, setShowSettled] = useState(false)
 
   useEffect(() => {
     loadLedger()
@@ -41,52 +53,65 @@ export function Ledger({ userId, onBack }: Props) {
   async function loadLedger() {
     setLoading(true)
 
-    // Fetch all settlements + rounds
-    const [settlRes, roundsRes] = await Promise.all([
+    const [settlRes, roundsRes, partRes] = await Promise.all([
       supabase.from('settlements').select('*'),
       supabase.from('rounds').select('*').eq('status', 'complete'),
+      supabase.from('round_participants').select('player_id').eq('user_id', userId),
     ])
 
     const settlements = (settlRes.data ?? []).map(rowToSettlementRecord)
     const rounds = (roundsRes.data ?? []).map(rowToRound)
-    const roundMap = new Map<string, Round>()
-    rounds.forEach(r => roundMap.set(r.id, r))
 
-    // Build a player map from all round snapshots
-    const playerMap = new Map<string, Player>()
+    const pMap = new Map<string, Player>()
     for (const r of rounds) {
       for (const p of r.players ?? []) {
-        playerMap.set(p.id, p)
+        pMap.set(p.id, p)
       }
     }
 
-    // Build net balance per opponent across all rounds
-    // We need to find which playerId represents the current user in each round
-    // The userId may appear as a playerId directly (for profile-based players)
-    // or we need to check round_participants
-    const userPlayerIds = new Set<string>()
-    userPlayerIds.add(userId) // Often the user's profile id IS their playerId
+    const upIds = new Set<string>()
+    upIds.add(userId)
+    if (partRes.data) {
+      for (const p of partRes.data) upIds.add(p.player_id)
+    }
 
-    // Also check round_participants for mapped playerIds
-    const { data: partData } = await supabase.from('round_participants').select('player_id').eq('user_id', userId)
-    if (partData) {
-      for (const p of partData) userPlayerIds.add(p.player_id)
+    setAllSettlements(settlements)
+    setAllRounds(rounds)
+    setPlayerMap(pMap)
+    setUserPlayerIds(upIds)
+    setLoading(false)
+  }
+
+  // Compute filtered balances from raw data + filter state
+  const balances = useMemo(() => {
+    if (loading) return []
+
+    // Filter rounds by date range
+    const roundMap = new Map<string, Round>()
+    for (const r of allRounds) {
+      const roundDate = new Date(r.date)
+      if (filterMode === 'season') {
+        if (roundDate.getFullYear() !== seasonYear) continue
+      } else if (filterMode === 'custom') {
+        if (customFrom && roundDate < new Date(customFrom)) continue
+        if (customTo && roundDate > new Date(customTo + 'T23:59:59')) continue
+      }
+      roundMap.set(r.id, r)
     }
 
     // Aggregate by opponent
     const opponentMap = new Map<string, { netCents: number; rounds: Map<string, { amountCents: number; settlements: SettlementRecord[] }> }>()
 
-    for (const s of settlements) {
+    for (const s of allSettlements) {
       const round = roundMap.get(s.roundId)
       if (!round) continue
 
       const isFrom = userPlayerIds.has(s.fromPlayerId)
       const isTo = userPlayerIds.has(s.toPlayerId)
       if (!isFrom && !isTo) continue
-      if (isFrom && isTo) continue // Self-settlement
+      if (isFrom && isTo) continue
 
       const opponentId = isFrom ? s.toPlayerId : s.fromPlayerId
-      // Positive = they owe us (we're the "to"), negative = we owe them (we're the "from")
       const sign = isTo ? 1 : -1
       const amount = s.status === 'paid' ? 0 : sign * s.amountCents
 
@@ -105,7 +130,6 @@ export function Ledger({ userId, onBack }: Props) {
       roundEntry.settlements.push(s)
     }
 
-    // Convert to array
     const result: OpponentBalance[] = []
     for (const [oppId, data] of opponentMap) {
       const player = playerMap.get(oppId) ?? null
@@ -131,19 +155,15 @@ export function Ledger({ userId, onBack }: Props) {
       })
     }
 
-    // Sort by absolute balance descending
     result.sort((a, b) => Math.abs(b.netCents) - Math.abs(a.netCents))
-    // Filter out zero balances
-    setBalances(result.filter(b => b.netCents !== 0))
-    setLoading(false)
-  }
+    return showSettled ? result : result.filter(b => b.netCents !== 0)
+  }, [loading, allSettlements, allRounds, userPlayerIds, playerMap, filterMode, seasonYear, customFrom, customTo, showSettled])
 
   const markAllSettled = async (opponentId: string) => {
     setMarkingSettled(opponentId)
     const opponent = balances.find(b => b.playerId === opponentId)
     if (!opponent) return
 
-    // Mark all owed settlements for this opponent as paid
     const settlementIds: string[] = []
     for (const r of opponent.rounds) {
       for (const s of r.settlements) {
@@ -155,13 +175,15 @@ export function Ledger({ userId, onBack }: Props) {
       await supabase.from('settlements').update({ status: 'paid', paid_at: new Date().toISOString() }).in('id', settlementIds)
     }
 
-    // Reload
     await loadLedger()
     setMarkingSettled(null)
   }
 
   const totalOwedToYou = balances.filter(b => b.netCents > 0).reduce((s, b) => s + b.netCents, 0)
   const totalYouOwe = balances.filter(b => b.netCents < 0).reduce((s, b) => s + Math.abs(b.netCents), 0)
+
+  const currentYear = new Date().getFullYear()
+  const yearOptions = Array.from({ length: 5 }, (_, i) => currentYear - i)
 
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-900 pb-28">
@@ -176,6 +198,67 @@ export function Ledger({ userId, onBack }: Props) {
       </header>
 
       <div className="px-4 py-5 max-w-2xl mx-auto space-y-4">
+        {/* Filter bar */}
+        <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-sm p-4 space-y-3">
+          <div className="flex gap-2">
+            {(['all', 'season', 'custom'] as FilterMode[]).map(mode => (
+              <button
+                key={mode}
+                onClick={() => setFilterMode(mode)}
+                className={`flex-1 h-9 text-sm font-semibold rounded-xl transition-colors ${
+                  filterMode === mode
+                    ? 'bg-amber-500 text-white'
+                    : 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 active:bg-gray-200'
+                }`}
+              >
+                {mode === 'all' ? 'All Time' : mode === 'season' ? 'Season' : 'Custom'}
+              </button>
+            ))}
+          </div>
+          {filterMode === 'season' && (
+            <select
+              value={seasonYear}
+              onChange={e => setSeasonYear(Number(e.target.value))}
+              className="w-full h-10 rounded-xl border border-gray-200 dark:border-gray-600 bg-gray-50 dark:bg-gray-700 px-3 text-sm text-gray-800 dark:text-gray-200"
+            >
+              {yearOptions.map(y => (
+                <option key={y} value={y}>{y} Season</option>
+              ))}
+            </select>
+          )}
+          {filterMode === 'custom' && (
+            <div className="flex gap-2">
+              <div className="flex-1">
+                <label className="text-[10px] text-gray-500 font-semibold uppercase">From</label>
+                <input
+                  type="date"
+                  value={customFrom}
+                  onChange={e => setCustomFrom(e.target.value)}
+                  className="w-full h-10 rounded-xl border border-gray-200 dark:border-gray-600 bg-gray-50 dark:bg-gray-700 px-3 text-sm text-gray-800 dark:text-gray-200"
+                />
+              </div>
+              <div className="flex-1">
+                <label className="text-[10px] text-gray-500 font-semibold uppercase">To</label>
+                <input
+                  type="date"
+                  value={customTo}
+                  onChange={e => setCustomTo(e.target.value)}
+                  className="w-full h-10 rounded-xl border border-gray-200 dark:border-gray-600 bg-gray-50 dark:bg-gray-700 px-3 text-sm text-gray-800 dark:text-gray-200"
+                />
+              </div>
+            </div>
+          )}
+          <label className="flex items-center gap-2 cursor-pointer">
+            <input
+              type="checkbox"
+              checked={showSettled}
+              onChange={e => setShowSettled(e.target.checked)}
+              className="w-4 h-4 rounded border-gray-300 text-amber-500 focus:ring-amber-500"
+            />
+            <span className="text-sm text-gray-600 dark:text-gray-400">Show settled (zero-balance) opponents</span>
+          </label>
+        </div>
+
         {loading ? (
           <div className="flex justify-center py-12">
             <div className="w-8 h-8 border-2 border-amber-500 border-t-transparent rounded-full animate-spin" />
@@ -184,7 +267,9 @@ export function Ledger({ userId, onBack }: Props) {
           <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-sm p-8 text-center">
             <p className="text-3xl mb-2">🤝</p>
             <p className="font-semibold text-gray-800 dark:text-gray-100">All square!</p>
-            <p className="text-sm text-gray-500 mt-1">No outstanding balances across your rounds.</p>
+            <p className="text-sm text-gray-500 mt-1">
+              {filterMode === 'all' ? 'No outstanding balances across your rounds.' : 'No balances for the selected period.'}
+            </p>
           </div>
         ) : (
           <>
@@ -205,6 +290,7 @@ export function Ledger({ userId, onBack }: Props) {
               {balances.map(b => {
                 const isExpanded = expandedOpponent === b.playerId
                 const owedToYou = b.netCents > 0
+                const isZero = b.netCents === 0
                 return (
                   <div key={b.playerId} className="bg-white dark:bg-gray-800 rounded-2xl shadow-sm overflow-hidden">
                     <button
@@ -217,12 +303,18 @@ export function Ledger({ userId, onBack }: Props) {
                       </div>
                       <div className="flex items-center gap-2">
                         <div className="text-right">
-                          <p className={`text-lg font-bold ${owedToYou ? 'text-green-600' : 'text-red-600'}`}>
-                            {owedToYou ? '+' : '-'}{fmtMoney(Math.abs(b.netCents))}
-                          </p>
-                          <p className={`text-xs ${owedToYou ? 'text-green-500' : 'text-red-500'}`}>
-                            {owedToYou ? 'they owe you' : 'you owe'}
-                          </p>
+                          {isZero ? (
+                            <p className="text-lg font-bold text-gray-400">$0.00</p>
+                          ) : (
+                            <>
+                              <p className={`text-lg font-bold ${owedToYou ? 'text-green-600' : 'text-red-600'}`}>
+                                {owedToYou ? '+' : '-'}{fmtMoney(Math.abs(b.netCents))}
+                              </p>
+                              <p className={`text-xs ${owedToYou ? 'text-green-500' : 'text-red-500'}`}>
+                                {owedToYou ? 'they owe you' : 'you owe'}
+                              </p>
+                            </>
+                          )}
                         </div>
                         <svg className={`w-4 h-4 text-gray-400 transition-transform ${isExpanded ? 'rotate-90' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
@@ -249,7 +341,7 @@ export function Ledger({ userId, onBack }: Props) {
                         </div>
 
                         {/* Payment buttons if you owe them */}
-                        {!owedToYou && b.player && (
+                        {!owedToYou && !isZero && b.player && (
                           <div>
                             <p className="text-xs text-gray-500 mb-2">Pay {b.playerName}</p>
                             <PaymentButtons toPlayer={b.player} amountCents={Math.abs(b.netCents)} note="Golf ledger balance" />
@@ -257,16 +349,18 @@ export function Ledger({ userId, onBack }: Props) {
                         )}
 
                         {/* Mark all settled */}
-                        <button
-                          onClick={() => {
-                            const owedCount = b.rounds.reduce((sum, r) => sum + r.settlements.filter(s => s.status === 'owed').length, 0)
-                            setConfirmSettleModal({ opponentId: b.playerId, opponentName: b.playerName, count: owedCount })
-                          }}
-                          disabled={markingSettled === b.playerId}
-                          className="w-full h-12 bg-gray-800 dark:bg-gray-600 text-white font-semibold rounded-xl active:bg-gray-900 disabled:opacity-50 transition-colors"
-                        >
-                          {markingSettled === b.playerId ? 'Settling...' : 'Mark All Settled'}
-                        </button>
+                        {!isZero && (
+                          <button
+                            onClick={() => {
+                              const owedCount = b.rounds.reduce((sum, r) => sum + r.settlements.filter(s => s.status === 'owed').length, 0)
+                              setConfirmSettleModal({ opponentId: b.playerId, opponentName: b.playerName, count: owedCount })
+                            }}
+                            disabled={markingSettled === b.playerId}
+                            className="w-full h-12 bg-gray-800 dark:bg-gray-600 text-white font-semibold rounded-xl active:bg-gray-900 disabled:opacity-50 transition-colors"
+                          >
+                            {markingSettled === b.playerId ? 'Settling...' : 'Mark All Settled'}
+                          </button>
+                        )}
                       </div>
                     )}
                   </div>
