@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { supabase } from '../../lib/supabase'
 
-type AuthMode = 'splash' | 'sign-in' | 'sign-up'
+type AuthMode = 'splash' | 'sign-in' | 'sign-up' | 'forgot-password'
 
 interface AuthProps {
   inviteCode?: string
@@ -76,21 +76,40 @@ export function Auth({ inviteCode }: AuthProps = {}) {
     setLoading(false)
   }
 
+  const handleForgotPassword = async () => {
+    if (!email.trim()) { setError('Enter your email address'); return }
+    if (!isValidEmail(email.trim())) { setError('Enter a valid email address'); return }
+    setLoading(true)
+    setError(null)
+    const { error: err } = await supabase.auth.resetPasswordForEmail(email.trim(), {
+      redirectTo: window.location.origin + '/golf-tracker/',
+    })
+    if (err) {
+      setError(friendlyError(err.message))
+    } else {
+      setMessage('Check your email for a password reset link.')
+    }
+    setLoading(false)
+  }
+
   const handleSubmit = () => {
     if (mode === 'sign-in') handleSignIn()
     else if (mode === 'sign-up') handleSignUp()
+    else if (mode === 'forgot-password') handleForgotPassword()
   }
 
   const title = {
     'splash': '',
     'sign-in': 'Sign In',
     'sign-up': 'Create Account',
+    'forgot-password': 'Reset Password',
   }[mode]
 
   const buttonLabel = {
     'splash': '',
     'sign-in': 'Sign In',
     'sign-up': 'Create Account',
+    'forgot-password': 'Send Reset Link',
   }[mode]
 
   const showPassword = mode === 'sign-in' || mode === 'sign-up'
@@ -143,7 +162,7 @@ export function Auth({ inviteCode }: AuthProps = {}) {
               {loading ? 'Loading...' : 'Sign In'}
             </button>
             <p className="text-xs text-gray-400 text-center">
-              Forgot password? Contact the app admin to reset it.
+              <button onClick={() => resetState('forgot-password')} className="text-amber-600 underline">Forgot password?</button>
             </p>
           </div>
 
@@ -170,7 +189,7 @@ export function Auth({ inviteCode }: AuthProps = {}) {
     )
   }
 
-  // Form screens (sign-in, sign-up, forgot-password, magic-link)
+  // Form screens (sign-in, sign-up, forgot-password)
   return (
     <div className="min-h-screen bg-slate-50 dark:bg-gray-900 flex flex-col items-center justify-center px-4">
       <div className="w-full max-w-sm space-y-6">
@@ -257,13 +276,21 @@ export function Auth({ inviteCode }: AuthProps = {}) {
                     </button>
                   </p>
                   <p className="text-xs text-gray-400">
-                    Forgot password? Contact the app admin to reset it.
+                    <button onClick={() => resetState('forgot-password')} className="text-amber-600 underline">Forgot password?</button>
                   </p>
                 </>
               )}
               {mode === 'sign-up' && (
                 <p className="text-gray-400">
                   Already have an account?{' '}
+                  <button onClick={() => resetState('sign-in')} className="text-amber-600 underline">
+                    Sign in
+                  </button>
+                </p>
+              )}
+              {mode === 'forgot-password' && (
+                <p className="text-gray-400">
+                  Remember your password?{' '}
                   <button onClick={() => resetState('sign-in')} className="text-amber-600 underline">
                     Sign in
                   </button>

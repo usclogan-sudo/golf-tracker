@@ -6,6 +6,7 @@ import { flush as flushOfflineQueue, getPending as getOfflinePending } from './l
 import { NotificationToast } from './components/NotificationToast'
 import { NotificationBadge } from './components/NotificationBadge'
 import { Auth } from './components/Auth/Auth'
+import { ResetPassword } from './components/Auth/ResetPassword'
 import { JoinRound } from './components/JoinRound/JoinRound'
 import { UpgradeAccount } from './components/Auth/UpgradeAccount'
 import { GuestBanner } from './components/GuestBanner/GuestBanner'
@@ -596,6 +597,7 @@ export default function App() {
   const [activeTournamentId, setActiveTournamentId] = useState<string | null>(null)
   const [activeEventId, setActiveEventId] = useState<string | null>(null)
   const [spectateCode, setSpectateCode] = useState<string | null>(null)
+  const [showResetPassword, setShowResetPassword] = useState(false)
   const { unreadCount: notificationCount, latestToast, dismissToast } = useNotifications(session?.user?.id ?? null)
 
   const [pendingJoinCode, setPendingJoinCode] = useState<string | null>(() => {
@@ -630,8 +632,11 @@ export default function App() {
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => setSession(session))
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
       setSession(session)
+      if (event === 'PASSWORD_RECOVERY') {
+        setShowResetPassword(true)
+      }
     })
     return () => subscription.unsubscribe()
   }, [])
@@ -703,6 +708,11 @@ export default function App() {
         <div className="w-8 h-8 border-2 border-amber-500 border-t-transparent rounded-full animate-spin" />
       </div>
     )
+  }
+
+  // Password reset flow (from email link)
+  if (showResetPassword) {
+    return <ResetPassword onDone={() => setShowResetPassword(false)} />
   }
 
   // Not signed in
