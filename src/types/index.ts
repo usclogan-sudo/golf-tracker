@@ -42,6 +42,7 @@ export interface Player {
 export interface UserProfile {
   userId: string
   isAdmin: boolean
+  adminOnly: boolean
   onboardingComplete: boolean
   displayName?: string
   handicapIndex?: number

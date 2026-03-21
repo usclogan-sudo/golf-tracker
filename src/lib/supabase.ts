@@ -233,6 +233,7 @@ export function rowToUserProfile(row: any): UserProfile {
   return {
     userId: row.user_id,
     isAdmin: row.is_admin,
+    adminOnly: row.admin_only ?? false,
     onboardingComplete: row.onboarding_complete,
     displayName: row.display_name ?? undefined,
     handicapIndex: row.handicap_index ?? undefined,
@@ -252,6 +253,7 @@ export function userProfileToRow(p: UserProfile) {
   return {
     user_id: p.userId,
     is_admin: p.isAdmin,
+    admin_only: p.adminOnly,
     onboarding_complete: p.onboardingComplete,
     display_name: p.displayName ?? null,
     handicap_index: p.handicapIndex ?? null,
@@ -273,7 +275,7 @@ export async function fetchOrCreateProfile(userId: string): Promise<UserProfile>
     .eq('user_id', userId)
     .maybeSingle()
   if (data) return rowToUserProfile(data)
-  const newProfile: UserProfile = { userId, isAdmin: false, onboardingComplete: false, tee: 'White' }
+  const newProfile: UserProfile = { userId, isAdmin: false, adminOnly: false, onboardingComplete: false, tee: 'White' }
   await supabase.from('user_profiles').insert(userProfileToRow(newProfile))
   return newProfile
 }

@@ -656,6 +656,10 @@ export default function App() {
         profile = { ...profile, onboardingComplete: true }
       }
       setUserProfile(profile)
+      // Admin-only accounts skip straight to admin dashboard
+      if (profile.adminOnly) {
+        setScreen('admin')
+      }
       setProfileLoading(false)
     })
   }, [session])
@@ -682,7 +686,7 @@ export default function App() {
         setScreen(s)
       } else {
         setHomeKey(k => k + 1)
-        setScreen('home')
+        setScreen(userProfile?.adminOnly ? 'admin' : 'home')
       }
     }
     window.addEventListener('popstate', handlePopState)
@@ -732,8 +736,8 @@ export default function App() {
   const userId = session.user.id
   const isAnonymous = session.user.is_anonymous ?? false
 
-  // Onboarding gate
-  if (userProfile && !userProfile.onboardingComplete) {
+  // Onboarding gate (admin-only accounts skip onboarding)
+  if (userProfile && !userProfile.onboardingComplete && !userProfile.adminOnly) {
     return (
       <Onboarding
         userId={userId}
@@ -744,7 +748,7 @@ export default function App() {
 
   const goHome = () => {
     setHomeKey(k => k + 1)
-    setScreen('home')
+    setScreen(userProfile?.adminOnly ? 'admin' : 'home')
   }
 
   if (screen === 'course-catalog') {
@@ -857,11 +861,19 @@ export default function App() {
         onAdmin={() => setScreen('admin')}
         isAnonymous={isAnonymous}
         onUpgrade={() => setScreen('upgrade-account')}
+        adminOnly={userProfile?.adminOnly}
       />
     )
   }
   if (screen === 'admin' && userProfile?.isAdmin) {
-    return <AdminDashboard userId={userId} onBack={goHome} />
+    return (
+      <AdminDashboard
+        userId={userId}
+        onBack={goHome}
+        isHome={userProfile.adminOnly}
+        onSettings={userProfile.adminOnly ? () => setScreen('settings') : undefined}
+      />
+    )
   }
   if (screen === 'tournament-list') {
     return (

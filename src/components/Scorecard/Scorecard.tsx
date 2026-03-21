@@ -819,8 +819,13 @@ export function Scorecard({ userId, roundId, onEndRound, onHome, readOnly: readO
                   let code = (event?.inviteCode) ?? round.inviteCode
                   if (!code) {
                     code = generateInviteCode()
+                    const { error } = await supabase.from('rounds').update({ invite_code: code }).eq('id', roundId)
+                    if (error) {
+                      // Conflict — another device generated a code first, fetch it
+                      const { data } = await supabase.from('rounds').select('invite_code').eq('id', roundId).single()
+                      code = data?.invite_code ?? code
+                    }
                     setRound(prev => prev ? { ...prev, inviteCode: code! } : prev)
-                    await supabase.from('rounds').update({ invite_code: code }).eq('id', roundId)
                   }
                   const title = event ? `Join ${event.name}!` : 'Join my round!'
                   const text = event
@@ -846,8 +851,12 @@ export function Scorecard({ userId, roundId, onEndRound, onHome, readOnly: readO
                   let code = (event?.inviteCode) ?? round.inviteCode
                   if (!code) {
                     code = generateInviteCode()
+                    const { error } = await supabase.from('rounds').update({ invite_code: code }).eq('id', roundId)
+                    if (error) {
+                      const { data } = await supabase.from('rounds').select('invite_code').eq('id', roundId).single()
+                      code = data?.invite_code ?? code
+                    }
                     setRound(prev => prev ? { ...prev, inviteCode: code! } : prev)
-                    await supabase.from('rounds').update({ invite_code: code }).eq('id', roundId)
                   }
                   const url = `${window.location.origin}${window.location.pathname}?spectate=${code}`
                   const title = 'Watch live leaderboard!'

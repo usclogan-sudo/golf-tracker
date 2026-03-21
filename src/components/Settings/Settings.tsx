@@ -13,9 +13,10 @@ interface Props {
   onAdmin?: () => void
   isAnonymous?: boolean
   onUpgrade?: () => void
+  adminOnly?: boolean
 }
 
-export function Settings({ userId, email, onBack, onSignOut, isAdmin, onAdmin, isAnonymous, onUpgrade }: Props) {
+export function Settings({ userId, email, onBack, onSignOut, isAdmin, onAdmin, isAnonymous, onUpgrade, adminOnly }: Props) {
   const { isDark, toggle: toggleDark } = useDarkMode()
   const [profile, setProfile] = useState<UserProfile | null>(null)
   const [displayName, setDisplayName] = useState('')
@@ -169,7 +170,7 @@ export function Settings({ userId, email, onBack, onSignOut, isAdmin, onAdmin, i
         </section>
 
         {/* Profile editing */}
-        {!isAnonymous && profile && (
+        {!isAnonymous && !adminOnly && profile && (
           <section className="bg-white dark:bg-gray-800 rounded-2xl shadow-sm p-4 space-y-3">
             <p className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">Your Profile</p>
             <div className="flex items-center gap-3">
@@ -219,7 +220,7 @@ export function Settings({ userId, email, onBack, onSignOut, isAdmin, onAdmin, i
         )}
 
         {/* Payment Info */}
-        {!isAnonymous && profile && (
+        {!isAnonymous && !adminOnly && profile && (
           <section className="bg-white dark:bg-gray-800 rounded-2xl shadow-sm p-4 space-y-3">
             <p className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">Payment Info</p>
             <p className="text-sm text-gray-500">So your buddies can pay you when you win.</p>
@@ -267,7 +268,7 @@ export function Settings({ userId, email, onBack, onSignOut, isAdmin, onAdmin, i
         )}
 
         {/* Admin Dashboard */}
-        {isAdmin && onAdmin && (
+        {isAdmin && !adminOnly && onAdmin && (
           <section className="bg-white dark:bg-gray-800 rounded-2xl shadow-sm p-4">
             <button
               onClick={onAdmin}
@@ -332,7 +333,7 @@ export function Settings({ userId, email, onBack, onSignOut, isAdmin, onAdmin, i
         )}
 
         {/* Delete account */}
-        <section className="bg-white dark:bg-gray-800 rounded-2xl shadow-sm p-4 space-y-3 border border-red-200">
+        {!adminOnly && <section className="bg-white dark:bg-gray-800 rounded-2xl shadow-sm p-4 space-y-3 border border-red-200">
           <p className="text-xs font-semibold text-red-500 uppercase tracking-wide">Danger Zone</p>
           <p className="text-sm text-gray-600">
             This will permanently delete all your data (courses, players, rounds, scores).
@@ -353,7 +354,7 @@ export function Settings({ userId, email, onBack, onSignOut, isAdmin, onAdmin, i
           >
             {deleting ? 'Deleting...' : 'Delete All Data & Sign Out'}
           </button>
-        </section>
+        </section>}
       </div>
 
       {showAvatarPicker && (
