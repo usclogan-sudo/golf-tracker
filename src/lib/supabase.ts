@@ -1,8 +1,12 @@
 import { createClient } from '@supabase/supabase-js'
 import type { Course, Player, Round, RoundPlayer, HoleScore, BuyIn, BBBPoint, JunkRecord, JunkType, UserProfile, GamePreset, GameType, StakesMode, PinnedFriend, RoundParticipant, SettlementRecord, SettlementStatus, AppNotification, NotificationType, SideBet, SideBetStatus, Tournament, TournamentFormat, TournamentStatus, TournamentRound, TournamentMatchup, MatchupStatus, GolfEvent, EventStatus, EventParticipant, EventRole, ScoreStatus } from '../types'
 
-const supabaseUrl = import.meta.env.VITE_SUPABASE_URL as string
-const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY as string
+const supabaseUrl = import.meta.env.VITE_SUPABASE_URL
+const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY
+
+if (!supabaseUrl || !supabaseAnonKey) {
+  throw new Error('Missing VITE_SUPABASE_URL or VITE_SUPABASE_ANON_KEY environment variables')
+}
 
 export const supabase = createClient(supabaseUrl, supabaseAnonKey)
 

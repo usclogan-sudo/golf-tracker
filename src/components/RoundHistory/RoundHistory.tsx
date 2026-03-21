@@ -17,6 +17,7 @@ const GAME_EMOJI: Record<GameType, string> = {
   nassau: '🏳️ Nassau',
   wolf: '🐺 Wolf',
   bingo_bango_bongo: '⭐ BBB',
+  hammer: '🔨 Hammer',
 }
 
 export function RoundHistory({ userId, onBack, onViewSettlements, onPlayAgain }: Props) {
@@ -95,6 +96,10 @@ export function RoundHistory({ userId, onBack, onViewSettlements, onPlayAgain }:
         supabase.from('buy_ins').delete().eq('round_id', roundId),
         supabase.from('bbb_points').delete().eq('round_id', roundId),
         supabase.from('settlements').delete().eq('round_id', roundId),
+        supabase.from('junk_records').delete().eq('round_id', roundId),
+        supabase.from('side_bets').delete().eq('round_id', roundId),
+        supabase.from('round_participants').delete().eq('round_id', roundId),
+        supabase.from('notifications').delete().eq('round_id', roundId),
       ])
       const failed = results.find(r => r.error)
       if (failed?.error) throw failed.error

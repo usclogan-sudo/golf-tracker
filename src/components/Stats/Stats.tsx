@@ -275,6 +275,9 @@ export function Stats({ userId, onBack }: Props) {
           supabase.from('junk_records').delete().in('round_id', roundIds),
           supabase.from('round_players').delete().in('round_id', roundIds),
           supabase.from('buy_ins').delete().in('round_id', roundIds),
+          supabase.from('side_bets').delete().in('round_id', roundIds),
+          supabase.from('round_participants').delete().in('round_id', roundIds),
+          supabase.from('notifications').delete().in('round_id', roundIds),
         ])
         await supabase.from('rounds').delete().in('id', roundIds)
       }

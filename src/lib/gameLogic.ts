@@ -542,13 +542,21 @@ export function calculateWolfPayouts(
     }))
   }
 
+  const centsPerUnit = Math.floor(totalPot / positiveUnits)
+  let remainder = totalPot - centsPerUnit * positiveUnits
+
   return Object.entries(result.netUnits)
     .filter(([, u]) => u > 0)
-    .map(([playerId, u]) => ({
-      playerId,
-      amountCents: Math.floor((u / positiveUnits) * totalPot),
-      reason: `Wolf +${u} unit${u !== 1 ? 's' : ''}`,
-    }))
+    .sort((a, b) => b[1] - a[1])
+    .map(([playerId, u]) => {
+      const extra = remainder > 0 ? Math.min(u, remainder) : 0
+      remainder = Math.max(0, remainder - extra)
+      return {
+        playerId,
+        amountCents: u * centsPerUnit + extra,
+        reason: `Wolf +${u} unit${u !== 1 ? 's' : ''}`,
+      }
+    })
 }
 
 // ─── Bingo Bango Bongo ────────────────────────────────────────────────────────
@@ -590,16 +598,30 @@ export function calculateBBBPayouts(
     }))
   }
 
-  return Object.entries(result.pointsWon)
+  const entries = Object.entries(result.pointsWon)
     .filter(([, pts]) => pts > 0)
-    .map(([playerId, pts]) => {
-      const share = Math.floor((pts / result.totalPoints) * totalPot)
-      return {
-        playerId,
-        amountCents: share,
-        reason: `${pts} point${pts !== 1 ? 's' : ''} (Bingo/Bango/Bongo)`,
-      }
-    })
+    .sort((a, b) => b[1] - a[1])
+
+  const totalPoints = result.totalPoints
+  let remainder = totalPot
+
+  const payouts = entries.map(([playerId, pts]) => {
+    const share = Math.floor((pts / totalPoints) * totalPot)
+    remainder -= share
+    return {
+      playerId,
+      amountCents: share,
+      reason: `${pts} point${pts !== 1 ? 's' : ''} (Bingo/Bango/Bongo)`,
+    }
+  })
+
+  // Distribute remainder cents to top earners
+  for (let i = 0; i < payouts.length && remainder > 0; i++) {
+    payouts[i].amountCents++
+    remainder--
+  }
+
+  return payouts
 }
 
 // ─── Hammer ──────────────────────────────────────────────────────────────────
