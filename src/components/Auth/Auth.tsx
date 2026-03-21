@@ -24,6 +24,17 @@ export function Auth({ inviteCode }: AuthProps = {}) {
 
   const isValidEmail = (e: string) => /^\S+@\S+\.\S+$/.test(e)
 
+  const friendlyError = (msg: string): string => {
+    const lower = msg.toLowerCase()
+    if (lower.includes('sending confirmation') || lower.includes('sending email') || lower.includes('rate limit') || lower.includes('email rate'))
+      return 'Email service is temporarily rate-limited. Try again in a few minutes, or use "Try it first" to continue as a guest.'
+    if (lower.includes('invalid login'))
+      return 'Incorrect email or password'
+    if (lower.includes('already registered') || lower.includes('already been registered'))
+      return 'An account with this email already exists. Try signing in instead.'
+    return msg
+  }
+
   const handleSignIn = async () => {
     if (!email.trim()) { setError('Enter your email address'); return }
     if (!isValidEmail(email.trim())) { setError('Enter a valid email address'); return }
@@ -34,7 +45,7 @@ export function Auth({ inviteCode }: AuthProps = {}) {
       email: email.trim(),
       password,
     })
-    if (err) setError(err.message)
+    if (err) setError(friendlyError(err.message))
     setLoading(false)
   }
 
@@ -50,7 +61,7 @@ export function Auth({ inviteCode }: AuthProps = {}) {
       options: { emailRedirectTo: window.location.origin + '/golf-tracker/' },
     })
     if (err) {
-      setError(err.message)
+      setError(friendlyError(err.message))
     } else {
       setMessage('Check your email to confirm your account, then sign in.')
     }
@@ -66,7 +77,7 @@ export function Auth({ inviteCode }: AuthProps = {}) {
       redirectTo: window.location.origin + '/golf-tracker/',
     })
     if (err) {
-      setError(err.message)
+      setError(friendlyError(err.message))
     } else {
       setMessage('Check your email for a password reset link.')
     }
@@ -86,7 +97,7 @@ export function Auth({ inviteCode }: AuthProps = {}) {
       },
     })
     if (err) {
-      setError(err.message)
+      setError(friendlyError(err.message))
     } else {
       setMessage('Check your email for a sign-in link.')
     }
@@ -97,7 +108,7 @@ export function Auth({ inviteCode }: AuthProps = {}) {
     setLoading(true)
     setError(null)
     const { error: err } = await supabase.auth.signInAnonymously()
-    if (err) setError(err.message)
+    if (err) setError(friendlyError(err.message))
     setLoading(false)
   }
 
