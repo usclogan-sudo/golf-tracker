@@ -645,45 +645,51 @@ export default function App() {
   }, [])
 
   useEffect(() => {
-    // Manually handle recovery tokens from URL hash
-    // (Outlook SafeLinks / Brevo tracking preserve hash fragments
-    //  but Supabase client sometimes fails to auto-detect them)
-    const hash = window.location.hash
-    const search = window.location.search
-    console.log('[Auth] hash:', hash.substring(0, 100) + (hash.length > 100 ? '...' : ''))
-    console.log('[Auth] search:', search)
-    console.log('[Auth] full URL:', window.location.href.substring(0, 200))
-    if (hash.includes('type=recovery') || hash.includes('type=signup')) {
-      const params = new URLSearchParams(hash.substring(1))
-      const accessToken = params.get('access_token')
-      const refreshToken = params.get('refresh_token')
-      const type = params.get('type')
-      console.log('[Auth] Found recovery hash. token:', !!accessToken, 'refresh:', !!refreshToken, 'type:', type)
-      if (accessToken && refreshToken) {
-        supabase.auth.setSession({ access_token: accessToken, refresh_token: refreshToken }).then(({ data, error }) => {
-          console.log('[Auth] setSession result:', error ? `ERROR: ${error.message}` : 'success')
-          if (!error && data.session) {
-            setSession(data.session)
-            if (type === 'recovery') {
-              setShowResetPassword(true)
-            }
-            window.history.replaceState(null, '', window.location.pathname)
-          }
-        })
-      }
-    } else {
-      console.log('[Auth] No recovery tokens in URL')
-    }
-
+    // Set up auth listener FIRST so it catches events from code exchange
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      console.log('[Auth] onAuthStateChange:', event)
       setSession(session)
       if (event === 'PASSWORD_RECOVERY') {
         setShowResetPassword(true)
       }
     })
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setSession(session)
-    })
+
+    // Handle PKCE code exchange from email links (password reset, signup confirm)
+    const code = new URLSearchParams(window.location.search).get('code')
+    if (code) {
+      console.log('[Auth] Found PKCE code, exchanging...')
+      supabase.auth.exchangeCodeForSession(code).then(({ data, error }) => {
+        console.log('[Auth] exchangeCode result:', error ? `ERROR: ${error.message}` : 'success')
+        if (!error && data.session) {
+          // onAuthStateChange should fire PASSWORD_RECOVERY, but as a fallback:
+          setSession(data.session)
+          setShowResetPassword(true)
+          window.history.replaceState(null, '', window.location.pathname)
+        }
+      })
+    } else {
+      // Normal session load (no code in URL)
+      // Also handle implicit flow recovery tokens in hash as fallback
+      const hash = window.location.hash
+      if (hash.includes('type=recovery')) {
+        const params = new URLSearchParams(hash.substring(1))
+        const accessToken = params.get('access_token')
+        const refreshToken = params.get('refresh_token')
+        if (accessToken && refreshToken) {
+          supabase.auth.setSession({ access_token: accessToken, refresh_token: refreshToken }).then(({ data, error }) => {
+            if (!error && data.session) {
+              setSession(data.session)
+              setShowResetPassword(true)
+              window.history.replaceState(null, '', window.location.pathname)
+            }
+          })
+          return () => subscription.unsubscribe()
+        }
+      }
+      supabase.auth.getSession().then(({ data: { session } }) => {
+        setSession(session)
+      })
+    }
     return () => subscription.unsubscribe()
   }, [])
 
