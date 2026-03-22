@@ -11,6 +11,7 @@ interface Props {
   onBack: () => void
   isHome?: boolean
   onSettings?: () => void
+  onLogout?: () => void
 }
 
 const GAME_TYPE_LABELS: Record<GameType, string> = {
@@ -19,6 +20,12 @@ const GAME_TYPE_LABELS: Record<GameType, string> = {
   nassau: '🏳️ Nassau',
   wolf: '🐺 Wolf',
   bingo_bango_bongo: '⭐ BBB',
+  hammer: '🔨 Hammer',
+  vegas: '🎲 Vegas',
+  stableford: '📊 Stableford',
+  dots: '🔴 Dots',
+  banker: '🏦 Banker',
+  quota: '📋 Quota',
 }
 
 // ─── Shared Courses Tab ──────────────────────────────────────────────────────
@@ -568,6 +575,132 @@ function GamePresetsTab({ userId }: { userId: string }) {
   )
 }
 
+// ─── Players Tab (Admin) ──────────────────────────────────────────────────────
+
+function PlayersTab() {
+  const [players, setPlayers] = useState<any[]>([])
+  const [loading, setLoading] = useState(true)
+  const [editTarget, setEditTarget] = useState<any | null>(null)
+  const [editName, setEditName] = useState('')
+  const [editHandicap, setEditHandicap] = useState('')
+  const [editTee, setEditTee] = useState('')
+  const [saving, setSaving] = useState(false)
+
+  useEffect(() => {
+    supabase.rpc('admin_get_all_players').then(({ data, error }) => {
+      if (error) {
+        console.error('admin_get_all_players RPC error:', error)
+        setLoading(false)
+        return
+      }
+      if (data) setPlayers(data)
+      setLoading(false)
+    })
+  }, [])
+
+  const startEdit = (player: any) => {
+    setEditTarget(player)
+    setEditName(player.name)
+    setEditHandicap(String(player.handicap_index ?? ''))
+    setEditTee(player.tee ?? 'White')
+  }
+
+  const handleSave = async () => {
+    if (!editTarget) return
+    setSaving(true)
+    const { error } = await supabase.rpc('admin_update_player', {
+      target_player_id: editTarget.id,
+      new_name: editName.trim() || null,
+      new_handicap: editHandicap ? parseFloat(editHandicap) : null,
+      new_tee: editTee || null,
+    })
+    if (error) {
+      console.error('admin_update_player error:', error)
+      alert('Failed to update player. Make sure the admin_update_player RPC is deployed.')
+    } else {
+      setPlayers(prev => prev.map(p =>
+        p.id === editTarget.id
+          ? { ...p, name: editName.trim() || p.name, handicap_index: editHandicap ? parseFloat(editHandicap) : p.handicap_index, tee: editTee || p.tee }
+          : p
+      ))
+    }
+    setSaving(false)
+    setEditTarget(null)
+  }
+
+  if (loading) {
+    return <div className="flex justify-center py-8"><div className="w-8 h-8 border-2 border-amber-500 border-t-transparent rounded-full animate-spin" /></div>
+  }
+
+  if (players.length === 0) {
+    return (
+      <div className="text-center py-8">
+        <p className="text-gray-500 text-sm">No players found. Make sure the <code className="bg-gray-100 px-1 rounded">admin_get_all_players</code> RPC is deployed.</p>
+        <p className="text-gray-400 text-xs mt-2">See <code>supabase-schema-admin.sql</code></p>
+      </div>
+    )
+  }
+
+  return (
+    <div className="space-y-2">
+      <p className="text-xs text-gray-500">{players.length} total players</p>
+      {players.map((p: any) => (
+        <div key={p.id} className="bg-white rounded-xl border border-gray-200 p-3">
+          {editTarget?.id === p.id ? (
+            <div className="space-y-2">
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  value={editName}
+                  onChange={e => setEditName(e.target.value)}
+                  placeholder="Name"
+                  className="flex-1 h-10 px-3 rounded-lg border border-gray-300 text-sm focus:outline-none focus:ring-2 focus:ring-amber-500"
+                />
+                <input
+                  type="number"
+                  value={editHandicap}
+                  onChange={e => setEditHandicap(e.target.value)}
+                  placeholder="HCP"
+                  step="0.1"
+                  className="w-20 h-10 px-3 rounded-lg border border-gray-300 text-sm focus:outline-none focus:ring-2 focus:ring-amber-500"
+                />
+                <input
+                  type="text"
+                  value={editTee}
+                  onChange={e => setEditTee(e.target.value)}
+                  placeholder="Tee"
+                  className="w-20 h-10 px-3 rounded-lg border border-gray-300 text-sm focus:outline-none focus:ring-2 focus:ring-amber-500"
+                />
+              </div>
+              <div className="flex gap-2 justify-end">
+                <button onClick={() => setEditTarget(null)} className="text-sm text-gray-500 px-3 py-1.5">Cancel</button>
+                <button
+                  onClick={handleSave}
+                  disabled={saving}
+                  className="text-sm font-semibold text-white bg-gray-800 px-4 py-1.5 rounded-lg disabled:opacity-50"
+                >
+                  {saving ? 'Saving...' : 'Save'}
+                </button>
+              </div>
+            </div>
+          ) : (
+            <div className="flex items-center justify-between">
+              <div className="min-w-0 flex-1">
+                <p className="font-semibold text-gray-800">{p.name}</p>
+                <p className="text-xs text-gray-500">
+                  HCP: {p.handicap_index ?? '—'} · Tee: {p.tee ?? '—'}
+                  {p.owner_name && <span className="text-gray-400"> · Owner: {p.owner_name}</span>}
+                </p>
+              </div>
+              <button onClick={() => startEdit(p)} className="text-blue-600 text-sm font-medium flex-shrink-0">Edit</button>
+            </div>
+          )}
+        </div>
+      ))}
+    </div>
+  )
+}
+
 // ─── Users Tab (Admin) ────────────────────────────────────────────────────────
 
 function UsersTab({ currentUserId }: { currentUserId: string }) {
@@ -576,6 +709,20 @@ function UsersTab({ currentUserId }: { currentUserId: string }) {
   const [toggling, setToggling] = useState<string | null>(null)
   const [deleteTarget, setDeleteTarget] = useState<{ id: string; name: string } | null>(null)
   const [deleting, setDeleting] = useState(false)
+  const [editTarget, setEditTarget] = useState<any | null>(null)
+  const [editDisplayName, setEditDisplayName] = useState('')
+  const [editHandicap, setEditHandicap] = useState('')
+  const [editVenmo, setEditVenmo] = useState('')
+  const [editZelle, setEditZelle] = useState('')
+  const [editCashApp, setEditCashApp] = useState('')
+  const [editPaypal, setEditPaypal] = useState('')
+  const [editSaving, setEditSaving] = useState(false)
+  const [showCreate, setShowCreate] = useState(false)
+  const [createEmail, setCreateEmail] = useState('')
+  const [createPassword, setCreatePassword] = useState('')
+  const [createDisplayName, setCreateDisplayName] = useState('')
+  const [createHandicap, setCreateHandicap] = useState('')
+  const [creating, setCreating] = useState(false)
 
   useEffect(() => {
     supabase.rpc('admin_get_all_users').then(({ data, error }) => {
@@ -619,62 +766,294 @@ function UsersTab({ currentUserId }: { currentUserId: string }) {
     setDeleteTarget(null)
   }
 
+  const startEditUser = (u: any) => {
+    setEditTarget(u)
+    setEditDisplayName(u.display_name ?? '')
+    setEditHandicap(u.handicap_index != null ? String(u.handicap_index) : '')
+    setEditVenmo(u.venmo_username ?? '')
+    setEditZelle(u.zelle_identifier ?? '')
+    setEditCashApp(u.cashapp_username ?? '')
+    setEditPaypal(u.paypal_email ?? '')
+  }
+
+  const handleEditSave = async () => {
+    if (!editTarget) return
+    setEditSaving(true)
+    const { error } = await supabase.rpc('admin_update_user_profile', {
+      target_user_id: editTarget.user_id,
+      new_display_name: editDisplayName.trim() || null,
+      new_handicap: editHandicap ? parseFloat(editHandicap) : null,
+      new_venmo: editVenmo.trim() || null,
+      new_zelle: editZelle.trim() || null,
+      new_cashapp: editCashApp.trim() || null,
+      new_paypal: editPaypal.trim() || null,
+    })
+    if (error) {
+      console.error('admin_update_user_profile error:', error)
+      alert('Failed to update user. Make sure the admin_update_user_profile RPC is deployed.')
+    } else {
+      setUsers(prev => prev.map(u =>
+        u.user_id === editTarget.user_id
+          ? {
+              ...u,
+              display_name: editDisplayName.trim() || u.display_name,
+              handicap_index: editHandicap ? parseFloat(editHandicap) : u.handicap_index,
+              venmo_username: editVenmo.trim() || u.venmo_username,
+              zelle_identifier: editZelle.trim() || u.zelle_identifier,
+              cashapp_username: editCashApp.trim() || u.cashapp_username,
+              paypal_email: editPaypal.trim() || u.paypal_email,
+            }
+          : u
+      ))
+    }
+    setEditSaving(false)
+    setEditTarget(null)
+  }
+
+  const handleCreateAccount = async () => {
+    if (!createEmail.trim() || !createPassword.trim()) return
+    setCreating(true)
+    const { data, error } = await supabase.rpc('admin_create_user', {
+      user_email: createEmail.trim(),
+      user_password: createPassword,
+      user_display_name: createDisplayName.trim() || null,
+      user_handicap: createHandicap ? parseFloat(createHandicap) : null,
+    })
+    if (error) {
+      console.error('admin_create_user error:', error)
+      alert(`Failed to create account: ${error.message}`)
+    } else {
+      // Refresh user list
+      const { data: refreshed } = await supabase.rpc('admin_get_all_users')
+      if (refreshed) setUsers(refreshed)
+      setShowCreate(false)
+      setCreateEmail('')
+      setCreatePassword('')
+      setCreateDisplayName('')
+      setCreateHandicap('')
+    }
+    setCreating(false)
+  }
+
   if (loading) {
     return <div className="flex justify-center py-8"><div className="w-8 h-8 border-2 border-amber-500 border-t-transparent rounded-full animate-spin" /></div>
   }
 
+  if (showCreate) {
+    return (
+      <div className="space-y-4">
+        <div className="flex items-center justify-between">
+          <h3 className="font-semibold text-gray-800">Create Account</h3>
+          <button onClick={() => setShowCreate(false)} className="text-sm text-gray-500">Cancel</button>
+        </div>
+        <div>
+          <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">Email</label>
+          <input
+            type="email"
+            value={createEmail}
+            onChange={e => setCreateEmail(e.target.value)}
+            placeholder="user@example.com"
+            className="w-full h-12 px-4 rounded-xl border border-gray-300 text-base focus:outline-none focus:ring-2 focus:ring-amber-500"
+          />
+        </div>
+        <div>
+          <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">Password</label>
+          <input
+            type="text"
+            value={createPassword}
+            onChange={e => setCreatePassword(e.target.value)}
+            placeholder="Temporary password"
+            className="w-full h-12 px-4 rounded-xl border border-gray-300 text-base focus:outline-none focus:ring-2 focus:ring-amber-500"
+          />
+          <p className="text-xs text-gray-400 mt-1">User can change this after first login</p>
+        </div>
+        <div className="grid grid-cols-2 gap-3">
+          <div>
+            <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">Display Name</label>
+            <input
+              type="text"
+              value={createDisplayName}
+              onChange={e => setCreateDisplayName(e.target.value)}
+              placeholder="Optional"
+              className="w-full h-12 px-4 rounded-xl border border-gray-300 text-base focus:outline-none focus:ring-2 focus:ring-amber-500"
+            />
+          </div>
+          <div>
+            <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">Handicap</label>
+            <input
+              type="number"
+              value={createHandicap}
+              onChange={e => setCreateHandicap(e.target.value)}
+              placeholder="Optional"
+              step="0.1"
+              className="w-full h-12 px-4 rounded-xl border border-gray-300 text-base focus:outline-none focus:ring-2 focus:ring-amber-500"
+            />
+          </div>
+        </div>
+        <button
+          onClick={handleCreateAccount}
+          disabled={creating || !createEmail.trim() || !createPassword.trim()}
+          className="w-full h-12 bg-gray-800 text-white font-semibold rounded-xl disabled:opacity-50 active:bg-gray-900 transition-colors"
+        >
+          {creating ? 'Creating...' : 'Create Account'}
+        </button>
+      </div>
+    )
+  }
+
   if (users.length === 0) {
     return (
-      <div className="text-center py-8">
-        <p className="text-gray-500 text-sm">No users found. Make sure the <code className="bg-gray-100 px-1 rounded">admin_get_all_users</code> RPC is deployed.</p>
-        <p className="text-gray-400 text-xs mt-2">See <code>supabase-schema-admin.sql</code></p>
+      <div className="space-y-3">
+        <button
+          onClick={() => setShowCreate(true)}
+          className="w-full h-10 border-2 border-dashed border-amber-300 text-amber-600 font-semibold rounded-xl text-sm active:bg-amber-50"
+        >
+          + Create Account
+        </button>
+        <div className="text-center py-8">
+          <p className="text-gray-500 text-sm">No users found. Make sure the <code className="bg-gray-100 px-1 rounded">admin_get_all_users</code> RPC is deployed.</p>
+          <p className="text-gray-400 text-xs mt-2">See <code>supabase-schema-admin.sql</code></p>
+        </div>
       </div>
     )
   }
 
   return (
     <div className="space-y-2">
+      <button
+        onClick={() => setShowCreate(true)}
+        className="w-full h-10 border-2 border-dashed border-amber-300 text-amber-600 font-semibold rounded-xl text-sm active:bg-amber-50"
+      >
+        + Create Account
+      </button>
       <p className="text-xs text-gray-500">{users.length} registered users</p>
       {users.map((u: any) => {
         const isSelf = u.user_id === currentUserId
+        const isEditing = editTarget?.user_id === u.user_id
         return (
           <div key={u.user_id} className="bg-white rounded-xl border border-gray-200 p-3">
-            <div className="flex items-center justify-between">
-              <div className="min-w-0 flex-1">
-                <p className="font-semibold text-gray-800">{u.display_name || 'No name'}</p>
-                <p className="text-xs text-gray-500 truncate">
-                  HCP: {u.handicap_index ?? '—'}
-                  {u.venmo_username && ` · Venmo: @${u.venmo_username}`}
-                  {u.zelle_identifier && ` · Zelle: ${u.zelle_identifier}`}
-                  {u.cashapp_username && ` · Cash App: $${u.cashapp_username}`}
-                </p>
+            {isEditing ? (
+              <div className="space-y-2">
+                <div className="grid grid-cols-2 gap-2">
+                  <div>
+                    <label className="block text-[10px] text-gray-400 mb-0.5">Display Name</label>
+                    <input
+                      type="text"
+                      value={editDisplayName}
+                      onChange={e => setEditDisplayName(e.target.value)}
+                      className="w-full h-9 px-2 rounded-lg border border-gray-300 text-sm focus:outline-none focus:ring-2 focus:ring-amber-500"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[10px] text-gray-400 mb-0.5">Handicap</label>
+                    <input
+                      type="number"
+                      value={editHandicap}
+                      onChange={e => setEditHandicap(e.target.value)}
+                      step="0.1"
+                      className="w-full h-9 px-2 rounded-lg border border-gray-300 text-sm focus:outline-none focus:ring-2 focus:ring-amber-500"
+                    />
+                  </div>
+                </div>
+                <div className="grid grid-cols-2 gap-2">
+                  <div>
+                    <label className="block text-[10px] text-gray-400 mb-0.5">Venmo</label>
+                    <input
+                      type="text"
+                      value={editVenmo}
+                      onChange={e => setEditVenmo(e.target.value)}
+                      placeholder="@username"
+                      className="w-full h-9 px-2 rounded-lg border border-gray-300 text-sm focus:outline-none focus:ring-2 focus:ring-amber-500"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[10px] text-gray-400 mb-0.5">Zelle</label>
+                    <input
+                      type="text"
+                      value={editZelle}
+                      onChange={e => setEditZelle(e.target.value)}
+                      placeholder="email or phone"
+                      className="w-full h-9 px-2 rounded-lg border border-gray-300 text-sm focus:outline-none focus:ring-2 focus:ring-amber-500"
+                    />
+                  </div>
+                </div>
+                <div className="grid grid-cols-2 gap-2">
+                  <div>
+                    <label className="block text-[10px] text-gray-400 mb-0.5">Cash App</label>
+                    <input
+                      type="text"
+                      value={editCashApp}
+                      onChange={e => setEditCashApp(e.target.value)}
+                      placeholder="$cashtag"
+                      className="w-full h-9 px-2 rounded-lg border border-gray-300 text-sm focus:outline-none focus:ring-2 focus:ring-amber-500"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[10px] text-gray-400 mb-0.5">PayPal</label>
+                    <input
+                      type="text"
+                      value={editPaypal}
+                      onChange={e => setEditPaypal(e.target.value)}
+                      placeholder="email"
+                      className="w-full h-9 px-2 rounded-lg border border-gray-300 text-sm focus:outline-none focus:ring-2 focus:ring-amber-500"
+                    />
+                  </div>
+                </div>
+                <div className="flex gap-2 justify-end">
+                  <button onClick={() => setEditTarget(null)} className="text-sm text-gray-500 px-3 py-1.5">Cancel</button>
+                  <button
+                    onClick={handleEditSave}
+                    disabled={editSaving}
+                    className="text-sm font-semibold text-white bg-gray-800 px-4 py-1.5 rounded-lg disabled:opacity-50"
+                  >
+                    {editSaving ? 'Saving...' : 'Save'}
+                  </button>
+                </div>
               </div>
-              <div className="flex items-center gap-2 flex-shrink-0">
-                {u.is_admin && <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-amber-100 text-amber-700">Admin</span>}
-                {!isSelf && (
-                  <>
-                    <button
-                      onClick={() => toggleAdmin(u.user_id, u.is_admin)}
-                      disabled={toggling === u.user_id}
-                      className={`text-xs font-semibold px-2.5 py-1.5 rounded-lg transition-colors disabled:opacity-50 ${
-                        u.is_admin
-                          ? 'text-red-600 border border-red-200 active:bg-red-50'
-                          : 'text-blue-600 border border-blue-200 active:bg-blue-50'
-                      }`}
-                    >
-                      {toggling === u.user_id ? '...' : u.is_admin ? 'Remove Admin' : 'Make Admin'}
-                    </button>
-                    <button
-                      onClick={() => setDeleteTarget({ id: u.user_id, name: u.display_name || 'this user' })}
-                      className="text-xs font-semibold px-2.5 py-1.5 rounded-lg text-red-600 border border-red-200 active:bg-red-50"
-                    >
-                      Delete
-                    </button>
-                  </>
-                )}
-                {isSelf && <span className="text-[10px] text-gray-400">You</span>}
+            ) : (
+              <div className="flex items-center justify-between">
+                <div className="min-w-0 flex-1">
+                  <p className="font-semibold text-gray-800">{u.display_name || 'No name'}</p>
+                  <p className="text-xs text-gray-500 truncate">
+                    HCP: {u.handicap_index ?? '—'}
+                    {u.venmo_username && ` · Venmo: @${u.venmo_username}`}
+                    {u.zelle_identifier && ` · Zelle: ${u.zelle_identifier}`}
+                    {u.cashapp_username && ` · Cash App: $${u.cashapp_username}`}
+                  </p>
+                </div>
+                <div className="flex items-center gap-2 flex-shrink-0">
+                  {u.is_admin && <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-amber-100 text-amber-700">Admin</span>}
+                  {!isSelf && (
+                    <>
+                      <button
+                        onClick={() => startEditUser(u)}
+                        className="text-xs font-semibold px-2.5 py-1.5 rounded-lg text-blue-600 border border-blue-200 active:bg-blue-50"
+                      >
+                        Edit
+                      </button>
+                      <button
+                        onClick={() => toggleAdmin(u.user_id, u.is_admin)}
+                        disabled={toggling === u.user_id}
+                        className={`text-xs font-semibold px-2.5 py-1.5 rounded-lg transition-colors disabled:opacity-50 ${
+                          u.is_admin
+                            ? 'text-red-600 border border-red-200 active:bg-red-50'
+                            : 'text-blue-600 border border-blue-200 active:bg-blue-50'
+                        }`}
+                      >
+                        {toggling === u.user_id ? '...' : u.is_admin ? 'Remove Admin' : 'Make Admin'}
+                      </button>
+                      <button
+                        onClick={() => setDeleteTarget({ id: u.user_id, name: u.display_name || 'this user' })}
+                        className="text-xs font-semibold px-2.5 py-1.5 rounded-lg text-red-600 border border-red-200 active:bg-red-50"
+                      >
+                        Delete
+                      </button>
+                    </>
+                  )}
+                  {isSelf && <span className="text-[10px] text-gray-400">You</span>}
+                </div>
               </div>
-            </div>
+            )}
           </div>
         )
       })}
@@ -840,14 +1219,15 @@ function SystemTab() {
 
 // ─── Admin Dashboard ─────────────────────────────────────────────────────────
 
-type AdminTab = 'courses' | 'presets' | 'users' | 'rounds' | 'system'
+type AdminTab = 'courses' | 'presets' | 'players' | 'users' | 'rounds' | 'system'
 
-export function AdminDashboard({ userId, onBack, isHome, onSettings }: Props) {
+export function AdminDashboard({ userId, onBack, isHome, onSettings, onLogout }: Props) {
   const [tab, setTab] = useState<AdminTab>('courses')
 
   const tabs: { key: AdminTab; label: string }[] = [
     { key: 'courses', label: 'Courses' },
     { key: 'presets', label: 'Presets' },
+    { key: 'players', label: 'Players' },
     { key: 'users', label: 'Users' },
     { key: 'rounds', label: 'Rounds' },
     { key: 'system', label: 'System' },
@@ -881,6 +1261,17 @@ export function AdminDashboard({ userId, onBack, isHome, onSettings }: Props) {
             </svg>
           </button>
         )}
+        {isHome && onLogout && (
+          <button
+            onClick={onLogout}
+            className="min-w-[44px] min-h-[44px] flex items-center justify-center rounded-full hover:bg-gray-800"
+            aria-label="Log out"
+          >
+            <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+            </svg>
+          </button>
+        )}
       </header>
 
       <div className="px-4 py-4 max-w-2xl mx-auto">
@@ -900,6 +1291,7 @@ export function AdminDashboard({ userId, onBack, isHome, onSettings }: Props) {
 
         {tab === 'courses' && <SharedCoursesTab userId={userId} />}
         {tab === 'presets' && <GamePresetsTab userId={userId} />}
+        {tab === 'players' && <PlayersTab />}
         {tab === 'users' && <UsersTab currentUserId={userId} />}
         {tab === 'rounds' && <RoundsTab />}
         {tab === 'system' && <SystemTab />}

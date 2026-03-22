@@ -881,6 +881,7 @@ export default function App() {
         onBack={goHome}
         isHome={userProfile.adminOnly}
         onSettings={userProfile.adminOnly ? () => setScreen('settings') : undefined}
+        onLogout={userProfile.adminOnly ? () => supabase.auth.signOut() : undefined}
       />
     )
   }

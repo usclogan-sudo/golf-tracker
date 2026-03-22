@@ -184,3 +184,172 @@ BEGIN
   DELETE FROM rounds WHERE id = target_round_id;
 END;
 $$;
+
+-- Get all players across all users (admin only)
+CREATE OR REPLACE FUNCTION admin_get_all_players()
+RETURNS TABLE (
+  id text,
+  user_id uuid,
+  name text,
+  handicap_index float,
+  tee text,
+  ghin_number text,
+  is_public boolean,
+  venmo_username text,
+  zelle_identifier text,
+  cashapp_username text,
+  paypal_email text,
+  created_at timestamptz,
+  owner_name text
+)
+LANGUAGE plpgsql
+SECURITY DEFINER
+AS $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM user_profiles
+    WHERE user_id = auth.uid() AND is_admin = true
+  ) THEN
+    RAISE EXCEPTION 'Not authorized';
+  END IF;
+
+  RETURN QUERY
+    SELECT p.id, p.user_id, p.name, p.handicap_index, p.tee,
+      p.ghin_number, COALESCE(p.is_public, false), p.venmo_username,
+      p.zelle_identifier, p.cashapp_username, p.paypal_email,
+      p.created_at,
+      COALESCE(up.display_name, 'Unknown') AS owner_name
+    FROM players p
+    LEFT JOIN user_profiles up ON p.user_id = up.user_id
+    ORDER BY p.name;
+END;
+$$;
+
+-- Update a player's details (admin only)
+CREATE OR REPLACE FUNCTION admin_update_player(
+  target_player_id text,
+  new_name text DEFAULT NULL,
+  new_handicap float DEFAULT NULL,
+  new_tee text DEFAULT NULL
+)
+RETURNS void
+LANGUAGE plpgsql
+SECURITY DEFINER
+AS $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM user_profiles
+    WHERE user_id = auth.uid() AND is_admin = true
+  ) THEN
+    RAISE EXCEPTION 'Not authorized';
+  END IF;
+
+  UPDATE players SET
+    name = COALESCE(new_name, name),
+    handicap_index = COALESCE(new_handicap, handicap_index),
+    tee = COALESCE(new_tee, tee)
+  WHERE id = target_player_id;
+END;
+$$;
+
+-- Update a user profile (admin only)
+CREATE OR REPLACE FUNCTION admin_update_user_profile(
+  target_user_id uuid,
+  new_display_name text DEFAULT NULL,
+  new_handicap float DEFAULT NULL,
+  new_venmo text DEFAULT NULL,
+  new_zelle text DEFAULT NULL,
+  new_cashapp text DEFAULT NULL,
+  new_paypal text DEFAULT NULL
+)
+RETURNS void
+LANGUAGE plpgsql
+SECURITY DEFINER
+AS $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM user_profiles
+    WHERE user_id = auth.uid() AND is_admin = true
+  ) THEN
+    RAISE EXCEPTION 'Not authorized';
+  END IF;
+
+  UPDATE user_profiles SET
+    display_name = COALESCE(new_display_name, display_name),
+    handicap_index = COALESCE(new_handicap, handicap_index),
+    venmo_username = COALESCE(new_venmo, venmo_username),
+    zelle_identifier = COALESCE(new_zelle, zelle_identifier),
+    cashapp_username = COALESCE(new_cashapp, cashapp_username),
+    paypal_email = COALESCE(new_paypal, paypal_email)
+  WHERE user_id = target_user_id;
+END;
+$$;
+
+-- Create a new user account (admin only)
+CREATE OR REPLACE FUNCTION admin_create_user(
+  user_email text,
+  user_password text,
+  user_display_name text DEFAULT NULL,
+  user_handicap float DEFAULT NULL
+)
+RETURNS uuid
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = extensions, public, auth
+AS $$
+DECLARE
+  new_user_id uuid := gen_random_uuid();
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM public.user_profiles
+    WHERE user_id = auth.uid() AND is_admin = true
+  ) THEN
+    RAISE EXCEPTION 'Not authorized';
+  END IF;
+
+  IF EXISTS (SELECT 1 FROM auth.users WHERE email = lower(user_email)) THEN
+    RAISE EXCEPTION 'Email already registered';
+  END IF;
+
+  -- Insert auth user
+  INSERT INTO auth.users (
+    id, instance_id, aud, role, email, encrypted_password,
+    email_confirmed_at, confirmation_token, recovery_token,
+    email_change_token_new, email_change,
+    raw_app_meta_data, raw_user_meta_data,
+    is_super_admin, created_at, updated_at
+  ) VALUES (
+    new_user_id,
+    '00000000-0000-0000-0000-000000000000'::uuid,
+    'authenticated', 'authenticated',
+    lower(user_email),
+    crypt(user_password, gen_salt('bf')),
+    now(), '', '', '', '',
+    '{"provider":"email","providers":["email"]}'::jsonb,
+    '{}'::jsonb,
+    false, now(), now()
+  );
+
+  -- Insert auth identity (required for login)
+  INSERT INTO auth.identities (
+    id, user_id, identity_data, provider, provider_id,
+    last_sign_in_at, created_at, updated_at
+  ) VALUES (
+    gen_random_uuid(),
+    new_user_id,
+    jsonb_build_object('sub', new_user_id::text, 'email', lower(user_email)),
+    'email',
+    new_user_id::text,
+    now(), now(), now()
+  );
+
+  -- Create user profile
+  INSERT INTO public.user_profiles (
+    user_id, is_admin, admin_only, onboarding_complete, display_name, handicap_index, tee
+  ) VALUES (
+    new_user_id, false, false, false, user_display_name, user_handicap, 'White'
+  );
+
+  RETURN new_user_id;
+END;
+$$;
