@@ -647,7 +647,6 @@ export default function App() {
   useEffect(() => {
     // Set up auth listener FIRST so it catches events from code exchange
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
-      console.log('[Auth] onAuthStateChange:', event)
       setSession(session)
       if (event === 'PASSWORD_RECOVERY') {
         setShowResetPassword(true)
@@ -657,9 +656,7 @@ export default function App() {
     // Handle PKCE code exchange from email links (password reset, signup confirm)
     const code = new URLSearchParams(window.location.search).get('code')
     if (code) {
-      console.log('[Auth] Found PKCE code, exchanging...')
       supabase.auth.exchangeCodeForSession(code).then(({ data, error }) => {
-        console.log('[Auth] exchangeCode result:', error ? `ERROR: ${error.message}` : 'success')
         if (!error && data.session) {
           // onAuthStateChange should fire PASSWORD_RECOVERY, but as a fallback:
           setSession(data.session)
