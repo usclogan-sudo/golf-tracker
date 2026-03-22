@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { v4 as uuidv4 } from 'uuid'
-import { supabase, courseToRow, playerToRow, roundToRow, roundPlayerToRow, buyInToRow, rowToCourse, rowToPlayer, rowToSharedCourse, rowToGamePreset, rowToUserProfile } from '../../lib/supabase'
+import { supabase, courseToRow, playerToRow, roundToRow, roundPlayerToRow, buyInToRow, rowToCourse, rowToPlayer, rowToSharedCourse, rowToGamePreset, rowToUserProfile, generateInviteCode } from '../../lib/supabase'
 import { fmtMoney, JUNK_LABELS } from '../../lib/gameLogic'
 import { venturaCourses } from '../../data/venturaCourses'
 import { NearMeCourses } from '../NearMeCourses/NearMeCourses'
@@ -1851,6 +1851,7 @@ function TreasurerAndBuyIns({
     setSaving(true)
     try {
       const roundId = uuidv4()
+      const inviteCode = generateInviteCode()
       const round: Round = {
         id: roundId,
         courseId: course.id,
@@ -1869,6 +1870,7 @@ function TreasurerAndBuyIns({
         treasurerPlayerId: treasurerId,
         groups,
         gameMasterId,
+        inviteCode,
       }
 
       const buyIns: BuyIn[] = players.map(p => ({
@@ -1893,6 +1895,22 @@ function TreasurerAndBuyIns({
         supabase.from('round_players').insert(roundPlayers.map(rp => roundPlayerToRow(rp, userId))),
         supabase.from('buy_ins').insert(buyIns.map(b => buyInToRow(b, userId))),
       ])
+
+      // Fire-and-forget: send round invite notifications to registered players
+      const playerIds = players.map(p => p.id)
+      supabase.from('user_profiles').select('display_name').eq('user_id', userId).single()
+        .then(({ data }) => {
+          const creatorName = data?.display_name ?? 'Someone'
+          supabase.rpc('send_round_invite_notifications', {
+            p_round_id: roundId,
+            p_invite_code: inviteCode,
+            p_course_name: course.name,
+            p_creator_name: creatorName,
+            p_player_ids: playerIds,
+          }).then(({ error }) => {
+            if (error) console.warn('Failed to send round invite notifications:', error)
+          })
+        })
 
       onCreateRound(roundId)
     } finally {

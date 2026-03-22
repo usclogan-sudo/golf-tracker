@@ -346,6 +346,7 @@ export interface AppNotification {
   title: string
   body?: string
   roundId?: string
+  inviteCode?: string
   read: boolean
   createdAt: Date
 }

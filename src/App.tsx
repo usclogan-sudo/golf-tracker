@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import type { Session } from '@supabase/supabase-js'
 import { supabase, rowToCourse, rowToRound, rowToHoleScore, fetchOrCreateProfile } from './lib/supabase'
 import { useNotifications } from './hooks/useNotifications'
@@ -35,7 +35,7 @@ import { EventSetup } from './components/EventSetup/EventSetup'
 import { EventLeaderboard } from './components/EventLeaderboard/EventLeaderboard'
 import { Ledger } from './components/Ledger/Ledger'
 import { LiveLeaderboard } from './components/LiveLeaderboard/LiveLeaderboard'
-import type { Course, Round, HoleScore, UserProfile, GameType, StakesMode } from './types'
+import type { AppNotification, Course, Round, HoleScore, UserProfile, GameType, StakesMode } from './types'
 
 type Screen = 'home' | 'course-catalog' | 'course-setup' | 'new-round' | 'scorecard' | 'settle-up' | 'round-history' | 'stats' | 'settings' | 'onboarding' | 'admin' | 'upgrade-account' | 'player-directory' | 'rounds-detail' | 'courses-detail' | 'handicap-detail' | 'join-round' | 'tournament-list' | 'tournament-setup' | 'tournament-detail' | 'personal-dashboard' | 'event-setup' | 'event-leaderboard' | 'ledger' | 'spectate'
 
@@ -603,7 +603,16 @@ export default function App() {
   const [activeEventId, setActiveEventId] = useState<string | null>(null)
   const [spectateCode, setSpectateCode] = useState<string | null>(null)
   const [showResetPassword, setShowResetPassword] = useState(false)
-  const { unreadCount: notificationCount, latestToast, dismissToast } = useNotifications(session?.user?.id ?? null)
+  const { unreadCount: notificationCount, latestToast, dismissToast, markRead } = useNotifications(session?.user?.id ?? null)
+
+  const handleToastAction = useCallback((n: AppNotification) => {
+    if (n.type === 'round_invite' && n.inviteCode) {
+      dismissToast()
+      markRead(n.id)
+      setPendingJoinCode(n.inviteCode)
+      setScreen('join-round')
+    }
+  }, [dismissToast, markRead])
 
   const [pendingJoinCode, setPendingJoinCode] = useState<string | null>(() => {
     // Check sessionStorage first (survives auth redirect)
@@ -1043,7 +1052,7 @@ export default function App() {
         destructive={appConfirmModal.destructive}
       />
     )}
-    {latestToast && <NotificationToast notification={latestToast} onDismiss={dismissToast} />}
+    {latestToast && <NotificationToast notification={latestToast} onDismiss={dismissToast} onAction={handleToastAction} />}
     </>
   )
 }

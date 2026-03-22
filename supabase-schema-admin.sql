@@ -353,3 +353,69 @@ BEGIN
   RETURN new_user_id;
 END;
 $$;
+
+-- Add invite_code column to notifications
+ALTER TABLE notifications ADD COLUMN IF NOT EXISTS invite_code text;
+
+-- Send round invite notifications to registered players (bypasses RLS)
+CREATE OR REPLACE FUNCTION send_round_invite_notifications(
+  p_round_id uuid,
+  p_invite_code text,
+  p_course_name text,
+  p_creator_name text,
+  p_player_ids text[]
+)
+RETURNS int
+LANGUAGE plpgsql
+SECURITY DEFINER
+AS $$
+DECLARE
+  pid text;
+  pid_uuid uuid;
+  sent int := 0;
+BEGIN
+  FOREACH pid IN ARRAY p_player_ids
+  LOOP
+    -- Try casting to uuid; skip if invalid
+    BEGIN
+      pid_uuid := pid::uuid;
+    EXCEPTION WHEN others THEN
+      CONTINUE;
+    END;
+
+    -- Skip the caller (round creator)
+    IF pid_uuid = auth.uid() THEN
+      CONTINUE;
+    END IF;
+
+    -- Only notify registered users (those with a user_profiles row)
+    IF NOT EXISTS (SELECT 1 FROM user_profiles WHERE user_id = pid_uuid) THEN
+      CONTINUE;
+    END IF;
+
+    -- Idempotency: skip if notification already exists for this round+user
+    IF EXISTS (
+      SELECT 1 FROM notifications
+      WHERE round_id = p_round_id AND user_id = pid_uuid AND type = 'round_invite'
+    ) THEN
+      CONTINUE;
+    END IF;
+
+    INSERT INTO notifications (id, user_id, type, title, body, round_id, invite_code, read, created_at)
+    VALUES (
+      gen_random_uuid(),
+      pid_uuid,
+      'round_invite',
+      p_creator_name || ' invited you to play at ' || p_course_name,
+      'Tap Join to enter the round',
+      p_round_id,
+      p_invite_code,
+      false,
+      now()
+    );
+    sent := sent + 1;
+  END LOOP;
+
+  RETURN sent;
+END;
+$$;

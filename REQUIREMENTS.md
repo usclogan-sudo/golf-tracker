@@ -1,467 +1,448 @@
 # Fore Skins Golf Tracker — Functional Requirements
 
-**Last Updated:** March 9, 2026
-**Version:** 1.4
+**Last Updated:** March 22, 2026
+**Version:** 2.0
 
 ---
 
 ## 1. App Purpose
 
-A mobile-first app for groups of friends who play golf together to track side games, scores, handicaps, and settle money — all from the course in real time.
+A mobile-first web app for groups of friends who play golf together to track side games, scores, handicaps, and settle money — all from the course in real time.
+
+**Live Site:** https://usclogan-sudo.github.io/golf-tracker/
+**Stack:** React 18 + TypeScript + Vite + Tailwind CSS v3 + Supabase
 
 ---
 
 ## 2. User Accounts & Access
 
-### 2.1 Sign In / Sign Up
-- [x] Passwordless sign-in via email magic link
-- [x] Password-based sign-in as primary method (inline on splash page)
-- [x] Splash page with branding + direct sign-in form + Create Account + Guest login
-- [x] Anonymous guest sign-in (no account required, uses Supabase anonymous auth)
+### 2.1 Authentication
+- [x] Password-based sign-in (primary, inline on splash page)
+- [x] Anonymous guest sign-in (Supabase anonymous auth, no account required)
 - [x] Guest upgrade flow — convert anonymous account to full account, preserving all data
 - [x] Guest nudge banner on Home screen (loss-aversion messaging, per-session dismissible)
+- [x] Password reset flow
 - [ ] "Remember me" / stay signed in across sessions
 - [ ] Social login (Google, Apple)
 
-### 2.2 User Profile
-- [ ] Display name and avatar
-- [ ] Email management
-- [x] Delete account option (deletes all user data from all tables)
-- [x] Settings screen with account info, password change, danger zone
-- [x] Conditional UI: anonymous users see "Create Account" instead of "Change Password"
-- [ ] Payment info on profile (Venmo ID, Zelle email/phone, Cash App, PayPal — linked or displayed)
+### 2.2 User Profile & Onboarding
+- [x] 2-step onboarding wizard (profile setup + payment methods)
+- [x] Display name
+- [x] Avatar picker (presets + custom URL)
+- [x] Handicap index
+- [x] Default tee preference
+- [x] Payment methods: Venmo, Zelle, Cash App, PayPal (with preferred method)
+- [x] Password change
+- [x] Delete account (removes all user data from all tables)
+- [x] Dark mode toggle (persisted to localStorage)
+- [x] Settings screen with account info, payment methods, danger zone
 
 ### 2.3 Privacy & Security
-- [x] Each user can only see their own data
 - [x] Row-level security on all database tables
+- [x] Each user can only see their own data
+- [x] Conditional UI: anonymous users see "Create Account" instead of "Change Password"
 
 ---
 
 ## 3. Player Management
 
-### 3.1 Add Player
-- [x] Name
-- [x] Handicap index (-10 to 54)
-- [x] Default tee preference (White, Blue, Gold, Red, etc.)
-- [x] GHIN number (optional — casual golfers can skip, still available for handicap verification)
-- [x] Payment info: Venmo ID, Zelle email/phone, Cash App, PayPal — at least one required
+### 3.1 Add / Edit / Delete Players
+- [x] Name, handicap index (-10 to 54), default tee
+- [x] GHIN number (optional)
+- [x] Payment info: Venmo, Zelle, Cash App, PayPal
 - [x] Quick-add player inline during round setup
+- [x] Edit existing player details
+- [x] Delete player with confirmation dialog
 
-### 3.2 Find & Connect with Players
-- [ ] Search for registered players in the app by name
-- [ ] "Find Players Near Me" — GPS-based discovery of other registered users
-- [ ] Drop-down/autocomplete list of registered players when adding to a group
+### 3.2 Player Directory
+- [x] Browse all players (own guests + all registered users)
+- [x] View player stats and registration status
+- [x] Pin favorite friends for quick access
+- [x] Public player profiles (registered users visible to all)
 - [ ] Send connection request to another player
-- [ ] Connected players appear in your roster for easy round setup
+- [ ] "Find Players Near Me" — GPS-based discovery
 
-### 3.3 Edit Player
-- [x] Edit existing player details from home screen
-- [x] Update handicap index
-- [x] Delete player from edit form with confirmation dialog
-
-### 3.4 Remove Player
-- [ ] Players **cannot** be deleted from the app by other users (accounts are self-managed)
-- [ ] Game master/scorekeeper **can** remove a player from a group or an active game
-- [ ] Confirm before removing from a game (warn if scores already entered)
-
-### 3.5 Handicap
+### 3.3 Handicap
 - [x] Manual handicap index entry
 - [x] USGA course handicap calculation (index x slope/113 + rating - par)
 - [x] Stroke allocation per hole based on stroke index
-- [ ] Auto-sync handicap from GHIN API (required GHIN number enables this)
-- [ ] Track handicap changes over time
-- [ ] Expand course handicap support for all courses in the system (not just saved courses)
+- [x] WHS handicap calculation from round history (20 most recent differentials)
+- [x] Handicap differential history with visual chart
+- [ ] Auto-sync handicap from GHIN API
 
 ---
 
 ## 4. Course Management
 
-### 4.1 Course Catalog
-- [x] Pre-loaded Ventura County courses (~15+)
-- [x] Search catalog by name or city
-- [x] Add catalog course to user's saved courses
-- [ ] Expanded catalog (nationwide or API-powered)
+### 4.1 Course Sources
+- [x] Pre-loaded Ventura County catalog (~15+ courses)
+- [x] Course search API integration (nationwide, search by name/city/state/zip)
+- [x] One-tap import from API with full data (tees, ratings, slopes, pars, yardages)
+- [x] GPS-based nearby courses (OpenStreetMap, up to 8 within 25 miles)
+- [x] One-tap add from nearby list (pre-fills course name)
+- [x] Shared admin course templates
 
-### 4.2 Course Data API Integration
-- [ ] Integrate with a golf course data API (e.g., GolfCourseAPI, Golf Genius, or similar) for full nationwide/international coverage
-- [ ] Auto-populate course data: name, address, tee sets, ratings, slopes, pars, yardages, stroke index
-- [ ] Search courses by name, city, state, or zip code
-- [ ] Keep course data up to date (sync periodically or on-demand)
-- [ ] Fallback to manual entry if course not found in API
-
-### 4.3 Handicap API Integration
-- [ ] Integrate with USGA GHIN API to auto-pull player handicap index
-- [ ] Auto-update handicap before each round (or on-demand refresh)
-- [ ] Show handicap revision history from GHIN
-- [ ] Support international handicap systems (WHS — World Handicap System)
-
-### 4.4 Nearby Courses
-- [x] Detect user location via GPS
-- [x] Show up to 8 courses within 25 miles (OpenStreetMap)
-- [x] One-tap add from nearby list (pre-fills course name in CourseSetup)
-- [ ] Show course details (rating, slope, par) in nearby results via API
-
-> **Jeff:** Unsure if GPS detection is working today — needs testing/verification.
-
-### 4.5 Custom Course
+### 4.2 Custom Courses
 - [x] Course name
 - [x] Multiple tee sets (name, USGA rating, slope)
 - [x] 18 holes with par, stroke index, yardages per tee
-- [x] Stroke index validation (1–18 used exactly once)
-- [x] Par templates (72/71/70) for one-tap par configuration
-- [x] Standard stroke index auto-allocation on new courses
+- [x] Stroke index validation (1-18 used exactly once)
+- [x] Par templates (72/71/70) for one-tap configuration
+- [x] Standard stroke index auto-allocation
 
-### 4.6 Edit Course
+### 4.3 Course Operations
 - [x] Edit saved course details (tees, holes, ratings)
+- [x] Delete a saved course with confirmation
+- [x] Course statistics (times played, best scores, averages)
+- [ ] Show course details (rating, slope, par) in nearby search results
 
-### 4.7 Delete Course
-- [x] Delete a saved course
-- [x] Confirm before deleting
-
----
-
-## 5. Groups & Scorekeeper
-
-### 5.1 Groups
-- [ ] A group is a set of up to **5 players** playing together on the course
-- [ ] Each round consists of one or more groups
-- [ ] Multiple groups can be **linked into the same game/event** (e.g., 20 players across 4 groups all playing the same skins game at the same course)
-- [ ] All linked groups share the same game type, stakes, and buy-in
-- [ ] Each group plays independently but results are combined across all linked groups
-
-### 5.2 Scorekeeper Role
-- [ ] Each group has one designated **scorekeeper**
-- [ ] Any player in the group can enter scores from their own device
-- [ ] Scores entered by non-scorekeepers are **pending** until the scorekeeper approves
-- [ ] Scorekeeper can **approve or reject** submitted scores
-- [ ] Scorekeeper can **overwrite** any score in their group at any time
-- [ ] Scorekeeper approval is shown visually (e.g., checkmark vs pending indicator)
-- [ ] If scorekeeper enters a score directly, it's automatically approved
-
-### 5.3 Group Management
-- [ ] Create a group and invite players (by email or from roster)
-- [ ] Assign scorekeeper during round setup
-- [ ] Change scorekeeper mid-round if needed
-- [ ] Save recurring groups for reuse (e.g., "Saturday Crew", "Work League")
-- [ ] Group name and optional icon/color
-
-### 5.4 Linking Groups
-- [ ] When starting a round, option to "Create New Event" or "Join Existing Event"
-- [ ] Event creator sets the game type, stakes, and course
-- [ ] Additional groups join via **invite link** or **event code** (short alphanumeric, e.g., "FORE-7X3K")
-- [ ] Share invite link via text, email, or copy-to-clipboard
-- [ ] Each group's scorekeeper manages their own group's scores
-- [ ] All groups feed into the same leaderboard and payout pool
-
-### 5.5 Discover Nearby Games (GPS)
-- [ ] "Find Games Near Me" feature on home screen
-- [ ] Uses GPS to detect nearby courses with active events
-- [ ] Shows list of open/joinable events at courses within range
-- [ ] Display: course name, game type, stakes, number of players/groups, tee time
-- [ ] One-tap request to join (event creator or scorekeeper approves)
-- [ ] Privacy controls: event creator can set event as **Public** (discoverable) or **Private** (invite-only)
-- [ ] Distance and direction shown for each nearby game
-- [ ] Filter by game type, stakes level, or tee time
+### 4.4 Handicap API Integration
+- [ ] Integrate with USGA GHIN API to auto-pull player handicap index
+- [ ] Auto-update handicap before each round
+- [ ] Show handicap revision history from GHIN
 
 ---
 
-## 6. Round Setup
+## 5. Round Setup (5-Step Wizard)
 
-### 6.1 Start a Round (3-step wizard)
-
-**Step 1 — Pick a Course**
-- [x] Select from any available course in the app (catalog + API, not just user-saved courses)
+### Step 1 — Pick a Course
+- [x] Select from any available course (catalog + API + custom + shared)
 - [x] Browse catalog to add a new course
 - [x] Course details shown (par, tees, holes)
 
-**Step 2 — Pick Players & Groups**
-- [x] Select from saved players
+### Step 2 — Pick Players
+- [x] Select from registered users and guest players
 - [x] Assign tee per player (override default)
 - [x] Quick-add a new player inline
 - [x] Auto-calculate course handicap per player/tee
-- [ ] Assign players to groups (max 5 per group)
-- [ ] Designate a scorekeeper per group
-- [ ] Option to link to an existing event or create a new one
+- [x] Up to 20 players per round
 
-**Step 3 — Configure Game**
-- [x] Choose game type (Skins, Best Ball, Nassau, Wolf, BBB)
-- [x] Choose stakes mode (Standard or High Roller)
+### Step 3 — Groups
+- [x] Assign players to groups (for multi-group play)
+
+### Step 4 — Configure Game
+- [x] Choose game type (11 types — see Section 7)
+- [x] Configure game-specific options
+- [x] Optional junk/side bets alongside any game
+- [x] Game presets — save and reuse favorite configurations
+- [x] Game rules modal with how-to-play for each type
+
+### Step 5 — Stakes & Start
+- [x] Choose stakes mode (Standard $5-$50 or High Roller $100-$1000)
 - [x] Set buy-in amount (presets or custom)
-- [x] Configure game-specific options (see Section 7)
 - [x] Designate treasurer (collects buy-ins)
+- [x] Designate game master/scorekeeper
+- [x] Mark buy-ins as paid/unpaid before starting
+- [x] Generate invite code for shared scoring
+- [x] Send real-time invite notifications to registered players
 
-### 6.2 Resume Round
+### Resume Round
 - [x] Active rounds shown on home screen
 - [x] Tap to resume where you left off
-- [x] End round directly from Home screen (marks complete, goes to Settle Up)
-- [x] Confirmation before ending with option to view results
+- [x] End round from Home screen (marks complete, goes to Settle Up)
+- [x] Play again from round history (reuses template)
 
 ---
 
-## 7. Game Types & Rules
+## 6. Live Scorecard
+
+### 6.1 Score Entry
+- [x] Hole-by-hole scoring for each player
+- [x] Touch-optimized number pad input
+- [x] Hole navigator (1-18) with visual distinction between scored and unscored holes
+- [x] Current hole info (par, stroke index, course name)
+- [x] Navigate forward/back between holes
+
+### 6.2 Score Display
+- [x] Score badges per player (Eagle, Birdie, Par, Bogey, Double+)
+- [x] Handicap strokes received shown per player per hole
+- [x] Net score calculation
+- [x] Running total per player (gross + vs-par through N holes played)
+- [x] Celebrations: hole-in-one, eagle, birdie (toast + fullscreen animation)
+
+### 6.3 Game Panels (shown during play)
+- [x] Skins: carryover count, pot value
+- [x] Best Ball: team scores, holes won
+- [x] Nassau: front/back/18 leaders
+- [x] Wolf: current wolf, partner selection
+- [x] BBB: bingo/bango/bongo assignment
+- [x] Hammer: hammer state, value, decline tracking
+- [x] All other game types: appropriate live tracking panels
+
+### 6.4 Junk & Side Bet Tracking
+- [x] Junk tracking during play (sandy, greenie, snake, barkie, CTP)
+- [x] Custom side bets per hole (description, amount, participants)
+- [x] Side bet resolution (pick winner, cancel)
+
+### 6.5 Score Validation & Error Handling
+- [x] Flag unlikely scores (hole-in-one on par 4+, +5 over par) with warning
+- [x] Undo button for last score change
+- [x] Confirmation dialog before navigating away from active scoring
+- [x] Network error banner when score save fails
+- [x] Offline queue — scores saved locally, synced when connection restores
+
+### 6.6 Shared Scoring
+- [x] Invite code for collaborative scoring (share with other players)
+- [x] Join active round via invite code
+- [x] Real-time score sync via Supabase Realtime
+- [x] Round creator and game master can both edit scores
+- [x] In-app notification with Join button when invited to a round
+
+---
+
+## 7. Game Types (11 Fully Implemented)
 
 ### 7.1 Skins
 - [x] Lowest score on a hole wins the skin
 - [x] Gross or Net scoring mode
 - [x] Carryovers ON/OFF (tied holes carry pot to next)
 - [x] Display carryover count and accumulated pot value
-- [x] Calculate skins won per player at end
-- [ ] Press option on a hole (double or nothing — player can press to double the skin value)
+- [ ] Press option (double-or-nothing on a hole)
 
 ### 7.2 Best Ball
 - [x] 2v2 team format (best score per team counts)
 - [x] Team assignment during setup (Team A vs Team B)
-- [x] Match Play mode (count holes won, first to 10)
+- [x] Match Play mode (count holes won)
 - [x] Stroke Play mode (lowest total team strokes)
 - [x] Gross or Net scoring mode
-- [x] Track holes won per team
 
 ### 7.3 Nassau
 - [x] Three simultaneous bets: Front 9, Back 9, Total 18
 - [x] Lowest total strokes per segment wins that bet
 - [x] Gross or Net scoring mode
 - [x] Display segment leaders during play
-- [ ] Auto-press option (double the bet when down by 2)
-- [ ] Manual press on any hole (player initiates a double-or-nothing press mid-round)
-
-> **Jeff:** Pressing is a big part of Nassau and Skins. A player who's losing can "press" which starts a new side bet from that hole forward. It's essentially double or nothing. This is a core feature for competitive groups.
+- [ ] Auto-press option (when down by 2)
+- [ ] Manual press mid-round
 
 ### 7.4 Wolf
 - [x] 4-player rotation — each player takes turn as Wolf
-- [x] Wolf picks a partner after tee shots or goes Lone Wolf (2x multiplier)
+- [x] Wolf picks a partner or goes Lone Wolf (2x multiplier)
 - [x] Customizable wolf order (drag to reorder)
 - [x] Gross or Net scoring mode
-- [x] Track net units won/lost per player
-- [ ] "Pig" variant (wolf picks before anyone tees off)
+- [ ] "Pig" variant (wolf picks before tee shots)
 
 ### 7.5 Bingo Bango Bongo (BBB)
-- [x] Three points awarded per hole:
-  - Bingo: First player on the green
-  - Bango: Closest to the pin once all are on
-  - Bongo: First player to hole out
+- [x] Three points per hole: Bingo (first on green), Bango (closest to pin), Bongo (first to hole out)
 - [x] Manual point assignment via buttons per hole
 - [x] Gross or Net scoring mode
-- [x] Track total points per player
 
-### 7.6 Junk / Dot Games
-- [ ] Side bets that run alongside any main game type
-- [ ] Configurable per round (toggle which junks are active)
-- [ ] Common junks:
-  - **Sandy Par** — par or better from a bunker
-  - **Closest to the Pin** (CTP) — on designated par 3s
-  - **Poley** — make a putt longer than the flagstick length
-  - **Greenie** — hit the green in regulation on par 3s
-  - **Barkie** — par or better after hitting a tree
-  - **Ferret** — par or better from off the green
-  - **Snake** — three-putt (penalty dot)
-- [ ] Each junk has a configurable dollar value or point value
-- [ ] Track junks per player per hole
-- [ ] Junk totals included in settle up and payout
+### 7.6 Hammer
+- [x] Escalating bet that can be "hammered" back
+- [x] Base value configuration
+- [x] Max presses option
+- [x] Auto-hammer option
+- [x] Hole-by-hole hammer state tracking (holder, value, presses, declined)
 
-### 7.7 Future Game Types
-- [ ] Stableford (points-based scoring: 0 for double+, 1 bogey, 2 par, 3 birdie, 4 eagle)
-- [ ] Vegas (team scores combined as 2-digit numbers)
-- [ ] Hammer (escalating bet that can be "hammered" back)
-- [ ] Quota (target based on handicap, earn points for under-par holes)
+### 7.7 Vegas
+- [x] Team scoring (2-digit combined numbers)
+- [x] Team assignment (A vs B)
+- [x] Gross or Net scoring mode
 
----
+### 7.8 Stableford
+- [x] Points-based scoring (0 for double+, 1 bogey, 2 par, 3 birdie, 4 eagle)
+- [x] Gross or Net scoring mode
 
-## 8. Live Scorecard
+### 7.9 Dots
+- [x] Configurable junk bets: sandy, greenie, snake, barkie, CTP, fairway hit, up & down, one putt, longest drive, par save
+- [x] Configurable value per dot
 
-### 8.1 Score Entry
-- [x] Hole-by-hole scoring for each player
-- [x] +/- stepper buttons (range 1–15)
-- [x] Hole navigator (1–18) with clear visual distinction between scored and unscored holes
-- [x] Current hole info (par, stroke index, course name)
-- [x] Navigate forward/back between holes
+### 7.10 Banker
+- [x] Rotating banker per hole
+- [x] Customizable banker order
+- [x] Gross or Net scoring mode
 
-### 8.2 Score Display
-- [x] Score badges per player (Eagle, Birdie, Par, Bogey, Double+)
-- [x] Handicap strokes received shown per player per hole
-- [x] Net score calculation
-- [x] Running total per player (gross + vs-par through N holes played)
-
-### 8.3 Game Panels (shown during play)
-- [x] Skins: carryover count, pot value
-- [x] Best Ball: team scores, holes won
-- [x] Nassau: front/back/18 leaders
-- [x] Wolf: current wolf, partner selection
-- [x] BBB: bingo/bango/bongo assignment
-- [ ] Junk/Dot tracker panel (when junks are active)
-
-### 8.4 Scorekeeper Workflow
-- [ ] Any player in the group can submit a score from their device
-- [ ] Submitted scores show as **pending** (visible but not finalized)
-- [ ] Scorekeeper sees pending scores with approve/reject buttons
-- [ ] Scorekeeper can overwrite any score in their group at any time
-- [ ] Scorekeeper-entered scores are automatically approved
-- [ ] Visual indicator: approved (checkmark) vs pending (clock/dot)
-- [ ] Notification to scorekeeper when a score is submitted for approval
-
-### 8.5 Score Validation
-- [x] Flag unlikely scores (hole-in-one on par 4+, +5 over par) with warning
-- [ ] Warn if a hole is skipped
-
-### 8.6 Undo & Error Handling
-- [x] Undo button for last score change (per hole, shown in bottom bar)
-- [x] Confirmation dialog before navigating away from active scoring
-- [x] Network error banner when score save fails
-- [x] Error handling on hole navigation saves
-
-### 8.7 Real-Time Sync
-- [x] Scores persist to database after each entry
-- [ ] Multi-device sync (multiple users scoring the same round)
-- [ ] Real-time updates via Supabase Realtime (subscriptions)
+### 7.11 Quota
+- [x] Target based on handicap, earn points for under-par holes
+- [x] Per-player quota configuration
+- [x] Gross or Net scoring mode
 
 ---
 
-## 9. Real-Time Leaderboard
+## 8. Settle Up & Payouts
 
-### 9.1 Live Leaderboard
-- [ ] Accessible to all players across all linked groups during a round
-- [ ] Updates in real time as scores are approved
-- [ ] Shows all players ranked by game-specific criteria:
-  - Skins: skins won, carryover status
-  - Best Ball: team scores, holes won
-  - Nassau: front/back/18 standings
-  - Wolf: net units
-  - BBB: total points
-- [ ] Gross and net score columns
-- [ ] Thru indicator (how many holes each player has completed)
-- [ ] Current hole indicator per group
-
-### 9.2 Leaderboard Views
-- [ ] **Overall** — all players across all groups ranked together
-- [ ] **By Group** — filter to see one group's scores
-- [ ] **Money** — who's winning/losing how much in real time
-
-### 9.3 Access
-- [ ] Any player in any linked group can view the leaderboard
-- [ ] Non-players can view via a shareable spectator link
-- [ ] Auto-refreshes without manual pull-to-refresh
-
----
-
-## 10. Settle Up & Payouts
-
-### 10.1 Results Display
+### 8.1 Results Display
 - [x] Game-specific results (skins won, team winners, units, points)
 - [x] Round summary (player count, buy-in, total pot)
-- [ ] **Settle up overview page** — comprehensive summary of the round before payments
-- [ ] Junk/dot game totals included in results
+- [x] Junk/side bet totals included in results
+- [x] Unified settlements combining game + junk + side bet payouts
 
-### 10.2 Payout Calculation
+### 8.2 Payout Calculation
 - [x] Treasurer-based model (treasurer collects, then distributes)
 - [x] Automatic payout amounts per player based on game results
 - [x] High Roller premium styling
 
-### 10.3 Treasurer & Audit
-- [ ] Treasurer has **audit responsibility** — can review all scores, payouts, and payment statuses
-- [ ] Treasurer dashboard: who has paid, who owes, total collected vs total distributed
-- [ ] Audit log of all payout changes and payment status updates
-- [ ] Treasurer can flag disputes and adjust payouts manually
-
-### 10.4 Payment
+### 8.3 Payment Integration
 - [x] Venmo deep-link button (opens Venmo with pre-filled amount)
+- [x] Zelle integration (mailto with payment details)
+- [x] Cash App deep-link button
+- [x] PayPal deep-link button
+- [x] Mobile detection for native app deep links
 - [x] Copy payment text fallback
-- [ ] Mark buy-in as "paid" (toggle button — data model exists, UI missing)
-- [ ] Payment status tracking (who has paid, who hasn't)
-- [ ] Zelle / PayPal / Cash App deep links
+
+### 8.4 Settlement Tracking
+- [x] Settlement records per round (from/to player, amount, reason, status)
+- [x] Mark settlements as paid
+- [x] Payment status tracking (owed vs paid)
+
+### 8.5 Ledger
+- [x] Historical payment ledger by opponent
+- [x] Date range filtering
+- [x] Net balance per opponent
+- [x] Mark individual payments as settled
+
+### 8.6 Future
+- [ ] Treasurer audit dashboard (review all scores, payouts, payment statuses)
 - [ ] In-app payment processing (Stripe/Venmo API)
-- [ ] Auto-processing of payments (long-term goal — initiate payments directly from the app)
-
-### 10.5 Platform Fees (Future)
-- [ ] Optional admin/platform fee collected per round or per player
-- [ ] Configurable fee amount or percentage
-- [ ] Fee shown transparently in settle up summary
-- [ ] Not critical yet — revisit when user base grows
-
-> **Jeff:** Auto-processing payments would be amazing but is probably a reach for now. We should discuss admin fees at some point but it's not super critical yet.
+- [ ] Platform fees (configurable per round or per player)
 
 ---
 
-## 11. Round History & Stats
+## 9. Events (Multi-Group Play)
 
-### 11.1 Past Rounds
-- [ ] View list of completed rounds
-- [ ] Round detail view (scores, results, payouts)
-- [ ] Filter by date, course, game type
-- [ ] Delete a completed round
+### 9.1 Event Setup
+- [x] 6-step event creation wizard
+- [x] Multi-group events (up to 5 players per group)
+- [x] Group-specific scorekeepers
+- [x] Event invite codes for additional groups to join
+- [x] Event creator sets game type, stakes, and course
 
-### 11.2 Lifetime Stats
-- [ ] Lifetime stats per player: rounds played, total winnings/losses
-- [ ] Average score per player
-- [ ] Best round per player
-- [ ] Head-to-head records between players
+### 9.2 Score Approval Workflow
+- [x] Non-scorekeepers submit scores as **pending**
+- [x] Scorekeepers see pending scores with approve/reject buttons
+- [x] Scorekeeper-entered scores are automatically approved
+- [x] Visual indicator: approved (checkmark) vs pending (clock/dot)
 
-### 11.3 Trends
-- [ ] Handicap index over time chart
-- [ ] Scoring average trend
-- [ ] Win/loss streaks
+### 9.3 Event Leaderboard
+- [x] Live event leaderboard with real-time updates
+- [x] Group tabs for filtering by group
+- [x] Online presence indicators (who's currently in the app)
+- [x] All groups feed into the same leaderboard
+
+---
+
+## 10. Tournaments
+
+### 10.1 Tournament Formats
+- [x] Single elimination bracket
+- [x] Double elimination bracket (winners + losers brackets)
+- [x] Stroke play format
+
+### 10.2 Tournament Features
+- [x] Tournament creation and player selection
+- [x] Bye handling for non-power-of-2 player counts
+- [x] Visual bracket display
+- [x] Match play head-to-head scoring
+- [x] Tournament list (active/completed)
+
+---
+
+## 11. Notifications
+
+### 11.1 In-App Notifications (Implemented)
+- [x] Real-time notifications via Supabase Realtime
+- [x] Notification types: round_invite, score_update, unsettled_round, round_complete
+- [x] Toast popup with auto-dismiss
+- [x] Round invite toast with "Join" action button (navigates to JoinRound)
+- [x] Unread badge count on home screen
+- [x] Mark read / mark all read
+
+### 11.2 Future Notifications
+- [ ] Email notifications (round invites, settlement reminders)
+- [ ] Push notifications (via service worker)
+- [ ] Reminder if buy-in is unpaid
+- [ ] Weekly stats summary email
 
 ---
 
 ## 12. Sharing & Social
 
-### 12.1 Share Results
-- [ ] Screenshot/image of scorecard to share via text or social
+### 12.1 Implemented
+- [x] Join round via invite code (URL param or manual entry)
+- [x] Spectate mode — live leaderboard via spectator code (no account required)
+- [x] In-app round invite notifications with Join button
+- [x] Player directory with shared round history
+- [x] Pinned friends for quick access
+
+### 12.2 Future
+- [ ] Share scorecard screenshot/image via text or social
 - [ ] Share round summary link
-
-### 12.2 Multi-User Rounds
-- [ ] Invite other app users to join a round
-- [ ] Each player enters their own scores from their phone
-- [ ] Real-time score sync across devices
-- [ ] Shared round visible to all participants
+- [ ] GPS-based "Find Games Near Me" (discover open events at nearby courses)
 
 ---
 
-## 13. Notifications
+## 13. Analytics & Stats
 
-- [ ] Email notification when invited to a round
-- [ ] Push notification when round is settled
-- [ ] Reminder if buy-in is unpaid
-- [ ] Weekly summary of stats
+### 13.1 Personal Dashboard
+- [x] Net winnings/losses (all-time)
+- [x] Scoring average
+- [x] Head-to-head records vs opponents
+- [x] Monthly scoring trends (chart)
+- [x] Game type breakdown
+
+### 13.2 Player Stats
+- [x] Rounds played, wins, total payouts
+- [x] Score distribution
+- [x] Best rounds by course
+
+### 13.3 Round History
+- [x] View completed rounds with hole-by-hole scores
+- [x] Delete completed rounds
+- [x] Play again (template reuse)
+
+### 13.4 Course Stats
+- [x] Times played per course
+- [x] Best scores and averages per course
+
+### 13.5 Handicap Tracking
+- [x] WHS handicap calculation from round differentials
+- [x] Handicap progression chart over time
+- [x] Differential history
 
 ---
 
-## 14. Installability & Offline
+## 14. PWA & Offline
 
-### 14.1 PWA (Progressive Web App)
-- [ ] Add manifest.json for "Add to Home Screen"
+- [x] Install banner/prompt ("Add to Home Screen")
+- [x] Offline score entry queue (syncs when connection restores)
+- [ ] Full service worker for offline caching
 - [ ] App icon and splash screen
-- [ ] Service worker for offline caching
-
-### 14.2 Offline Support
-- [ ] Score entry works without internet
-- [ ] Sync scores when connection restored
 
 ---
 
 ## 15. UI & Experience
 
-### 15.1 Current
+### Implemented
 - [x] Mobile-first responsive design
-- [x] Green theme (standard) / Gold theme (high roller)
-- [x] Home dashboard with stats chips
-- [x] Card-based layout for players and courses
+- [x] Green theme (standard) / Gold theme (High Roller)
+- [x] Dark mode (full app)
+- [x] Home dashboard with stat chips
+- [x] Card-based layout
 - [x] Browser back button support (pushState/popstate history sync)
-- [x] Course data scoped per user (user_id filter on queries)
+- [x] Game rules modal with how-to-play for each game type
 
-### 15.2 Future
-- [ ] Dark mode
-- [ ] Customizable team/group name
+### Future
 - [ ] Animations and transitions between screens
 - [ ] Haptic feedback on score entry (mobile)
 - [ ] Landscape mode for scorecard (wider table view)
 
 ---
 
-## 16. Admin & Data Management
+## 16. Admin
 
-- [ ] Export round data (CSV or PDF)
-- [ ] Bulk delete old rounds
-- [ ] Backup/restore data
-- [ ] Delete account and all associated data
+- [x] Admin dashboard
+- [x] View all users (names, emails, admin status)
+- [x] Create user accounts
+- [x] Set/revoke admin status
+- [x] Delete users and all associated data
+- [x] View all rounds with management options
+- [x] Delete rounds
+- [x] View all players with owner info
+- [x] Edit player details (name, handicap, tee)
+- [x] Edit user profiles (display name, handicap, payment methods)
+- [x] Shared course template management
+- [x] Game preset management with sorting
+- [x] System stats (total users, rounds, courses, active/completed)
+- [ ] Export data (CSV/PDF)
 
 ---
 
@@ -470,8 +451,9 @@ A mobile-first app for groups of friends who play golf together to track side ga
 | Date | Version | Changes |
 |------|---------|---------|
 | 2026-03-06 | 1.0 | Initial requirements document |
-| 2026-03-06 | 1.1 | Added: Groups (max 5 players), Scorekeeper role with approve/overwrite, Linked groups across an event, Real-time leaderboard |
-| 2026-03-06 | 1.2 | Added: Course Data API integration, GHIN/WHS handicap API, GPS game discovery ("Find Games Near Me"), invite link/event code joining, public vs private events |
-| 2026-03-09 | 1.3 | Jeff's feedback: GHIN required (not optional), payment info expanded (Venmo/Zelle/CashApp/PayPal), player discovery & connect, players can't be deleted by others (only removed from games), pressing for Nassau/Skins, Junk/Dot games (sandy par, CTP, poley, greenie, barkie, ferret, snake), treasurer audit responsibility, settle up overview, platform fees placeholder, course selection from full catalog not just saved, notes on auth UX and GPS verification |
-| 2026-03-09 | 1.4 | Splash page with inline sign-in, anonymous guest auth + upgrade flow, usability audit: browser back button support, scorecard leave confirmation, network error handling, delete player, course user_id security fix, GHIN made optional, par templates for course setup, Near Me pre-fills course name, score undo button, end round from Home |
-| 2026-03-09 | 1.5 | Medium usability fixes: accurate guest banner copy, actionable onboarding steps, removed duplicate copy buttons in SettleUp, running total on scorecard (gross + vs-par through N holes), contextual End Round confirmation (shows holes scored/missing), improved hole navigator contrast (scored vs unscored), fixed course setup navigation when adding from new-round flow |
+| 2026-03-06 | 1.1 | Added: Groups, Scorekeeper role, Linked groups, Real-time leaderboard |
+| 2026-03-06 | 1.2 | Added: Course API, GHIN/WHS API, GPS discovery, invite codes |
+| 2026-03-09 | 1.3 | Jeff feedback: payment methods, player discovery, pressing, junk games, treasurer audit |
+| 2026-03-09 | 1.4 | Splash page, guest auth, usability audit, browser back, score undo, end round from Home |
+| 2026-03-09 | 1.5 | Guest banner copy, onboarding steps, scorecard running totals, hole navigator contrast |
+| 2026-03-22 | 2.0 | **Full rewrite.** Reconciled requirements with actual implementation. Added: 6 new game types (Hammer, Vegas, Stableford, Dots, Banker, Quota), tournaments (single/double elim, stroke play), events (multi-group with score approval), personal dashboard, ledger, handicap tracking (WHS), player directory with pinned friends, spectate mode, round invite notifications with Join button, side bets, celebrations, offline queue, admin dashboard, game presets, course stats, and more. Removed outdated/duplicate items. Reorganized into 16 sections. |

@@ -407,6 +407,7 @@ export function rowToNotification(row: any): AppNotification {
     title: row.title,
     body: row.body ?? undefined,
     roundId: row.round_id ?? undefined,
+    inviteCode: row.invite_code ?? undefined,
     read: row.read,
     createdAt: new Date(row.created_at),
   }
@@ -420,6 +421,7 @@ export function notificationToRow(n: AppNotification, userId: string) {
     title: n.title,
     body: n.body ?? null,
     round_id: n.roundId ?? null,
+    invite_code: n.inviteCode ?? null,
     read: n.read,
   }
 }
