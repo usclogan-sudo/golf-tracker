@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, useCallback } from 'react'
+import { useEffect, useMemo, useState, useCallback, useRef } from 'react'
 import { v4 as uuidv4 } from 'uuid'
 import { supabase, rowToRound, rowToRoundPlayer, rowToHoleScore, rowToBuyIn, rowToBBBPoint, rowToJunkRecord, rowToSideBet, rowToSettlementRecord, settlementRecordToRow, rowToUserProfile, rowToEvent } from '../../lib/supabase'
 import { PaymentButtons, getPreferredPayment } from '../PaymentButtons'
@@ -59,6 +59,8 @@ import type {
   UserProfile,
   GolfEvent,
 } from '../../types'
+import { ShareCard, useShareImage } from '../ShareCard'
+import type { ShareCardLeaderboardEntry, ShareCardPayout } from '../ShareCard'
 
 interface Props {
   roundId: string
@@ -132,6 +134,7 @@ export function SettleUp({ roundId, userId, eventId, onDone, onContinue }: Props
   const [settlementsInitialized, setSettlementsInitialized] = useState(false)
   const [eventData, setEventData] = useState<GolfEvent | null>(null)
   const [expandedSettlement, setExpandedSettlement] = useState<string | null>(null)
+  const { shareRef, sharing, shareImage } = useShareImage('fore-skins-results')
 
   useEffect(() => {
     Promise.all([
@@ -1179,6 +1182,141 @@ export function SettleUp({ roundId, userId, eventId, onDone, onContinue }: Props
             </div>
           </section>
         )}
+
+        {/* ── Share Results ── */}
+        {(() => {
+          const totalPar = snapshot.holes.reduce((s, h) => s + h.par, 0)
+          const shareBoard = players.map(p => {
+            const pScores = holeScores.filter(s => s.playerId === p.id)
+            const gross = pScores.reduce((s, hs) => s + hs.grossScore, 0)
+            const courseHcp = courseHcps[p.id] ?? 0
+            const netStrokes = pScores.reduce((s, hs) => {
+              const hole = snapshot.holes.find(h => h.number === hs.holeNumber)
+              return s + (hole ? strokesOnHole(courseHcp, hole.strokeIndex) : 0)
+            }, 0)
+            return { player: p, gross, net: gross - netStrokes, vsPar: gross - totalPar }
+          }).sort((a, b) => a.net - b.net)
+
+          const positions: number[] = []
+          shareBoard.forEach((entry, idx) => {
+            positions.push(idx === 0 ? 1 : entry.net === shareBoard[idx - 1].net ? positions[idx - 1] : idx + 1)
+          })
+          const leaderboard: ShareCardLeaderboardEntry[] = shareBoard.map((entry, idx) => ({
+            pos: positions[idx], name: entry.player.name, gross: entry.gross, net: entry.net, vsPar: entry.vsPar,
+          }))
+
+          const gameResults: string[] = []
+          if (skinsResult) {
+            if (skinsResult.totalSkins === 0) {
+              gameResults.push('Skins: All holes tied')
+            } else {
+              players.forEach(p => {
+                const skins = skinsResult.skinsWon[p.id] ?? 0
+                if (skins > 0) gameResults.push(`${p.name}: ${skins} skin${skins !== 1 ? 's' : ''}`)
+              })
+            }
+          }
+          if (bestBallResult) {
+            const config = game.config as BestBallConfig
+            const teamNames = (team: 'A' | 'B') => players.filter(p => config.teams[p.id] === team).map(p => p.name).join(' & ')
+            gameResults.push(`Team A (${teamNames('A')}): ${bestBallResult.holesWon.A} holes`)
+            gameResults.push(`Team B (${teamNames('B')}): ${bestBallResult.holesWon.B} holes`)
+            gameResults.push(bestBallResult.winner === 'tie' ? 'Result: All Square' : `Winner: Team ${bestBallResult.winner}`)
+          }
+          if (nassauResult) {
+            [{ l: 'Front', s: nassauResult.front }, { l: 'Back', s: nassauResult.back }, { l: 'Total', s: nassauResult.total }].forEach(({ l, s }) => {
+              const winner = s.winner ? playerById(s.winner)?.name : null
+              gameResults.push(`${l}: ${s.incomplete ? 'Incomplete' : winner ? winner : 'Tied'}`)
+            })
+          }
+          if (wolfResult) {
+            players.slice().sort((a, b) => (wolfResult.netUnits[b.id] ?? 0) - (wolfResult.netUnits[a.id] ?? 0)).forEach(p => {
+              const u = wolfResult.netUnits[p.id] ?? 0
+              gameResults.push(`${p.name}: ${u > 0 ? '+' : ''}${u} unit${Math.abs(u) !== 1 ? 's' : ''}`)
+            })
+          }
+          if (bbbResult) {
+            players.slice().sort((a, b) => (bbbResult.pointsWon[b.id] ?? 0) - (bbbResult.pointsWon[a.id] ?? 0)).forEach(p => {
+              const pts = bbbResult.pointsWon[p.id] ?? 0
+              gameResults.push(`${p.name}: ${pts} pt${pts !== 1 ? 's' : ''}`)
+            })
+          }
+          if (hammerResult) {
+            players.slice().sort((a, b) => (hammerResult.netCents[b.id] ?? 0) - (hammerResult.netCents[a.id] ?? 0)).forEach(p => {
+              const net = hammerResult.netCents[p.id] ?? 0
+              gameResults.push(`${p.name}: ${net > 0 ? '+' : ''}${fmtMoney(Math.abs(net))}`)
+            })
+          }
+          if (vegasResult) {
+            gameResults.push(`Team A: ${vegasResult.netPoints.A} pts`)
+            gameResults.push(`Team B: ${vegasResult.netPoints.B} pts`)
+            gameResults.push(vegasResult.winner === 'tie' ? 'Result: Tied' : `Winner: Team ${vegasResult.winner}`)
+          }
+          if (stablefordResult) {
+            players.slice().sort((a, b) => (stablefordResult.points[b.id] ?? 0) - (stablefordResult.points[a.id] ?? 0)).forEach(p => {
+              gameResults.push(`${p.name}: ${stablefordResult.points[p.id] ?? 0} pts`)
+            })
+          }
+          if (dotsResult) {
+            players.slice().sort((a, b) => (dotsResult.netCents[b.id] ?? 0) - (dotsResult.netCents[a.id] ?? 0)).forEach(p => {
+              const net = dotsResult.netCents[p.id] ?? 0
+              gameResults.push(`${p.name}: ${net > 0 ? '+' : ''}${fmtMoney(Math.abs(net))}`)
+            })
+          }
+          if (bankerResult) {
+            players.slice().sort((a, b) => (bankerResult.netCents[b.id] ?? 0) - (bankerResult.netCents[a.id] ?? 0)).forEach(p => {
+              const net = bankerResult.netCents[p.id] ?? 0
+              gameResults.push(`${p.name}: ${net > 0 ? '+' : ''}${fmtMoney(Math.abs(net))}`)
+            })
+          }
+          if (quotaResult) {
+            players.slice().sort((a, b) => (quotaResult.netPoints[b.id] ?? 0) - (quotaResult.netPoints[a.id] ?? 0)).forEach(p => {
+              const net = quotaResult.netPoints[p.id] ?? 0
+              gameResults.push(`${p.name}: ${net > 0 ? '+' : ''}${net} (quota ${quotaResult.quotas[p.id] ?? 0})`)
+            })
+          }
+
+          const sharePayouts: ShareCardPayout[] = payouts.map(p => ({
+            name: playerById(p.playerId)?.name ?? 'Unknown',
+            amountCents: p.amountCents,
+            reason: p.reason,
+          }))
+
+          const dateStr = round.date.toISOString().slice(0, 10)
+          const courseSafe = snapshot.courseName.replace(/[^a-z0-9]/gi, '-').toLowerCase()
+
+          return (
+            <>
+              <button
+                onClick={shareImage}
+                disabled={sharing}
+                className="w-full h-14 bg-emerald-600 text-white text-lg font-bold rounded-2xl active:bg-emerald-700 transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
+              >
+                {sharing ? (
+                  <span className="inline-block w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                ) : (
+                  <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
+                  </svg>
+                )}
+                {sharing ? 'Creating image…' : 'Share Results'}
+              </button>
+              <div style={{ position: 'absolute', left: -9999, top: 0 }}>
+                <ShareCard
+                  ref={shareRef}
+                  courseName={snapshot.courseName}
+                  date={round.date}
+                  gameLabel={gameLabel}
+                  stakesMode={game.stakesMode}
+                  leaderboard={leaderboard}
+                  gameResults={gameResults}
+                  payouts={sharePayouts}
+                  totalPot={potCents > 0 ? potCents : null}
+                />
+              </div>
+            </>
+          )
+        })()}
       </div>
 
       <div className="fixed bottom-0 inset-x-0 p-4 bg-white/95 dark:bg-gray-800/95 backdrop-blur-sm border-t border-gray-200 dark:border-gray-700 safe-bottom">
