@@ -645,12 +645,18 @@ export default function App() {
   }, [])
 
   useEffect(() => {
-    supabase.auth.getSession().then(({ data: { session } }) => setSession(session))
+    console.log('[Auth] URL hash:', window.location.hash)
+    console.log('[Auth] URL search:', window.location.search)
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      console.log('[Auth] onAuthStateChange:', event)
       setSession(session)
       if (event === 'PASSWORD_RECOVERY') {
         setShowResetPassword(true)
       }
+    })
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      console.log('[Auth] getSession result:', session ? 'has session' : 'no session')
+      setSession(session)
     })
     return () => subscription.unsubscribe()
   }, [])
