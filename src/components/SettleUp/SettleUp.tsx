@@ -391,35 +391,21 @@ export function SettleUp({ roundId, userId, eventId, onDone, onContinue }: Props
     await supabase.from('settlements').update({ status: 'paid', paid_at: paidAt }).in('id', settlementIds)
   }
 
-  if (loading || !round || !game || !snapshot) {
-    return <div className="min-h-screen bg-gray-50 dark:bg-gray-900 flex items-center justify-center"><p className="text-gray-400">Loading…</p></div>
-  }
-
-  const gameLabel = GAME_LABELS[game.type] ?? game.type
-  const isHighRoller = game.stakesMode === 'high_roller'
-  const headerClass = isHighRoller ? 'hr-header' : 'app-header'
-
-  const owedSettlements = settlementRecords.filter(s => s.status === 'owed')
-  const paidSettlements = settlementRecords.filter(s => s.status === 'paid')
-  const allSettled = settlementRecords.length > 0 && owedSettlements.length === 0
-
   // Collection Checklist: aggregate settlements by counterparty from treasurer's perspective
+  // (must be before early return to keep hook order stable)
   const collectionChecklist = useMemo(() => {
     if (!treasurerId || settlementRecords.length === 0) return []
-    // Group settlements by the non-treasurer player
     const byPlayer = new Map<string, { collectCents: number; payCents: number; owedIds: string[]; totalIds: string[]; paidCount: number }>()
     for (const s of settlementRecords) {
       const involvesT = s.fromPlayerId === treasurerId || s.toPlayerId === treasurerId
       if (!involvesT) {
-        // Direct settlement between non-treasurer players — show as-is
-        // Group under fromPlayer
         const key = s.fromPlayerId + '→' + s.toPlayerId
         if (!byPlayer.has(key)) byPlayer.set(key, { collectCents: 0, payCents: 0, owedIds: [], totalIds: [], paidCount: 0 })
         const entry = byPlayer.get(key)!
         entry.totalIds.push(s.id)
         if (s.status === 'paid') entry.paidCount++
         else entry.owedIds.push(s.id)
-        entry.collectCents += s.amountCents // not really "collect" but track for display
+        entry.collectCents += s.amountCents
         continue
       }
       const counterpartyId = s.fromPlayerId === treasurerId ? s.toPlayerId : s.fromPlayerId
@@ -429,21 +415,18 @@ export function SettleUp({ roundId, userId, eventId, onDone, onContinue }: Props
       if (s.status === 'paid') { entry.paidCount++; continue }
       entry.owedIds.push(s.id)
       if (s.toPlayerId === treasurerId) {
-        // They owe the treasurer
         entry.collectCents += s.amountCents
       } else {
-        // Treasurer owes them
         entry.payCents += s.amountCents
       }
     }
     const result: { playerId: string; playerName: string; netCents: number; owedIds: string[]; totalCount: number; paidCount: number; player: Player | undefined; isDirect?: boolean; directLabel?: string }[] = []
     for (const [key, data] of byPlayer) {
       if (key.includes('→')) {
-        // Direct settlement between non-treasurer players
         const [fromId, toId] = key.split('→')
         const fromP = playerById(fromId)
         const toP = playerById(toId)
-        if (data.owedIds.length === 0) continue // all paid, skip
+        if (data.owedIds.length === 0) continue
         result.push({
           playerId: key,
           playerName: `${fromP?.name ?? '?'} → ${toP?.name ?? '?'}`,
@@ -457,7 +440,7 @@ export function SettleUp({ roundId, userId, eventId, onDone, onContinue }: Props
         })
       } else {
         const net = data.collectCents - data.payCents
-        if (data.owedIds.length === 0) continue // all paid
+        if (data.owedIds.length === 0) continue
         result.push({
           playerId: key,
           playerName: playerById(key)?.name ?? key.slice(0, 8),
@@ -471,6 +454,18 @@ export function SettleUp({ roundId, userId, eventId, onDone, onContinue }: Props
     }
     return result.sort((a, b) => Math.abs(b.netCents) - Math.abs(a.netCents))
   }, [settlementRecords, treasurerId, enrichedPlayers])
+
+  if (loading || !round || !game || !snapshot) {
+    return <div className="min-h-screen bg-gray-50 dark:bg-gray-900 flex items-center justify-center"><p className="text-gray-400">Loading…</p></div>
+  }
+
+  const gameLabel = GAME_LABELS[game.type] ?? game.type
+  const isHighRoller = game.stakesMode === 'high_roller'
+  const headerClass = isHighRoller ? 'hr-header' : 'app-header'
+
+  const owedSettlements = settlementRecords.filter(s => s.status === 'owed')
+  const paidSettlements = settlementRecords.filter(s => s.status === 'paid')
+  const allSettled = settlementRecords.length > 0 && owedSettlements.length === 0
 
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-900 pb-32">
