@@ -645,17 +645,36 @@ export default function App() {
   }, [])
 
   useEffect(() => {
-    console.log('[Auth] URL hash:', window.location.hash)
-    console.log('[Auth] URL search:', window.location.search)
+    // Manually handle recovery tokens from URL hash
+    // (Outlook SafeLinks / Brevo tracking preserve hash fragments
+    //  but Supabase client sometimes fails to auto-detect them)
+    const hash = window.location.hash
+    if (hash.includes('type=recovery') || hash.includes('type=signup')) {
+      const params = new URLSearchParams(hash.substring(1))
+      const accessToken = params.get('access_token')
+      const refreshToken = params.get('refresh_token')
+      const type = params.get('type')
+      if (accessToken && refreshToken) {
+        supabase.auth.setSession({ access_token: accessToken, refresh_token: refreshToken }).then(({ data, error }) => {
+          if (!error && data.session) {
+            setSession(data.session)
+            if (type === 'recovery') {
+              setShowResetPassword(true)
+            }
+            // Clean the hash from the URL
+            window.history.replaceState(null, '', window.location.pathname)
+          }
+        })
+      }
+    }
+
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
-      console.log('[Auth] onAuthStateChange:', event)
       setSession(session)
       if (event === 'PASSWORD_RECOVERY') {
         setShowResetPassword(true)
       }
     })
     supabase.auth.getSession().then(({ data: { session } }) => {
-      console.log('[Auth] getSession result:', session ? 'has session' : 'no session')
       setSession(session)
     })
     return () => subscription.unsubscribe()
