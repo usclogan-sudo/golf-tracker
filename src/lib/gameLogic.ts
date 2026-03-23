@@ -837,8 +837,8 @@ export function calculateVegasPayouts(
   let remainder = potCents - perWinner * winnerIds.length
 
   return winnerIds.map(pid => {
-    const extra = remainder > 0 ? 1 : 0
-    remainder = Math.max(0, remainder - extra)
+    const extra = Math.min(remainder, 1)
+    remainder -= extra
     return { playerId: pid, amountCents: perWinner + extra, reason: `Vegas winner (Team ${winTeam})` }
   })
 }
@@ -1100,8 +1100,8 @@ export function calculateBankerPayouts(
     .filter(([, u]) => u > 0)
     .sort((a, b) => b[1] - a[1])
     .map(([playerId, u]) => {
-      const extra = remainder > 0 ? 1 : 0
-      remainder = Math.max(0, remainder - extra)
+      const extra = Math.min(remainder, u)
+      remainder -= extra
       return { playerId, amountCents: u * centsPerUnit + extra, reason: `Banker +${u} unit${u !== 1 ? 's' : ''}` }
     })
 }
@@ -1220,8 +1220,8 @@ export function calculateSkinsPayouts(
     .filter(([, w]) => w > 0)
     .sort((a, b) => b[1] - a[1])
     .map(([playerId, w]) => {
-      const extra = remainder > 0 ? 1 : 0
-      remainder = Math.max(0, remainder - extra)
+      const extra = Math.min(remainder, w)
+      remainder -= extra
       const skins = result.skinsWon[playerId] ?? 0
       return {
         playerId,
@@ -1254,8 +1254,8 @@ export function calculateBestBallPayouts(
   let remainder = potCents - perWinner * winnerIds.length
 
   return winnerIds.map(pid => {
-    const extra = remainder > 0 ? 1 : 0
-    remainder = Math.max(0, remainder - extra)
+    const extra = Math.min(remainder, 1)
+    remainder -= extra
     return {
       playerId: pid,
       amountCents: perWinner + extra,
