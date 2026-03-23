@@ -27,14 +27,19 @@ export function RoundsDetail({ userId, onBack }: Props) {
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    Promise.all([
-      supabase.from('rounds').select('*').order('date', { ascending: false }),
-      supabase.from('hole_scores').select('*'),
-    ]).then(([roundsRes, scoresRes]) => {
-      if (roundsRes.data) setRounds(roundsRes.data.map(rowToRound))
-      if (scoresRes.data) setHoleScores(scoresRes.data.map(rowToHoleScore))
-      setLoading(false)
-    })
+    supabase.from('rounds').select('*').order('date', { ascending: false })
+      .then(async (roundsRes) => {
+        if (roundsRes.data) {
+          const rounds = roundsRes.data.map(rowToRound)
+          setRounds(rounds)
+          const roundIds = rounds.map(r => r.id)
+          if (roundIds.length > 0) {
+            const { data: scoreRows } = await supabase.from('hole_scores').select('*').in('round_id', roundIds)
+            if (scoreRows) setHoleScores(scoreRows.map(rowToHoleScore))
+          }
+        }
+        setLoading(false)
+      })
   }, [userId])
 
   const stats = useMemo(() => {

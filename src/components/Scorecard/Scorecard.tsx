@@ -154,6 +154,7 @@ export function Scorecard({ userId, roundId, onEndRound, onHome, readOnly: readO
   const [sideBets, setSideBets] = useState<SideBet[]>([])
   const [roundParticipants, setRoundParticipants] = useState<RoundParticipant[]>([])
   const [loading, setLoading] = useState(true)
+  const [loadError, setLoadError] = useState(false)
   const [inviteToast, setInviteToast] = useState<string | null>(null)
   const [showRulesModal, setShowRulesModal] = useState(false)
   const [saveError, setSaveError] = useState<string | null>(null)
@@ -192,7 +193,9 @@ export function Scorecard({ userId, roundId, onEndRound, onHome, readOnly: readO
   const [batchScores, setBatchScores] = useState<Record<string, Record<number, string>>>({})
   const [numberPadTarget, setNumberPadTarget] = useState<{ playerId: string; playerName: string } | null>(null)
 
-  useEffect(() => {
+  const loadScorecardData = () => {
+    setLoadError(false)
+    setLoading(true)
     Promise.all([
       supabase.from('rounds').select('*').eq('id', roundId).single(),
       supabase.from('round_players').select('*').eq('round_id', roundId),
@@ -202,7 +205,12 @@ export function Scorecard({ userId, roundId, onEndRound, onHome, readOnly: readO
       supabase.from('side_bets').select('*').eq('round_id', roundId),
       supabase.from('round_participants').select('*').eq('round_id', roundId),
     ]).then(([roundRes, rpRes, hsRes, bbbRes, junkRes, sbRes, partRes]) => {
-      if (roundRes.data) setRound(rowToRound(roundRes.data))
+      if (roundRes.error || !roundRes.data) {
+        setLoadError(true)
+        setLoading(false)
+        return
+      }
+      setRound(rowToRound(roundRes.data))
       if (rpRes.data) setRoundPlayers(rpRes.data.map(rowToRoundPlayer))
       if (hsRes.data) setHoleScores(hsRes.data.map(rowToHoleScore))
       if (bbbRes.data) setBbbPoints(bbbRes.data.map(rowToBBBPoint))
@@ -210,7 +218,14 @@ export function Scorecard({ userId, roundId, onEndRound, onHome, readOnly: readO
       if (sbRes.data) setSideBets(sbRes.data.map(rowToSideBet))
       if (partRes.data) setRoundParticipants(partRes.data.map(rowToRoundParticipant))
       setLoading(false)
+    }).catch(() => {
+      setLoadError(true)
+      setLoading(false)
     })
+  }
+
+  useEffect(() => {
+    loadScorecardData()
   }, [roundId])
 
   // ─── Fetch event data when round is part of an event ──────────────────────
@@ -776,6 +791,16 @@ export function Scorecard({ userId, roundId, onEndRound, onHome, readOnly: readO
   }, [players, holeScores, snapshot, courseHcps])
 
   const headerClass = game?.stakesMode === 'high_roller' ? 'hr-header' : 'app-header'
+
+  if (loadError) {
+    return (
+      <div className="min-h-screen bg-gray-50 dark:bg-gray-900 flex flex-col items-center justify-center gap-4 px-6">
+        <p className="text-red-500 font-semibold">Failed to load scorecard</p>
+        <button onClick={loadScorecardData} className="px-6 py-3 bg-amber-500 text-white font-bold rounded-xl active:bg-amber-600">Tap to Retry</button>
+        <button onClick={onHome} className="text-gray-500 text-sm underline mt-2">Go Back</button>
+      </div>
+    )
+  }
 
   if (loading || !round || !snapshot) {
     return <div className="min-h-screen bg-gray-50 dark:bg-gray-900 flex items-center justify-center"><p className="text-gray-400">Loading round…</p></div>

@@ -131,12 +131,16 @@ export function SettleUp({ roundId, userId, eventId, onDone, onContinue }: Props
   const [profileMap, setProfileMap] = useState<Map<string, UserProfile>>(new Map())
   const [participantMap, setParticipantMap] = useState<Map<string, string>>(new Map()) // playerId → userId
   const [loading, setLoading] = useState(true)
+  const [loadError, setLoadError] = useState(false)
   const [settlementsInitialized, setSettlementsInitialized] = useState(false)
   const [eventData, setEventData] = useState<GolfEvent | null>(null)
   const [expandedSettlement, setExpandedSettlement] = useState<string | null>(null)
+  const [mutationError, setMutationError] = useState<string | null>(null)
   const { shareRef, sharing, shareImage } = useShareImage('fore-skins-results')
 
-  useEffect(() => {
+  const loadSettleUpData = () => {
+    setLoadError(false)
+    setLoading(true)
     Promise.all([
       supabase.from('rounds').select('*').eq('id', roundId).single(),
       supabase.from('round_players').select('*').eq('round_id', roundId),
@@ -148,7 +152,12 @@ export function SettleUp({ roundId, userId, eventId, onDone, onContinue }: Props
       supabase.from('settlements').select('*').eq('round_id', roundId),
       supabase.from('round_participants').select('*').eq('round_id', roundId),
     ]).then(([roundRes, rpRes, hsRes, biRes, bbbRes, junkRes, sbRes, settlRes, partRes]) => {
-      if (roundRes.data) setRound(rowToRound(roundRes.data))
+      if (roundRes.error || !roundRes.data) {
+        setLoadError(true)
+        setLoading(false)
+        return
+      }
+      setRound(rowToRound(roundRes.data))
       if (rpRes.data) setRoundPlayers(rpRes.data.map(rowToRoundPlayer))
       if (hsRes.data) setHoleScores(hsRes.data.map(rowToHoleScore))
       if (biRes.data) setBuyIns(biRes.data.map(rowToBuyIn))
@@ -181,6 +190,9 @@ export function SettleUp({ roundId, userId, eventId, onDone, onContinue }: Props
       }
 
       setLoading(false)
+    }).catch(() => {
+      setLoadError(true)
+      setLoading(false)
     })
 
     // Fetch event data if eventId provided or round has one
@@ -189,6 +201,10 @@ export function SettleUp({ roundId, userId, eventId, onDone, onContinue }: Props
         if (data) setEventData(rowToEvent(data))
       })
     }
+  }
+
+  useEffect(() => {
+    loadSettleUpData()
   }, [roundId, eventId])
 
   // Fetch event from round if not provided via prop
@@ -364,31 +380,49 @@ export function SettleUp({ roundId, userId, eventId, onDone, onContinue }: Props
   const toggleBuyInPaid = async (buyIn: BuyIn) => {
     const newStatus = buyIn.status === 'unpaid' ? 'marked_paid' : 'unpaid'
     const newPaidAt = newStatus === 'marked_paid' ? new Date().toISOString() : null
+    const prevBuyIns = buyIns
     setBuyIns(prev => prev.map(b =>
       b.id === buyIn.id
         ? { ...b, status: newStatus as BuyIn['status'], paidAt: newPaidAt ? new Date(newPaidAt) : undefined }
         : b
     ))
-    await supabase.from('buy_ins').update({ status: newStatus, paid_at: newPaidAt }).eq('id', buyIn.id)
+    setMutationError(null)
+    const { error } = await supabase.from('buy_ins').update({ status: newStatus, paid_at: newPaidAt }).eq('id', buyIn.id)
+    if (error) {
+      setBuyIns(prevBuyIns)
+      setMutationError('Failed to update buy-in status. Please try again.')
+    }
   }
 
   const toggleSettlementPaid = async (settlement: SettlementRecord) => {
     const newStatus = settlement.status === 'owed' ? 'paid' : 'owed'
     const newPaidAt = newStatus === 'paid' ? new Date().toISOString() : null
+    const prevRecords = settlementRecords
     setSettlementRecords(prev => prev.map(s =>
       s.id === settlement.id
         ? { ...s, status: newStatus as SettlementRecord['status'], paidAt: newPaidAt ? new Date(newPaidAt) : undefined }
         : s
     ))
-    await supabase.from('settlements').update({ status: newStatus, paid_at: newPaidAt }).eq('id', settlement.id)
+    setMutationError(null)
+    const { error } = await supabase.from('settlements').update({ status: newStatus, paid_at: newPaidAt }).eq('id', settlement.id)
+    if (error) {
+      setSettlementRecords(prevRecords)
+      setMutationError('Failed to update settlement. Please try again.')
+    }
   }
 
   const markPlayerSettled = async (settlementIds: string[]) => {
     const paidAt = new Date().toISOString()
+    const prevRecords = settlementRecords
     setSettlementRecords(prev => prev.map(s =>
       settlementIds.includes(s.id) ? { ...s, status: 'paid' as SettlementRecord['status'], paidAt: new Date(paidAt) } : s
     ))
-    await supabase.from('settlements').update({ status: 'paid', paid_at: paidAt }).in('id', settlementIds)
+    setMutationError(null)
+    const { error } = await supabase.from('settlements').update({ status: 'paid', paid_at: paidAt }).in('id', settlementIds)
+    if (error) {
+      setSettlementRecords(prevRecords)
+      setMutationError('Failed to mark settlements as paid. Please try again.')
+    }
   }
 
   // Collection Checklist: aggregate settlements by counterparty from treasurer's perspective
@@ -455,6 +489,16 @@ export function SettleUp({ roundId, userId, eventId, onDone, onContinue }: Props
     return result.sort((a, b) => Math.abs(b.netCents) - Math.abs(a.netCents))
   }, [settlementRecords, treasurerId, enrichedPlayers])
 
+  if (loadError) {
+    return (
+      <div className="min-h-screen bg-gray-50 dark:bg-gray-900 flex flex-col items-center justify-center gap-4 px-6">
+        <p className="text-red-500 font-semibold">Failed to load round data</p>
+        <button onClick={loadSettleUpData} className="px-6 py-3 bg-amber-500 text-white font-bold rounded-xl active:bg-amber-600">Tap to Retry</button>
+        <button onClick={onDone} className="text-gray-500 text-sm underline mt-2">Go Back</button>
+      </div>
+    )
+  }
+
   if (loading || !round || !game || !snapshot) {
     return <div className="min-h-screen bg-gray-50 dark:bg-gray-900 flex items-center justify-center"><p className="text-gray-400">Loading…</p></div>
   }
@@ -469,6 +513,12 @@ export function SettleUp({ roundId, userId, eventId, onDone, onContinue }: Props
 
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-900 pb-32">
+      {mutationError && (
+        <div className="fixed top-0 inset-x-0 z-50 bg-red-600 text-white text-center text-sm font-semibold px-4 py-3 shadow-lg">
+          {mutationError}
+          <button onClick={() => setMutationError(null)} className="ml-3 underline">Dismiss</button>
+        </div>
+      )}
       <header className={`${headerClass} text-white px-4 py-5 sticky top-0 z-10 shadow-xl`}>
         <div className="max-w-2xl mx-auto">
           <h1 className="text-2xl font-bold flex items-center gap-2">

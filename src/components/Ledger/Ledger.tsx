@@ -53,14 +53,20 @@ export function Ledger({ userId, onBack }: Props) {
   async function loadLedger() {
     setLoading(true)
 
-    const [settlRes, roundsRes, partRes] = await Promise.all([
-      supabase.from('settlements').select('*'),
+    const [roundsRes, partRes] = await Promise.all([
       supabase.from('rounds').select('*').eq('status', 'complete'),
       supabase.from('round_participants').select('player_id').eq('user_id', userId),
     ])
 
-    const settlements = (settlRes.data ?? []).map(rowToSettlementRecord)
     const rounds = (roundsRes.data ?? []).map(rowToRound)
+    const roundIds = rounds.map(r => r.id)
+
+    // Scope settlements to user's rounds only
+    let settlements: SettlementRecord[] = []
+    if (roundIds.length > 0) {
+      const { data } = await supabase.from('settlements').select('*').in('round_id', roundIds)
+      settlements = (data ?? []).map(rowToSettlementRecord)
+    }
 
     const pMap = new Map<string, Player>()
     for (const r of rounds) {

@@ -1837,6 +1837,7 @@ function TreasurerAndBuyIns({
   })
   const [allowStartUnpaid, setAllowStartUnpaid] = useState(false)
   const [saving, setSaving] = useState(false)
+  const [createError, setCreateError] = useState<string | null>(null)
 
   useEffect(() => { window.scrollTo({ top: 0, behavior: 'smooth' }) }, [])
 
@@ -1890,11 +1891,19 @@ function TreasurerAndBuyIns({
       }))
 
       // Insert round, round_players, and buy_ins
-      await Promise.all([
+      setCreateError(null)
+      const [roundResult, rpResult, biResult] = await Promise.all([
         supabase.from('rounds').insert(roundToRow(round, userId)),
         supabase.from('round_players').insert(roundPlayers.map(rp => roundPlayerToRow(rp, userId))),
         supabase.from('buy_ins').insert(buyIns.map(b => buyInToRow(b, userId))),
       ])
+
+      const insertError = roundResult.error || rpResult.error || biResult.error
+      if (insertError) {
+        setCreateError('Failed to create round. Check your connection and try again.')
+        setSaving(false)
+        return
+      }
 
       // Fire-and-forget: send round invite notifications to registered players
       const playerIds = players.map(p => p.id)
@@ -2043,6 +2052,9 @@ function TreasurerAndBuyIns({
 
       <div className="fixed bottom-0 inset-x-0 p-4 bg-white/95 dark:bg-gray-800/95 backdrop-blur-sm border-t border-gray-200 dark:border-gray-700">
         <div className="max-w-2xl mx-auto space-y-2">
+          {createError && (
+            <p className="text-red-600 text-sm font-semibold text-center">{createError}</p>
+          )}
           <button
             onClick={startRound}
             disabled={!canStart || saving}

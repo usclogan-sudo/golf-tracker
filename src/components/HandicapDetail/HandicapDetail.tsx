@@ -28,16 +28,23 @@ export function HandicapDetail({ userId, userProfile, onBack }: Props) {
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    Promise.all([
-      supabase.from('rounds').select('*').eq('status', 'complete').order('date', { ascending: false }),
-      supabase.from('hole_scores').select('*'),
-      supabase.from('round_players').select('*'),
-    ]).then(([roundsRes, scoresRes, rpRes]) => {
-      if (roundsRes.data) setRounds(roundsRes.data.map(rowToRound))
-      if (scoresRes.data) setHoleScores(scoresRes.data.map(rowToHoleScore))
-      if (rpRes.data) setRoundPlayers(rpRes.data.map(rowToRoundPlayer))
-      setLoading(false)
-    })
+    supabase.from('rounds').select('*').eq('status', 'complete').order('date', { ascending: false })
+      .then(async (roundsRes) => {
+        if (roundsRes.data) {
+          const rounds = roundsRes.data.map(rowToRound)
+          setRounds(rounds)
+          const roundIds = rounds.map(r => r.id)
+          if (roundIds.length > 0) {
+            const [scoresRes, rpRes] = await Promise.all([
+              supabase.from('hole_scores').select('*').in('round_id', roundIds),
+              supabase.from('round_players').select('*').in('round_id', roundIds),
+            ])
+            if (scoresRes.data) setHoleScores(scoresRes.data.map(rowToHoleScore))
+            if (rpRes.data) setRoundPlayers(rpRes.data.map(rowToRoundPlayer))
+          }
+        }
+        setLoading(false)
+      })
   }, [userId])
 
   const roundEntries = useMemo((): RoundEntry[] => {

@@ -220,34 +220,32 @@ function Home({
       }
     })
 
-    // Personal summary
-    Promise.all([
-      supabase.from('rounds').select('*').eq('status', 'complete').order('date', { ascending: false }),
-      supabase.from('hole_scores').select('*'),
-    ]).then(([roundsRes, scoresRes]) => {
-      if (roundsRes.error || scoresRes.error) return
-      if (!roundsRes.data || !scoresRes.data) return
-      const completedRounds = roundsRes.data.map(rowToRound)
-      const allScores = scoresRes.data.map(rowToHoleScore)
+    // Personal summary — fetch rounds first, then only scores for the last round
+    supabase.from('rounds').select('*').eq('status', 'complete').order('date', { ascending: false })
+      .then(async (roundsRes) => {
+        if (roundsRes.error || !roundsRes.data) return
+        const completedRounds = roundsRes.data.map(rowToRound)
 
-      // Find rounds where current user played
-      const myRounds = completedRounds.filter(r =>
-        r.players?.some(p => p.id === userId)
-      )
+        // Find rounds where current user played
+        const myRounds = completedRounds.filter(r =>
+          r.players?.some(p => p.id === userId)
+        )
 
-      if (myRounds.length === 0) return
+        if (myRounds.length === 0) return
 
-      const lastRound = myRounds[0]
-      const lastScores = allScores.filter(s => s.roundId === lastRound.id && s.playerId === userId)
-      const lastScore = lastScores.length > 0 ? lastScores.reduce((sum, s) => sum + s.grossScore, 0) : null
+        const lastRound = myRounds[0]
+        // Only fetch scores for the most recent round
+        const { data: scoreRows } = await supabase.from('hole_scores').select('*').eq('round_id', lastRound.id)
+        const lastScores = (scoreRows ?? []).map(rowToHoleScore).filter(s => s.playerId === userId)
+        const lastScore = lastScores.length > 0 ? lastScores.reduce((sum, s) => sum + s.grossScore, 0) : null
 
-      setPersonalSummary({
-        totalRounds: myRounds.length,
-        lastCourse: lastRound.courseSnapshot?.courseName ?? 'Unknown',
-        lastDate: lastRound.date.toLocaleDateString(undefined, { month: 'short', day: 'numeric' }),
-        lastScore,
+        setPersonalSummary({
+          totalRounds: myRounds.length,
+          lastCourse: lastRound.courseSnapshot?.courseName ?? 'Unknown',
+          lastDate: lastRound.date.toLocaleDateString(undefined, { month: 'short', day: 'numeric' }),
+          lastScore,
+        })
       })
-    })
   }, [userId])
 
   return (
@@ -595,6 +593,7 @@ export default function App() {
   const [homeKey, setHomeKey] = useState(0)
   const [userProfile, setUserProfile] = useState<UserProfile | null>(null)
   const [profileLoading, setProfileLoading] = useState(true)
+  const [profileError, setProfileError] = useState(false)
   const [playAgainRound, setPlayAgainRound] = useState<Round | null>(null)
   const [newCourseName, setNewCourseName] = useState('')
   const [scorecardReadOnly, setScorecardReadOnly] = useState(false)
@@ -698,6 +697,7 @@ export default function App() {
       return
     }
     setProfileLoading(true)
+    setProfileError(false)
     fetchOrCreateProfile(session.user.id).then(async profile => {
       // Auto-complete onboarding for anonymous guests — skip straight to app
       if (session.user.is_anonymous && profile && !profile.onboardingComplete) {
@@ -709,6 +709,9 @@ export default function App() {
       if (profile.adminOnly) {
         setScreen('admin')
       }
+      setProfileLoading(false)
+    }).catch(() => {
+      setProfileError(true)
       setProfileLoading(false)
     })
   }, [session])
@@ -776,6 +779,16 @@ export default function App() {
     return (
       <div className="min-h-screen bg-slate-50 dark:bg-gray-900 flex items-center justify-center">
         <div className="w-8 h-8 border-2 border-amber-500 border-t-transparent rounded-full animate-spin" />
+      </div>
+    )
+  }
+
+  if (profileError) {
+    return (
+      <div className="min-h-screen bg-slate-50 dark:bg-gray-900 flex flex-col items-center justify-center gap-4 px-6">
+        <p className="text-red-500 font-semibold text-lg">Failed to load profile</p>
+        <p className="text-gray-500 text-sm text-center">Check your connection and try again.</p>
+        <button onClick={() => { setProfileLoading(true); setProfileError(false); fetchOrCreateProfile(session.user.id).then(p => { setUserProfile(p); setProfileLoading(false) }).catch(() => { setProfileError(true); setProfileLoading(false) }) }} className="px-6 py-3 bg-amber-500 text-white font-bold rounded-xl active:bg-amber-600">Retry</button>
       </div>
     )
   }
@@ -1026,7 +1039,11 @@ export default function App() {
       message: msg,
       onConfirm: async () => {
         setAppConfirmModal(null)
-        await supabase.from('rounds').update({ status: 'complete' }).eq('id', roundId)
+        const { error } = await supabase.from('rounds').update({ status: 'complete' }).eq('id', roundId)
+        if (error) {
+          setAppConfirmModal({ title: 'Error', message: 'Failed to end round. Check your connection and try again.' , onConfirm: () => setAppConfirmModal(null) })
+          return
+        }
         setActiveRoundId(roundId)
         setScreen('settle-up')
       },

@@ -273,14 +273,16 @@ export function userProfileToRow(p: UserProfile) {
 }
 
 export async function fetchOrCreateProfile(userId: string): Promise<UserProfile> {
-  const { data } = await supabase
+  const { data, error } = await supabase
     .from('user_profiles')
     .select('*')
     .eq('user_id', userId)
     .maybeSingle()
+  if (error) throw new Error(`Failed to fetch profile: ${error.message}`)
   if (data) return rowToUserProfile(data)
   const newProfile: UserProfile = { userId, isAdmin: false, adminOnly: false, onboardingComplete: false, tee: 'White' }
-  await supabase.from('user_profiles').insert(userProfileToRow(newProfile))
+  const { error: insertError } = await supabase.from('user_profiles').insert(userProfileToRow(newProfile))
+  if (insertError) throw new Error(`Failed to create profile: ${insertError.message}`)
   return newProfile
 }
 
