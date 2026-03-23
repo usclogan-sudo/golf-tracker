@@ -135,6 +135,13 @@ export function SettleUp({ roundId, userId, eventId, onDone, onContinue }: Props
   const [settlementsInitialized, setSettlementsInitialized] = useState(false)
   const [eventData, setEventData] = useState<GolfEvent | null>(null)
   const [expandedSettlement, setExpandedSettlement] = useState<string | null>(null)
+  const [showBuyInDetails, setShowBuyInDetails] = useState<boolean | null>(null) // null = auto
+  const [expandedSections, setExpandedSections] = useState<Set<string>>(new Set())
+  const toggleSection = (key: string) => setExpandedSections(prev => {
+    const next = new Set(prev)
+    if (next.has(key)) next.delete(key); else next.add(key)
+    return next
+  })
   const [mutationError, setMutationError] = useState<string | null>(null)
   const { shareRef, sharing, shareImage } = useShareImage('fore-skins-results')
 
@@ -545,6 +552,61 @@ export function SettleUp({ roundId, userId, eventId, onDone, onContinue }: Props
           </div>
         )}
 
+        {/* ── You Owe / You Collect Summary (moved to top) ── */}
+        {settlementRecords.length > 0 && userId && (() => {
+          const myPlayerId = Array.from(participantMap.entries()).find(([, uid]) => uid === userId)?.[0]
+            ?? (treasurerId && (userId === round?.createdBy) ? treasurerId : null)
+          if (!myPlayerId) {
+            const totalOwed = owedSettlements.reduce((s, r) => s + r.amountCents, 0)
+            return (
+              <section className="bg-gray-50 dark:bg-gray-700 rounded-2xl p-4 text-center">
+                <p className="text-sm text-gray-500">Total in play</p>
+                <p className="text-2xl font-bold text-gray-800 dark:text-gray-100">{fmtMoney(totalOwed)}</p>
+                <p className="text-xs text-gray-400 mt-1">{owedSettlements.length} settlement{owedSettlements.length !== 1 ? 's' : ''} remaining</p>
+              </section>
+            )
+          }
+          let collectCents = 0
+          let oweCents = 0
+          const collectFrom: { name: string; cents: number }[] = []
+          const oweTo: { name: string; cents: number }[] = []
+          for (const s of settlementRecords.filter(r => r.status === 'owed')) {
+            if (s.toPlayerId === myPlayerId) {
+              collectCents += s.amountCents
+              const from = playerById(s.fromPlayerId)
+              collectFrom.push({ name: from?.name ?? '?', cents: s.amountCents })
+            } else if (s.fromPlayerId === myPlayerId) {
+              oweCents += s.amountCents
+              const to = playerById(s.toPlayerId)
+              oweTo.push({ name: to?.name ?? '?', cents: s.amountCents })
+            }
+          }
+          const net = collectCents - oweCents
+          return (
+            <section className={`rounded-2xl p-4 text-center space-y-2 ${
+              net > 0 ? 'bg-green-50 border-2 border-green-200' :
+              net < 0 ? 'bg-red-50 border-2 border-red-200' :
+              'bg-gray-50 border border-gray-200'
+            }`}>
+              <p className={`text-2xl font-bold ${
+                net > 0 ? 'text-green-700' : net < 0 ? 'text-red-700' : 'text-gray-600'
+              }`}>
+                {net > 0 ? `You collect ${fmtMoney(net)}` : net < 0 ? `You owe ${fmtMoney(Math.abs(net))}` : "You're even"}
+              </p>
+              {collectFrom.length > 0 && (
+                <p className="text-sm text-green-600">
+                  {collectFrom.map(c => `From ${c.name}: ${fmtMoney(c.cents)}`).join(' · ')}
+                </p>
+              )}
+              {oweTo.length > 0 && (
+                <p className="text-sm text-red-600">
+                  {oweTo.map(c => `To ${c.name}: ${fmtMoney(c.cents)}`).join(' · ')}
+                </p>
+              )}
+            </section>
+          )
+        })()}
+
         {/* Collection Checklist — treasurer's aggregated view */}
         {isTreasurer && collectionChecklist.length > 0 && (
           <section className="bg-white dark:bg-gray-800 rounded-2xl shadow-sm p-4 space-y-3">
@@ -605,60 +667,78 @@ export function SettleUp({ roundId, userId, eventId, onDone, onContinue }: Props
           </section>
         )}
 
-        {buyIns.length > 0 && (
+        {buyIns.length > 0 && (() => {
+          const allBuyInsPaid = unpaidBuyIns.length === 0
+          const isExpanded = showBuyInDetails !== null ? showBuyInDetails : !allBuyInsPaid
+          return (
           <section className="bg-white dark:bg-gray-800 rounded-2xl shadow-sm p-4 space-y-3">
-            <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Buy-In Status</p>
-            {isTreasurer && unpaidBuyIns.length > 0 && (
-              <div className="bg-red-50 border border-red-200 rounded-xl p-3">
-                <p className="text-red-700 text-sm font-semibold">
-                  {unpaidBuyIns.length} unpaid — collect {fmtMoney(unpaidBuyIns.length * game.buyInCents)} before distributing
-                </p>
-              </div>
-            )}
-            <div className="space-y-2">
-              {buyIns.map(b => {
-                const p = playerById(b.playerId)
-                const isPaid = b.status === 'marked_paid'
-                return (
-                  <div key={b.id} className={`flex items-center justify-between p-3 rounded-xl ${isPaid ? 'bg-green-50' : 'bg-red-50'}`}>
-                    <div>
-                      <p className="font-semibold text-gray-800 text-sm">{p?.name ?? 'Unknown'}</p>
-                      <p className="text-xs text-gray-500">
-                        {fmtMoney(b.amountCents)}
-                        {p?.venmoUsername && <span className="ml-1 text-blue-500">Venmo</span>}
-                        {p?.zelleIdentifier && <span className="ml-1 text-purple-500">Zelle</span>}
-                        {p?.cashAppUsername && <span className="ml-1 text-green-500">CashApp</span>}
-                        {p?.paypalEmail && <span className="ml-1 text-yellow-600">PayPal</span>}
-                      </p>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      {isTreasurer && !isPaid && p?.venmoUsername && (
-                        <a href={`https://venmo.com/u/${p.venmoUsername.replace('@', '')}`} target="_blank" rel="noopener noreferrer"
-                          className="text-xs text-blue-600 font-semibold underline">Venmo</a>
-                      )}
-                      {isTreasurer ? (
-                        <button
-                          onClick={() => toggleBuyInPaid(b)}
-                          className={`px-4 py-2 rounded-xl text-sm font-semibold transition-colors ${
-                            isPaid
-                              ? 'bg-green-600 text-white active:bg-gray-800'
-                              : 'bg-red-100 text-red-700 active:bg-red-200'
-                          }`}
-                        >
-                          {isPaid ? 'Paid' : 'Mark Paid'}
-                        </button>
-                      ) : (
-                        <span className={`px-3 py-1.5 rounded-xl text-sm font-semibold ${isPaid ? 'text-green-600' : 'text-red-500'}`}>
-                          {isPaid ? 'Paid' : 'Unpaid'}
-                        </span>
-                      )}
-                    </div>
+            <button
+              onClick={() => setShowBuyInDetails(!isExpanded)}
+              className="w-full flex items-center justify-between"
+            >
+              <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Buy-In Status</p>
+              {allBuyInsPaid && !isExpanded ? (
+                <span className="text-green-600 text-sm font-semibold">All buy-ins collected ✓</span>
+              ) : (
+                <span className="text-gray-400 text-sm">{isExpanded ? '▾' : '▸'}</span>
+              )}
+            </button>
+            {isExpanded && (
+              <>
+                {isTreasurer && unpaidBuyIns.length > 0 && (
+                  <div className="bg-red-50 border border-red-200 rounded-xl p-3">
+                    <p className="text-red-700 text-sm font-semibold">
+                      {unpaidBuyIns.length} unpaid — collect {fmtMoney(unpaidBuyIns.length * game.buyInCents)} before distributing
+                    </p>
                   </div>
-                )
-              })}
-            </div>
+                )}
+                <div className="space-y-2">
+                  {buyIns.map(b => {
+                    const p = playerById(b.playerId)
+                    const isPaid = b.status === 'marked_paid'
+                    return (
+                      <div key={b.id} className={`flex items-center justify-between p-3 rounded-xl ${isPaid ? 'bg-green-50' : 'bg-red-50'}`}>
+                        <div>
+                          <p className="font-semibold text-gray-800 text-sm">{p?.name ?? 'Unknown'}</p>
+                          <p className="text-xs text-gray-500">
+                            {fmtMoney(b.amountCents)}
+                            {p?.venmoUsername && <span className="ml-1 text-blue-500">Venmo</span>}
+                            {p?.zelleIdentifier && <span className="ml-1 text-purple-500">Zelle</span>}
+                            {p?.cashAppUsername && <span className="ml-1 text-green-500">CashApp</span>}
+                            {p?.paypalEmail && <span className="ml-1 text-yellow-600">PayPal</span>}
+                          </p>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          {isTreasurer && !isPaid && p?.venmoUsername && (
+                            <a href={`https://venmo.com/u/${p.venmoUsername.replace('@', '')}`} target="_blank" rel="noopener noreferrer"
+                              className="text-xs text-blue-600 font-semibold underline">Venmo</a>
+                          )}
+                          {isTreasurer ? (
+                            <button
+                              onClick={() => toggleBuyInPaid(b)}
+                              className={`px-4 py-2 rounded-xl text-sm font-semibold transition-colors ${
+                                isPaid
+                                  ? 'bg-green-600 text-white active:bg-gray-800'
+                                  : 'bg-red-100 text-red-700 active:bg-red-200'
+                              }`}
+                            >
+                              {isPaid ? 'Paid' : 'Mark Paid'}
+                            </button>
+                          ) : (
+                            <span className={`px-3 py-1.5 rounded-xl text-sm font-semibold ${isPaid ? 'text-green-600' : 'text-red-500'}`}>
+                              {isPaid ? 'Paid' : 'Unpaid'}
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    )
+                  })}
+                </div>
+              </>
+            )}
           </section>
-        )}
+          )
+        })()}
 
         {/* Summary */}
         <section className={`rounded-2xl shadow-sm p-4 ${isHighRoller ? 'border-2' : 'bg-white'}`}
@@ -779,22 +859,87 @@ export function SettleUp({ roundId, userId, eventId, onDone, onContinue }: Props
           )
         })()}
 
-        {/* ── Skins Results ── */}
+        {/* ── Collapsible Game Results ── */}
         {skinsResult && (
-          <section className="bg-white dark:bg-gray-800 rounded-2xl shadow-sm p-4 space-y-3">
-            <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">
-              <Tooltip term="Skins">Skins</Tooltip> Results · {skinsResult.totalSkins} skin{skinsResult.totalSkins !== 1 ? 's' : ''} won
-            </p>
-            {skinsResult.totalSkins === 0 ? (
-              <p className="text-gray-500 text-sm">No skins won — all holes tied. Pot refunded.</p>
-            ) : (
-              <div className="space-y-2">
-                {players.map(p => {
-                  const skins = skinsResult.skinsWon[p.id] ?? 0
+          <section className="bg-white dark:bg-gray-800 rounded-2xl shadow-sm overflow-hidden">
+            <button onClick={() => toggleSection('skins')} className="w-full flex items-center justify-between p-4 active:bg-gray-50 dark:active:bg-gray-700">
+              <span className="text-sm font-semibold text-gray-700 dark:text-gray-200">🎰 Skins · {skinsResult.totalSkins} skin{skinsResult.totalSkins !== 1 ? 's' : ''}</span>
+              <span className="text-gray-400 text-sm">{expandedSections.has('skins') ? '▾' : '▸'}</span>
+            </button>
+            {expandedSections.has('skins') && (
+              <div className="px-4 pb-4 space-y-2">
+                {skinsResult.totalSkins === 0 ? (
+                  <p className="text-gray-500 text-sm">No skins won — all holes tied. Pot refunded.</p>
+                ) : (
+                  players.map(p => {
+                    const skins = skinsResult.skinsWon[p.id] ?? 0
+                    return (
+                      <div key={p.id} className={`flex items-center justify-between p-3 rounded-xl ${skins > 0 ? 'bg-green-50' : 'bg-gray-50'}`}>
+                        <span className="font-semibold text-gray-800">{p.name}</span>
+                        <span className={`font-bold ${skins > 0 ? 'text-green-700' : 'text-gray-400'}`}>{skins} skin{skins !== 1 ? 's' : ''}</span>
+                      </div>
+                    )
+                  })
+                )}
+              </div>
+            )}
+          </section>
+        )}
+
+        {bestBallResult && (
+          <section className="bg-white dark:bg-gray-800 rounded-2xl shadow-sm overflow-hidden">
+            <button onClick={() => toggleSection('bestball')} className="w-full flex items-center justify-between p-4 active:bg-gray-50 dark:active:bg-gray-700">
+              <span className="text-sm font-semibold text-gray-700 dark:text-gray-200">🤝 Best Ball · {bestBallResult.winner === 'tie' ? 'Tied' : `Team ${bestBallResult.winner} Wins`}</span>
+              <span className="text-gray-400 text-sm">{expandedSections.has('bestball') ? '▾' : '▸'}</span>
+            </button>
+            {expandedSections.has('bestball') && (
+              <div className="px-4 pb-4 space-y-3">
+                <div className="grid grid-cols-3 gap-2 text-center">
+                  <div className="bg-blue-50 rounded-xl p-3"><p className="text-xs text-blue-600 font-medium">Team A</p><p className="text-2xl font-bold text-blue-800">{bestBallResult.holesWon.A}</p><p className="text-xs text-blue-500">holes</p></div>
+                  <div className="bg-gray-50 rounded-xl p-3"><p className="text-xs text-gray-500 font-medium">Tied</p><p className="text-2xl font-bold text-gray-600">{bestBallResult.holesWon.tied}</p><p className="text-xs text-gray-400">holes</p></div>
+                  <div className="bg-orange-50 rounded-xl p-3"><p className="text-xs text-orange-600 font-medium">Team B</p><p className="text-2xl font-bold text-orange-800">{bestBallResult.holesWon.B}</p><p className="text-xs text-orange-500">holes</p></div>
+                </div>
+                {(() => {
+                  const config = game.config as BestBallConfig
                   return (
-                    <div key={p.id} className={`flex items-center justify-between p-3 rounded-xl ${skins > 0 ? 'bg-green-50' : 'bg-gray-50'}`}>
-                      <span className="font-semibold text-gray-800">{p.name}</span>
-                      <span className={`font-bold ${skins > 0 ? 'text-green-700' : 'text-gray-400'}`}>{skins} skin{skins !== 1 ? 's' : ''}</span>
+                    <div className="grid grid-cols-2 gap-2 text-sm">
+                      {(['A', 'B'] as const).map(team => (
+                        <div key={team} className={`rounded-xl p-3 ${team === 'A' ? 'bg-blue-50' : 'bg-orange-50'}`}>
+                          <p className={`text-xs font-bold mb-1 ${team === 'A' ? 'text-blue-700' : 'text-orange-700'}`}>Team {team}</p>
+                          {players.filter(p => config.teams[p.id] === team).map(p => (<p key={p.id} className="text-gray-700">{p.name}</p>))}
+                        </div>
+                      ))}
+                    </div>
+                  )
+                })()}
+              </div>
+            )}
+          </section>
+        )}
+
+        {nassauResult && (
+          <section className="bg-white dark:bg-gray-800 rounded-2xl shadow-sm overflow-hidden">
+            <button onClick={() => toggleSection('nassau')} className="w-full flex items-center justify-between p-4 active:bg-gray-50 dark:active:bg-gray-700">
+              <span className="text-sm font-semibold text-gray-700 dark:text-gray-200">🏳️ Nassau · {nassauResult.total.winner ? playerById(nassauResult.total.winner)?.name : 'In Progress'}</span>
+              <span className="text-gray-400 text-sm">{expandedSections.has('nassau') ? '▾' : '▸'}</span>
+            </button>
+            {expandedSections.has('nassau') && (
+              <div className="px-4 pb-4 space-y-3">
+                {[
+                  { label: `Front (${nassauResult.front.holeRange})`, seg: nassauResult.front },
+                  { label: `Back (${nassauResult.back.holeRange})`, seg: nassauResult.back },
+                  { label: `Total (${nassauResult.total.holeRange})`, seg: nassauResult.total },
+                ].map(({ label, seg }) => {
+                  const winner = seg.winner ? playerById(seg.winner) : null
+                  const tiedNames = seg.tiedPlayers.map(id => playerById(id)?.name).filter(Boolean).join(', ')
+                  return (
+                    <div key={label} className={`rounded-xl p-3 ${seg.winner ? 'bg-teal-50' : 'bg-gray-50'}`}>
+                      <div className="flex items-center justify-between">
+                        <p className="font-semibold text-gray-700 text-sm">{label}</p>
+                        <p className={`font-bold text-sm ${seg.winner ? 'text-teal-700' : 'text-gray-400'}`}>
+                          {seg.incomplete ? 'Incomplete' : seg.winner ? `🏆 ${winner?.name}` : tiedNames ? `Tied: ${tiedNames}` : '—'}
+                        </p>
+                      </div>
                     </div>
                   )
                 })}
@@ -803,77 +948,15 @@ export function SettleUp({ roundId, userId, eventId, onDone, onContinue }: Props
           </section>
         )}
 
-        {/* ── Best Ball Results ── */}
-        {bestBallResult && (
-          <section className="bg-white dark:bg-gray-800 rounded-2xl shadow-sm p-4 space-y-3">
-            <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide"><Tooltip term="Best Ball">Best Ball</Tooltip> Results</p>
-            <div className="grid grid-cols-3 gap-2 text-center">
-              <div className="bg-blue-50 rounded-xl p-3"><p className="text-xs text-blue-600 font-medium">Team A</p><p className="text-2xl font-bold text-blue-800">{bestBallResult.holesWon.A}</p><p className="text-xs text-blue-500">holes</p></div>
-              <div className="bg-gray-50 rounded-xl p-3"><p className="text-xs text-gray-500 font-medium">Tied</p><p className="text-2xl font-bold text-gray-600">{bestBallResult.holesWon.tied}</p><p className="text-xs text-gray-400">holes</p></div>
-              <div className="bg-orange-50 rounded-xl p-3"><p className="text-xs text-orange-600 font-medium">Team B</p><p className="text-2xl font-bold text-orange-800">{bestBallResult.holesWon.B}</p><p className="text-xs text-orange-500">holes</p></div>
-            </div>
-            <div className={`rounded-xl p-3 text-center font-bold text-lg ${bestBallResult.winner === 'tie' ? 'bg-gray-100 text-gray-700' : bestBallResult.winner === 'A' ? 'bg-blue-100 text-blue-800' : 'bg-orange-100 text-orange-800'}`}>
-              {bestBallResult.winner === 'tie' ? '🤝 All Square — Pot Split' : `🏆 Team ${bestBallResult.winner} Wins`}
-            </div>
-            {(() => {
-              const config = game.config as BestBallConfig
-              return (
-                <div className="grid grid-cols-2 gap-2 text-sm">
-                  {(['A', 'B'] as const).map(team => (
-                    <div key={team} className={`rounded-xl p-3 ${team === 'A' ? 'bg-blue-50' : 'bg-orange-50'}`}>
-                      <p className={`text-xs font-bold mb-1 ${team === 'A' ? 'text-blue-700' : 'text-orange-700'}`}>Team {team}</p>
-                      {players.filter(p => config.teams[p.id] === team).map(p => (<p key={p.id} className="text-gray-700">{p.name}</p>))}
-                    </div>
-                  ))}
-                </div>
-              )
-            })()}
-          </section>
-        )}
-
-        {/* ── Nassau Results ── */}
-        {nassauResult && (
-          <section className="bg-white dark:bg-gray-800 rounded-2xl shadow-sm p-4 space-y-3">
-            <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide"><Tooltip term="Nassau">Nassau</Tooltip> Results</p>
-            {[
-              { label: `Front (${nassauResult.front.holeRange})`, seg: nassauResult.front },
-              { label: `Back (${nassauResult.back.holeRange})`, seg: nassauResult.back },
-              { label: `Total (${nassauResult.total.holeRange})`, seg: nassauResult.total },
-            ].map(({ label, seg }) => {
-              const winner = seg.winner ? playerById(seg.winner) : null
-              const tiedNames = seg.tiedPlayers.map(id => playerById(id)?.name).filter(Boolean).join(', ')
-              return (
-                <div key={label} className={`rounded-xl p-3 ${seg.winner ? 'bg-teal-50' : 'bg-gray-50'}`}>
-                  <div className="flex items-center justify-between">
-                    <p className="font-semibold text-gray-700 text-sm">{label}</p>
-                    <p className={`font-bold text-sm ${seg.winner ? 'text-teal-700' : 'text-gray-400'}`}>
-                      {seg.incomplete ? 'Incomplete' : seg.winner ? `🏆 ${winner?.name}` : tiedNames ? `Tied: ${tiedNames}` : '—'}
-                    </p>
-                  </div>
-                  {!seg.incomplete && (
-                    <div className="mt-2 flex gap-2 flex-wrap">
-                      {players.map(p => (
-                        <span key={p.id} className="text-xs text-gray-500">
-                          {p.name}: {seg.scores[p.id] ?? '—'}
-                        </span>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              )
-            })}
-          </section>
-        )}
-
-        {/* ── Wolf Results ── */}
         {wolfResult && (
-          <section className="bg-white dark:bg-gray-800 rounded-2xl shadow-sm p-4 space-y-3">
-            <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Wolf Results — Net Units</p>
-            <div className="space-y-2">
-              {players
-                .slice()
-                .sort((a, b) => (wolfResult.netUnits[b.id] ?? 0) - (wolfResult.netUnits[a.id] ?? 0))
-                .map(p => {
+          <section className="bg-white dark:bg-gray-800 rounded-2xl shadow-sm overflow-hidden">
+            <button onClick={() => toggleSection('wolf')} className="w-full flex items-center justify-between p-4 active:bg-gray-50 dark:active:bg-gray-700">
+              <span className="text-sm font-semibold text-gray-700 dark:text-gray-200">🐺 Wolf · Net Units</span>
+              <span className="text-gray-400 text-sm">{expandedSections.has('wolf') ? '▾' : '▸'}</span>
+            </button>
+            {expandedSections.has('wolf') && (
+              <div className="px-4 pb-4 space-y-2">
+                {players.slice().sort((a, b) => (wolfResult.netUnits[b.id] ?? 0) - (wolfResult.netUnits[a.id] ?? 0)).map(p => {
                   const units = wolfResult.netUnits[p.id] ?? 0
                   return (
                     <div key={p.id} className={`flex items-center justify-between p-3 rounded-xl ${units > 0 ? 'bg-purple-50' : units < 0 ? 'bg-red-50' : 'bg-gray-50'}`}>
@@ -884,46 +967,42 @@ export function SettleUp({ roundId, userId, eventId, onDone, onContinue }: Props
                     </div>
                   )
                 })}
-            </div>
+              </div>
+            )}
           </section>
         )}
 
-        {/* ── BBB Results ── */}
         {bbbResult && (
-          <section className="bg-white dark:bg-gray-800 rounded-2xl shadow-sm p-4 space-y-3">
-            <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">
-              Bingo Bango Bongo — {bbbResult.totalPoints} total points
-            </p>
-            <div className="space-y-2">
-              {players
-                .slice()
-                .sort((a, b) => (bbbResult.pointsWon[b.id] ?? 0) - (bbbResult.pointsWon[a.id] ?? 0))
-                .map(p => {
+          <section className="bg-white dark:bg-gray-800 rounded-2xl shadow-sm overflow-hidden">
+            <button onClick={() => toggleSection('bbb')} className="w-full flex items-center justify-between p-4 active:bg-gray-50 dark:active:bg-gray-700">
+              <span className="text-sm font-semibold text-gray-700 dark:text-gray-200">⭐ BBB · {bbbResult.totalPoints} points</span>
+              <span className="text-gray-400 text-sm">{expandedSections.has('bbb') ? '▾' : '▸'}</span>
+            </button>
+            {expandedSections.has('bbb') && (
+              <div className="px-4 pb-4 space-y-2">
+                {players.slice().sort((a, b) => (bbbResult.pointsWon[b.id] ?? 0) - (bbbResult.pointsWon[a.id] ?? 0)).map(p => {
                   const pts = bbbResult.pointsWon[p.id] ?? 0
                   return (
                     <div key={p.id} className={`flex items-center justify-between p-3 rounded-xl ${pts > 0 ? 'bg-amber-50' : 'bg-gray-50'}`}>
                       <span className="font-semibold text-gray-800">{p.name}</span>
-                      <span className={`font-bold ${pts > 0 ? 'text-amber-700' : 'text-gray-400'}`}>
-                        {pts} point{pts !== 1 ? 's' : ''}
-                      </span>
+                      <span className={`font-bold ${pts > 0 ? 'text-amber-700' : 'text-gray-400'}`}>{pts} point{pts !== 1 ? 's' : ''}</span>
                     </div>
                   )
                 })}
-            </div>
+              </div>
+            )}
           </section>
         )}
 
-        {/* ── Hammer Results ── */}
         {hammerResult && (
-          <section className="bg-white dark:bg-gray-800 rounded-2xl shadow-sm p-4 space-y-3">
-            <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">
-              Hammer Results — {hammerResult.totalHolesPlayed} hole{hammerResult.totalHolesPlayed !== 1 ? 's' : ''} decided
-            </p>
-            <div className="space-y-2">
-              {players
-                .slice()
-                .sort((a, b) => (hammerResult.netCents[b.id] ?? 0) - (hammerResult.netCents[a.id] ?? 0))
-                .map(p => {
+          <section className="bg-white dark:bg-gray-800 rounded-2xl shadow-sm overflow-hidden">
+            <button onClick={() => toggleSection('hammer')} className="w-full flex items-center justify-between p-4 active:bg-gray-50 dark:active:bg-gray-700">
+              <span className="text-sm font-semibold text-gray-700 dark:text-gray-200">🔨 Hammer · {hammerResult.totalHolesPlayed} holes</span>
+              <span className="text-gray-400 text-sm">{expandedSections.has('hammer') ? '▾' : '▸'}</span>
+            </button>
+            {expandedSections.has('hammer') && (
+              <div className="px-4 pb-4 space-y-2">
+                {players.slice().sort((a, b) => (hammerResult.netCents[b.id] ?? 0) - (hammerResult.netCents[a.id] ?? 0)).map(p => {
                   const net = hammerResult.netCents[p.id] ?? 0
                   return (
                     <div key={p.id} className={`flex items-center justify-between p-3 rounded-xl ${net > 0 ? 'bg-green-50' : net < 0 ? 'bg-red-50' : 'bg-gray-50'}`}>
@@ -934,28 +1013,24 @@ export function SettleUp({ roundId, userId, eventId, onDone, onContinue }: Props
                     </div>
                   )
                 })}
-            </div>
+              </div>
+            )}
           </section>
         )}
 
-        {/* ── Junk Details (informational tallies) ── */}
         {junkResult && round?.junkConfig && (
-          <section className="bg-white dark:bg-gray-800 rounded-2xl shadow-sm p-4 space-y-3">
-            <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">
-              Junk Side Bets — {fmtMoney(round.junkConfig.valueCents)}/junk
-            </p>
-            <div className="space-y-2">
-              {players
-                .slice()
-                .sort((a, b) => (junkResult.netCents[b.id] ?? 0) - (junkResult.netCents[a.id] ?? 0))
-                .map(p => {
+          <section className="bg-white dark:bg-gray-800 rounded-2xl shadow-sm overflow-hidden">
+            <button onClick={() => toggleSection('junk')} className="w-full flex items-center justify-between p-4 active:bg-gray-50 dark:active:bg-gray-700">
+              <span className="text-sm font-semibold text-gray-700 dark:text-gray-200">🎲 Junks · {fmtMoney(round.junkConfig.valueCents)}/junk</span>
+              <span className="text-gray-400 text-sm">{expandedSections.has('junk') ? '▾' : '▸'}</span>
+            </button>
+            {expandedSections.has('junk') && (
+              <div className="px-4 pb-4 space-y-2">
+                {players.slice().sort((a, b) => (junkResult.netCents[b.id] ?? 0) - (junkResult.netCents[a.id] ?? 0)).map(p => {
                   const net = junkResult.netCents[p.id] ?? 0
                   const tallies = junkResult.tallies[p.id]
                   const junkDetails = tallies
-                    ? round.junkConfig!.types
-                        .filter(jt => tallies[jt] > 0)
-                        .map(jt => `${JUNK_LABELS[jt].emoji}${tallies[jt]}`)
-                        .join(' ')
+                    ? round.junkConfig!.types.filter(jt => tallies[jt] > 0).map(jt => `${JUNK_LABELS[jt].emoji}${tallies[jt]}`).join(' ')
                     : ''
                   return (
                     <div key={p.id} className={`flex items-center justify-between p-3 rounded-xl ${net > 0 ? 'bg-indigo-50' : net < 0 ? 'bg-red-50' : 'bg-gray-50'}`}>
@@ -965,41 +1040,43 @@ export function SettleUp({ roundId, userId, eventId, onDone, onContinue }: Props
                       </div>
                       <span className={`font-bold ${net > 0 ? 'text-indigo-700' : net < 0 ? 'text-red-600' : 'text-gray-400'}`}>
                         {net === 0 ? '$0' : `${net > 0 ? '+' : ''}${fmtMoney(Math.abs(net))}`}
-                        {net < 0 && <span className="text-xs font-normal ml-0.5">owes</span>}
                       </span>
                     </div>
                   )
                 })}
-            </div>
+              </div>
+            )}
           </section>
         )}
 
-        {/* ── Side Bets Summary ── */}
         {sideBets.filter(sb => sb.status === 'resolved').length > 0 && (
-          <section className="bg-white dark:bg-gray-800 rounded-2xl shadow-sm p-4 space-y-3">
-            <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">
-              Side Bets — {sideBets.filter(sb => sb.status === 'resolved').length} resolved
-            </p>
-            <div className="space-y-2">
-              {sideBets.filter(sb => sb.status === 'resolved').map(bet => {
-                const winnerName = bet.winnerPlayerId ? playerById(bet.winnerPlayerId)?.name : '?'
-                const losers = bet.participants.filter(id => id !== bet.winnerPlayerId)
-                return (
-                  <div key={bet.id} className="bg-amber-50 rounded-xl p-3">
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <p className="font-semibold text-gray-800 text-sm">{bet.description}</p>
-                        <p className="text-xs text-gray-500">Hole {bet.holeNumber} · {fmtMoney(bet.amountCents)}/loser</p>
+          <section className="bg-white dark:bg-gray-800 rounded-2xl shadow-sm overflow-hidden">
+            <button onClick={() => toggleSection('sidebets')} className="w-full flex items-center justify-between p-4 active:bg-gray-50 dark:active:bg-gray-700">
+              <span className="text-sm font-semibold text-gray-700 dark:text-gray-200">💰 Side Bets · {sideBets.filter(sb => sb.status === 'resolved').length} resolved</span>
+              <span className="text-gray-400 text-sm">{expandedSections.has('sidebets') ? '▾' : '▸'}</span>
+            </button>
+            {expandedSections.has('sidebets') && (
+              <div className="px-4 pb-4 space-y-2">
+                {sideBets.filter(sb => sb.status === 'resolved').map(bet => {
+                  const winnerName = bet.winnerPlayerId ? playerById(bet.winnerPlayerId)?.name : '?'
+                  const losers = bet.participants.filter(id => id !== bet.winnerPlayerId)
+                  return (
+                    <div key={bet.id} className="bg-amber-50 rounded-xl p-3">
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <p className="font-semibold text-gray-800 text-sm">{bet.description}</p>
+                          <p className="text-xs text-gray-500">Hole {bet.holeNumber} · {fmtMoney(bet.amountCents)}/loser</p>
+                        </div>
+                        <span className="text-sm font-bold text-amber-700">🏆 {winnerName}</span>
                       </div>
-                      <span className="text-sm font-bold text-amber-700">🏆 {winnerName}</span>
+                      <p className="text-xs text-gray-500 mt-1">
+                        {losers.map(id => playerById(id)?.name).join(', ')} → {winnerName}
+                      </p>
                     </div>
-                    <p className="text-xs text-gray-500 mt-1">
-                      {losers.map(id => playerById(id)?.name).join(', ')} → {winnerName}
-                    </p>
-                  </div>
-                )
-              })}
-            </div>
+                  )
+                })}
+              </div>
+            )}
           </section>
         )}
 
@@ -1020,64 +1097,6 @@ export function SettleUp({ roundId, userId, eventId, onDone, onContinue }: Props
             </div>
           </section>
         )}
-
-        {/* ── You Owe / You Collect Summary ── */}
-        {settlementRecords.length > 0 && userId && (() => {
-          // Find which player the current user is
-          const myPlayerId = Array.from(participantMap.entries()).find(([, uid]) => uid === userId)?.[0]
-            ?? (treasurerId && (userId === round?.createdBy) ? treasurerId : null)
-          if (!myPlayerId) {
-            // Spectator — show overall summary
-            const totalOwed = owedSettlements.reduce((s, r) => s + r.amountCents, 0)
-            return (
-              <section className="bg-gray-50 dark:bg-gray-700 rounded-2xl p-4 text-center">
-                <p className="text-sm text-gray-500">Total in play</p>
-                <p className="text-2xl font-bold text-gray-800 dark:text-gray-100">{fmtMoney(totalOwed)}</p>
-                <p className="text-xs text-gray-400 mt-1">{owedSettlements.length} settlement{owedSettlements.length !== 1 ? 's' : ''} remaining</p>
-              </section>
-            )
-          }
-          // Calculate net for the current user
-          let collectCents = 0
-          let oweCents = 0
-          const collectFrom: { name: string; cents: number }[] = []
-          const oweTo: { name: string; cents: number }[] = []
-          for (const s of settlementRecords.filter(r => r.status === 'owed')) {
-            if (s.toPlayerId === myPlayerId) {
-              collectCents += s.amountCents
-              const from = playerById(s.fromPlayerId)
-              collectFrom.push({ name: from?.name ?? '?', cents: s.amountCents })
-            } else if (s.fromPlayerId === myPlayerId) {
-              oweCents += s.amountCents
-              const to = playerById(s.toPlayerId)
-              oweTo.push({ name: to?.name ?? '?', cents: s.amountCents })
-            }
-          }
-          const net = collectCents - oweCents
-          return (
-            <section className={`rounded-2xl p-4 text-center space-y-2 ${
-              net > 0 ? 'bg-green-50 border-2 border-green-200' :
-              net < 0 ? 'bg-red-50 border-2 border-red-200' :
-              'bg-gray-50 border border-gray-200'
-            }`}>
-              <p className={`text-2xl font-bold ${
-                net > 0 ? 'text-green-700' : net < 0 ? 'text-red-700' : 'text-gray-600'
-              }`}>
-                {net > 0 ? `You collect ${fmtMoney(net)}` : net < 0 ? `You owe ${fmtMoney(Math.abs(net))}` : "You're even"}
-              </p>
-              {collectFrom.length > 0 && (
-                <p className="text-sm text-green-600">
-                  {collectFrom.map(c => `From ${c.name}: ${fmtMoney(c.cents)}`).join(' · ')}
-                </p>
-              )}
-              {oweTo.length > 0 && (
-                <p className="text-sm text-red-600">
-                  {oweTo.map(c => `To ${c.name}: ${fmtMoney(c.cents)}`).join(' · ')}
-                </p>
-              )}
-            </section>
-          )
-        })()}
 
         {/* ── Unified Settlements (game + junk) with Mark Paid ── */}
         {settlementRecords.length > 0 && (
@@ -1202,29 +1221,6 @@ export function SettleUp({ roundId, userId, eventId, onDone, onContinue }: Props
           <section className="bg-gray-50 rounded-2xl p-4 text-center">
             <p className="text-gray-600 font-semibold">No winners calculated yet</p>
             <p className="text-gray-500 text-sm mt-1">Each player gets {fmtMoney(game.buyInCents)} back from the treasurer.</p>
-          </section>
-        )}
-
-        {/* Payment Directory */}
-        {enrichedPlayers.some(p => p.venmoUsername || p.zelleIdentifier || p.cashAppUsername || p.paypalEmail) && (
-          <section className="bg-white dark:bg-gray-800 rounded-2xl shadow-sm p-4 space-y-3">
-            <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Payment Directory</p>
-            <div className="space-y-2">
-              {enrichedPlayers.map(p => {
-                const methods: string[] = []
-                if (p.venmoUsername) methods.push(`Venmo: ${p.venmoUsername}`)
-                if (p.zelleIdentifier) methods.push(`Zelle: ${p.zelleIdentifier}`)
-                if (p.cashAppUsername) methods.push(`CashApp: ${p.cashAppUsername}`)
-                if (p.paypalEmail) methods.push(`PayPal: ${p.paypalEmail}`)
-                if (methods.length === 0) methods.push('Cash only')
-                return (
-                  <div key={p.id} className="p-3 bg-gray-50 rounded-xl">
-                    <p className="font-semibold text-gray-800 text-sm">{p.name}</p>
-                    <p className="text-xs text-gray-500 mt-0.5">{methods.join(' · ')}</p>
-                  </div>
-                )
-              })}
-            </div>
           </section>
         )}
 

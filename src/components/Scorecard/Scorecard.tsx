@@ -164,7 +164,7 @@ export function Scorecard({ userId, roundId, onEndRound, onHome, readOnly: readO
   const [activeGroupTab, setActiveGroupTab] = useState<number | 'all'>(1)
   const [celebration, setCelebration] = useState<{ level: 'toast' | 'fullscreen'; title: string; subtitle?: string; emoji: string; playerName: string } | null>(null)
   const [confirmModal, setConfirmModal] = useState<{ title: string; message: string; onConfirm: () => void; destructive?: boolean } | null>(null)
-  const [scoreTab, setScoreTab] = useState<'scores' | 'leaderboard'>('scores')
+  const [scoreTab, setScoreTab] = useState<'scores' | 'game' | 'leaderboard'>('scores')
   const [showSideBetForm, setShowSideBetForm] = useState(false)
   const [sideBetDesc, setSideBetDesc] = useState('')
   const [sideBetAmount, setSideBetAmount] = useState('5')
@@ -174,11 +174,12 @@ export function Scorecard({ userId, roundId, onEndRound, onHome, readOnly: readO
   const [showHoleConfirm, setShowHoleConfirm] = useState(false)
   const [confirmParFill, setConfirmParFill] = useState(false)
   const [showMiniBoard, setShowMiniBoard] = useState(false)
-  const [showGameStatus, setShowGameStatus] = useState(false)
+  const [showGameStatus, setShowGameStatus] = useState(true)
   const { isOnline } = useOnlineStatus()
   const [syncing, setSyncing] = useState(false)
   const [pendingCount, setPendingCount] = useState(getPending())
   const holeNavRef = useRef<HTMLDivElement>(null)
+  const [showHoleGrid, setShowHoleGrid] = useState(false)
 
   // Event-related state
   const [event, setEvent] = useState<GolfEvent | null>(null)
@@ -358,10 +359,10 @@ export function Scorecard({ userId, roundId, onEndRound, onHome, readOnly: readO
 
   // Auto-scroll hole nav bar to current hole
   useEffect(() => {
-    if (!holeNavRef.current) return
+    if (!showHoleGrid || !holeNavRef.current) return
     const btn = holeNavRef.current.querySelector(`[data-hole="${currentHole}"]`) as HTMLElement | null
     if (btn) btn.scrollIntoView({ behavior: 'smooth', inline: 'center', block: 'nearest' })
-  }, [currentHole])
+  }, [currentHole, showHoleGrid])
 
   const courseHcps = useMemo(() => {
     if (!snapshot || !roundPlayers) return {}
@@ -955,20 +956,40 @@ export function Scorecard({ userId, roundId, onEndRound, onHome, readOnly: readO
             <button onClick={confirmGoHome} className="text-gray-300 text-sm font-medium px-3 min-h-[44px] rounded-lg hover:bg-gray-600">← Back</button>
           </div>
         </div>
-        <div ref={holeNavRef} className="max-w-2xl mx-auto mt-2 flex gap-1.5 overflow-x-auto pb-1">
-          {Array.from({ length: snapshot?.holes.length ?? 18 }, (_, i) => i + 1).map(n => {
-            const hasScore = players.length > 0 && players.every(p => holeScores.some(s => s.playerId === p.id && s.holeNumber === n))
-            return (
-              <button key={n} data-hole={n} onClick={() => goToHole(n)}
-                className={`min-w-[44px] min-h-[44px] w-11 h-11 rounded-full text-sm font-bold flex-shrink-0 transition-colors flex items-center justify-center ${
-                  n === currentHole ? 'bg-white text-gray-800 ring-2 ring-amber-400' : hasScore ? 'bg-amber-500 text-white' : 'bg-gray-700/40 text-gray-400 border border-gray-500/30'
-                }`}>{n}</button>
-            )
-          })}
+        <div className="max-w-2xl mx-auto mt-2 flex items-center justify-center gap-3">
+          <button
+            onClick={() => goToHole(Math.max(1, currentHole - 1))}
+            disabled={currentHole === 1}
+            className="min-w-[44px] min-h-[44px] rounded-full bg-gray-700/40 text-gray-300 font-bold text-lg disabled:opacity-30"
+          >‹</button>
+          <button
+            onClick={() => setShowHoleGrid(!showHoleGrid)}
+            className="text-white font-bold text-sm px-3 py-1.5 rounded-lg active:bg-gray-600 transition-colors"
+          >
+            Hole {currentHole} of {snapshot?.holes.length ?? 18}
+          </button>
+          <button
+            onClick={() => goToHole(Math.min(snapshot?.holes.length ?? 18, currentHole + 1))}
+            disabled={currentHole === (snapshot?.holes.length ?? 18)}
+            className="min-w-[44px] min-h-[44px] rounded-full bg-gray-700/40 text-gray-300 font-bold text-lg disabled:opacity-30"
+          >›</button>
         </div>
+        {showHoleGrid && (
+          <div ref={holeNavRef} className="max-w-2xl mx-auto mt-2 flex gap-1.5 overflow-x-auto pb-1">
+            {Array.from({ length: snapshot?.holes.length ?? 18 }, (_, i) => i + 1).map(n => {
+              const hasScore = players.length > 0 && players.every(p => holeScores.some(s => s.playerId === p.id && s.holeNumber === n))
+              return (
+                <button key={n} data-hole={n} onClick={() => { goToHole(n); setShowHoleGrid(false) }}
+                  className={`min-w-[44px] min-h-[44px] w-11 h-11 rounded-full text-sm font-bold flex-shrink-0 transition-colors flex items-center justify-center ${
+                    n === currentHole ? 'bg-white text-gray-800 ring-2 ring-amber-400' : hasScore ? 'bg-amber-500 text-white' : 'bg-gray-700/40 text-gray-400 border border-gray-500/30'
+                  }`}>{n}</button>
+              )
+            })}
+          </div>
+        )}
       </header>
 
-      {/* Score / Leaderboard tab toggle */}
+      {/* Score / Game / Leaderboard tab toggle */}
       <div className="bg-white border-b border-gray-200 px-4 py-2 sticky top-[calc(5.5rem+2rem)] z-[6]">
         <div className="max-w-2xl mx-auto flex gap-1">
           <button
@@ -978,6 +999,14 @@ export function Scorecard({ userId, roundId, onEndRound, onHome, readOnly: readO
             }`}
           >
             Scores
+          </button>
+          <button
+            onClick={() => setScoreTab('game')}
+            className={`flex-1 py-2 rounded-lg text-sm font-semibold transition-colors ${
+              scoreTab === 'game' ? 'bg-gray-800 text-white' : 'bg-gray-100 text-gray-600'
+            }`}
+          >
+            Game
           </button>
           <button
             onClick={() => setScoreTab('leaderboard')}
@@ -1488,558 +1517,52 @@ export function Scorecard({ userId, roundId, onEndRound, onHome, readOnly: readO
 
       {scoreTab === 'scores' && (
       <div className="px-4 py-4 max-w-2xl mx-auto space-y-4">
-        {!isOnline && (
-          <div className="bg-yellow-50 border border-yellow-200 rounded-xl px-4 py-3 flex items-center gap-2">
-            <span className="text-yellow-600 text-lg">📡</span>
-            <div className="flex-1">
-              <p className="text-yellow-800 text-sm font-semibold">You're offline</p>
-              <p className="text-yellow-600 text-xs">Scores are saved locally and will sync when you reconnect</p>
+        {/* Single priority status line — highest priority: save error > offline > syncing > context */}
+        {(() => {
+          if (saveError) return (
+            <div className="bg-red-50 border border-red-200 rounded-lg px-3 py-2 flex items-center justify-between gap-2">
+              <p className="text-red-700 text-sm font-semibold flex-1 truncate">{saveError}</p>
+              {lastFailedSave && (
+                <button onClick={() => { setSaveError(null); setLastFailedSave(null); setScore(lastFailedSave.playerId, lastFailedSave.grossScore) }}
+                  className="text-red-600 text-xs font-bold bg-red-100 px-2 py-1 rounded-lg active:bg-red-200 whitespace-nowrap">Retry</button>
+              )}
+              <button onClick={() => { setSaveError(null); setLastFailedSave(null) }} className="text-red-400 font-bold ml-1">&times;</button>
             </div>
-            {pendingCount > 0 && (
-              <span className="text-yellow-700 text-xs font-bold bg-yellow-100 px-2 py-1 rounded-full">{pendingCount} queued</span>
-            )}
-          </div>
-        )}
-        {syncing && (
-          <div className="bg-blue-50 border border-blue-200 rounded-xl px-4 py-2 flex items-center gap-2">
-            <span className="text-blue-500 animate-spin text-sm">↻</span>
-            <p className="text-blue-700 text-sm font-semibold">Syncing scores...</p>
-          </div>
-        )}
-        {/* Event context banners */}
-        {isEventRound && showContextBanner && (() => {
-          // Scorekeeper banner (manager who IS also scorekeeper shows this)
-          if (isGroupScorekeeper) {
-            const groupMembers = players
-              .filter(p => round.groups?.[p.id] === myEventGroupNumber)
-              .map(p => p.name)
-            return (
-              <div className="bg-blue-50 border border-blue-200 rounded-xl px-4 py-3 flex items-start justify-between">
-                <div className="flex-1">
-                  <p className="text-blue-800 text-sm font-semibold">
-                    Scorekeeper for Group {myEventGroupNumber}
-                  </p>
-                  <p className="text-blue-600 text-xs mt-0.5">
-                    {groupMembers.join(', ')} · Your scores are auto-approved
-                  </p>
-                </div>
-                <button onClick={() => setShowContextBanner(false)} className="text-blue-400 text-lg font-bold ml-2">&times;</button>
+          )
+          if (!isOnline) return (
+            <div className="bg-yellow-50 border border-yellow-200 rounded-lg px-3 py-2 flex items-center gap-2">
+              <span className="text-yellow-600 text-sm">📡</span>
+              <p className="text-yellow-800 text-sm font-semibold flex-1">Offline{pendingCount > 0 ? ` · ${pendingCount} queued` : ''}</p>
+            </div>
+          )
+          if (syncing) return (
+            <div className="bg-blue-50 border border-blue-200 rounded-lg px-3 py-2 flex items-center gap-2">
+              <span className="text-blue-500 animate-spin text-sm">↻</span>
+              <p className="text-blue-700 text-sm font-semibold">Syncing...</p>
+            </div>
+          )
+          if (isEventRound && showContextBanner) {
+            if (isGroupScorekeeper) return (
+              <div className="bg-blue-50 border border-blue-200 rounded-lg px-3 py-2 flex items-center justify-between">
+                <p className="text-blue-800 text-sm font-semibold">Scorekeeper · Group {myEventGroupNumber}</p>
+                <button onClick={() => setShowContextBanner(false)} className="text-blue-400 font-bold ml-2">&times;</button>
               </div>
             )
-          }
-          // Manager (not scorekeeper) banner
-          if (isEventManager) {
-            return (
-              <div className="bg-green-50 border border-green-200 rounded-xl px-4 py-3 flex items-start justify-between">
-                <div className="flex-1">
-                  <p className="text-green-800 text-sm font-semibold">Event Manager</p>
-                  <p className="text-green-600 text-xs mt-0.5">All scores auto-approved</p>
-                </div>
-                <button onClick={() => setShowContextBanner(false)} className="text-green-400 text-lg font-bold ml-2">&times;</button>
+            if (isEventManager) return (
+              <div className="bg-green-50 border border-green-200 rounded-lg px-3 py-2 flex items-center justify-between">
+                <p className="text-green-800 text-sm font-semibold">Event Manager · Auto-approved</p>
+                <button onClick={() => setShowContextBanner(false)} className="text-green-400 font-bold ml-2">&times;</button>
               </div>
             )
-          }
-          // Self-entry player banner
-          if (myEventParticipant && !canApproveScores) {
-            return (
-              <div className="bg-yellow-50 border border-yellow-200 rounded-xl px-4 py-3 flex items-start justify-between">
-                <div className="flex-1">
-                  <p className="text-yellow-800 text-sm font-semibold">Self-Entry Mode</p>
-                  <p className="text-yellow-600 text-xs mt-0.5">Your scores are pending approval from your scorekeeper</p>
-                </div>
-                <button onClick={() => setShowContextBanner(false)} className="text-yellow-400 text-lg font-bold ml-2">&times;</button>
+            if (myEventParticipant && !canApproveScores) return (
+              <div className="bg-yellow-50 border border-yellow-200 rounded-lg px-3 py-2 flex items-center justify-between">
+                <p className="text-yellow-800 text-sm font-semibold">Self-Entry · Pending approval</p>
+                <button onClick={() => setShowContextBanner(false)} className="text-yellow-400 font-bold ml-2">&times;</button>
               </div>
             )
           }
           return null
         })()}
-        {saveError && (
-          <div className="bg-red-50 border border-red-200 rounded-xl px-4 py-3 flex items-center justify-between gap-2">
-            <p className="text-red-700 text-sm font-semibold flex-1">{saveError}</p>
-            {lastFailedSave && (
-              <button
-                onClick={() => { setSaveError(null); setLastFailedSave(null); setScore(lastFailedSave.playerId, lastFailedSave.grossScore) }}
-                className="text-red-600 text-xs font-bold bg-red-100 px-3 py-1.5 rounded-lg active:bg-red-200 whitespace-nowrap"
-              >
-                Retry
-              </button>
-            )}
-            <button onClick={() => { setSaveError(null); setLastFailedSave(null) }} className="text-red-400 text-lg font-bold ml-1">&times;</button>
-          </div>
-        )}
-        {/* Game Status accordion */}
-        {(skinsResult || bestBallResult || nassauResult || (wolfConfig && wolfId) || (game?.type === 'hammer' && hammerConfig) || (game?.type === 'bingo_bango_bongo') || (junkConfig && junkConfig.types.length > 0)) && (
-          <button
-            onClick={() => setShowGameStatus(!showGameStatus)}
-            className="w-full flex items-center justify-between bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl px-4 py-3 active:bg-gray-50 dark:active:bg-gray-700 transition-colors"
-          >
-            <span className="text-sm font-semibold text-gray-700 dark:text-gray-200">Game Status</span>
-            <span className="text-gray-400 text-sm">{showGameStatus ? '▾' : '▸'}</span>
-          </button>
-        )}
-        {showGameStatus && skinsResult && (
-          <div className="flex items-center gap-2">
-            <div className="flex-1">
-              <SkinsStatus carry={currentCarry} potCents={game!.buyInCents * players.length * (1 + ((game!.config as any).presses?.length ?? 0))} />
-            </div>
-            {!readOnly && (
-              <button
-                onClick={handlePress}
-                className="px-3 py-2 bg-orange-500 text-white text-xs font-bold rounded-xl active:bg-orange-600 flex-shrink-0"
-              >
-                Press{(game!.config as any).presses?.length ? ` (${(game!.config as any).presses.length})` : ''}
-              </button>
-            )}
-          </div>
-        )}
-        {showGameStatus && bestBallResult && <BestBallStatus holesWon={bestBallResult.holesWon} />}
-
-        {/* Nassau status */}
-        {showGameStatus && nassauResult && (() => {
-          const getName = (id: string | null) => id ? (players.find(p => p.id === id)?.name ?? '?') : null
-          const pressCount = (game!.config as any).presses?.length ?? 0
-          const totalHoles = snapshot?.holes.length ?? 18
-          const half = Math.ceil(totalHoles / 2)
-          const segs = [
-            { label: `F${half}`, seg: nassauResult.front },
-            { label: `B${totalHoles - half}`, seg: nassauResult.back },
-            { label: `${totalHoles}`, seg: nassauResult.total },
-          ]
-          return (
-            <div className="flex items-center gap-2">
-              <div className="flex-1 bg-teal-50 border border-teal-200 rounded-xl px-3 py-2 flex items-center gap-2">
-                <span className="font-bold text-teal-700 text-sm mr-1">Nassau</span>
-                {segs.map(({ label, seg }) => {
-                  const leaderName = seg.incomplete
-                    ? '—'
-                    : seg.winner
-                    ? getName(seg.winner)
-                    : seg.tiedPlayers.length > 1
-                    ? 'Tied'
-                    : '—'
-                  return (
-                    <div key={label} className="text-center px-2 border-l border-teal-200">
-                      <p className="text-xs text-teal-500">{label}</p>
-                      <p className="text-xs font-semibold text-teal-800 truncate max-w-[64px]">{leaderName}</p>
-                    </div>
-                  )
-                })}
-              </div>
-              {!readOnly && (
-                <button
-                  onClick={handlePress}
-                  className="px-3 py-2 bg-orange-500 text-white text-xs font-bold rounded-xl active:bg-orange-600 flex-shrink-0"
-                >
-                  Press{pressCount ? ` (${pressCount})` : ''}
-                </button>
-              )}
-            </div>
-          )
-        })()}
-
-        {/* Wolf panel */}
-        {showGameStatus && !readOnly && wolfConfig && wolfId && (() => {
-          const wolfPlayer = players.find(p => p.id === wolfId)
-          const nonWolfs = players.filter(p => p.id !== wolfId)
-          return (
-            <div className="bg-purple-50 border border-purple-200 rounded-xl p-3 space-y-2">
-              <p className="font-bold text-purple-800 text-sm">🐺 Wolf: {wolfPlayer?.name}</p>
-              <p className="text-xs text-purple-600">Pick a partner after tee shots, or go Lone Wolf:</p>
-              <div className="flex flex-wrap gap-2">
-                {nonWolfs.map(p => (
-                  <button
-                    key={p.id}
-                    onClick={() => updateWolfDecision(currentHole, p.id)}
-                    className={`px-3 py-1.5 rounded-lg text-sm font-semibold transition-colors ${
-                      wolfDecision?.partnerId === p.id
-                        ? 'bg-purple-600 text-white'
-                        : 'bg-white border border-purple-200 text-purple-700'
-                    }`}
-                  >
-                    {p.name}
-                  </button>
-                ))}
-                <button
-                  onClick={() => updateWolfDecision(currentHole, null)}
-                  className={`px-3 py-1.5 rounded-lg text-sm font-semibold transition-colors ${
-                    wolfDecision !== undefined && wolfDecision.partnerId === null
-                      ? 'bg-red-500 text-white'
-                      : 'bg-white border border-red-200 text-red-600'
-                  }`}
-                >
-                  Lone Wolf 🐺
-                </button>
-              </div>
-              {wolfDecision && (
-                <p className="text-xs text-purple-500">
-                  {wolfDecision.partnerId === null
-                    ? `${wolfPlayer?.name} going LONE WOLF`
-                    : `${wolfPlayer?.name} + ${players.find(p => p.id === wolfDecision.partnerId)?.name}`}
-                </p>
-              )}
-            </div>
-          )
-        })()}
-
-        {/* Hammer panel */}
-        {showGameStatus && game?.type === 'hammer' && hammerConfig && players.length === 2 && (() => {
-          const baseValue = hammerConfig.baseValueCents
-          const hState = currentHammerState
-          const holeValue = hState ? hState.value : baseValue
-          const holderName = hState ? (players.find(p => p.id === hState.hammerHolder)?.name ?? '?') : players[0].name
-          const receiverName = hState
-            ? (players.find(p => p.id !== hState.hammerHolder)?.name ?? '?')
-            : players[1].name
-          const receiverId = hState
-            ? players.find(p => p.id !== hState.hammerHolder)?.id
-            : players[1].id
-          const holderId = hState ? hState.hammerHolder : players[0].id
-          const canThrow = !readOnly && (!hState || (!hState.declined && (hammerConfig.maxPresses == null || hState.presses < hammerConfig.maxPresses)))
-          const canDecline = !readOnly && hState && !hState.declined && hState.presses > 0
-
-          // Running totals from hammerResult
-          const p1Total = hammerResult?.netCents[players[0].id] ?? 0
-          const p2Total = hammerResult?.netCents[players[1].id] ?? 0
-
-          return (
-            <div className="bg-orange-50 border border-orange-200 rounded-xl p-3 space-y-2">
-              <div className="flex items-center justify-between">
-                <p className="font-bold text-orange-800 text-sm">🔨 Hammer</p>
-                <span className="text-xs font-semibold text-orange-600 bg-orange-100 px-2 py-0.5 rounded-full">
-                  Hole value: {fmtMoney(holeValue)}
-                </span>
-              </div>
-
-              {hState?.declined ? (
-                <div className="bg-red-50 border border-red-200 rounded-lg p-2">
-                  <p className="text-sm text-red-700 font-semibold">
-                    {players.find(p => p.id === hState.declinedBy)?.name} declined — {holderName} wins {fmtMoney(hState.value / 2)}
-                  </p>
-                </div>
-              ) : (
-                <div className="space-y-2">
-                  <p className="text-xs text-orange-600">
-                    {hState
-                      ? `${holderName} threw the hammer (×${hState.presses}) — ${receiverName} to respond`
-                      : `${holderName} holds the hammer`}
-                  </p>
-                  {!readOnly && (
-                    <div className="flex gap-2">
-                      <button
-                        onClick={throwHammer}
-                        disabled={!canThrow}
-                        className="flex-1 py-2 rounded-lg text-sm font-bold bg-orange-500 text-white active:bg-orange-600 disabled:opacity-40"
-                      >
-                        🔨 Throw Hammer
-                      </button>
-                      {canDecline && (
-                        <button
-                          onClick={declineHammer}
-                          className="flex-1 py-2 rounded-lg text-sm font-bold bg-red-100 text-red-700 border border-red-200 active:bg-red-200"
-                        >
-                          Decline
-                        </button>
-                      )}
-                    </div>
-                  )}
-                </div>
-              )}
-
-              {/* Running totals */}
-              <div className="flex gap-2 pt-1 border-t border-orange-200">
-                {players.map(p => {
-                  const net = hammerResult?.netCents[p.id] ?? 0
-                  return (
-                    <div key={p.id} className={`flex-1 text-center rounded-lg py-1 ${net > 0 ? 'bg-green-50' : net < 0 ? 'bg-red-50' : 'bg-gray-50'}`}>
-                      <p className="text-xs text-gray-500">{p.name}</p>
-                      <p className={`text-sm font-bold ${net > 0 ? 'text-green-700' : net < 0 ? 'text-red-700' : 'text-gray-600'}`}>
-                        {net >= 0 ? '+' : ''}{fmtMoney(Math.abs(net))}
-                      </p>
-                    </div>
-                  )
-                })}
-              </div>
-            </div>
-          )
-        })()}
-
-        {/* BBB panel */}
-        {showGameStatus && !readOnly && game?.type === 'bingo_bango_bongo' && (() => {
-          const BBBRow = ({
-            category,
-            icon,
-            label,
-          }: {
-            category: 'bingo' | 'bango' | 'bongo'
-            icon: string
-            label: string
-          }) => (
-            <div className="space-y-1">
-              <p className="text-xs font-semibold text-amber-700">{icon} {label}</p>
-              <div className="flex flex-wrap gap-1.5">
-                {players.map(p => (
-                  <button
-                    key={p.id}
-                    onClick={() => setBBBPoint(category, p.id)}
-                    className={`px-2.5 py-1 rounded-lg text-xs font-semibold transition-colors ${
-                      currentBBB?.[category] === p.id
-                        ? 'bg-amber-500 text-white'
-                        : 'bg-white border border-amber-200 text-amber-700'
-                    }`}
-                  >
-                    {p.name}
-                  </button>
-                ))}
-              </div>
-            </div>
-          )
-          return (
-            <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 space-y-3">
-              <p className="font-bold text-amber-800 text-sm">⭐ Bingo Bango Bongo — Hole {currentHole}</p>
-              <BBBRow category="bingo" icon="🟢" label="Bingo — First on green" />
-              <BBBRow category="bango" icon="📍" label="Bango — Closest to pin" />
-              <BBBRow category="bongo" icon="🏆" label="Bongo — First to hole out" />
-            </div>
-          )
-        })()}
-
-        {/* Merged Hole Bets panel (junks + side bets) */}
-        {showGameStatus && !readOnly && (() => {
-          const hasJunks = junkConfig && junkConfig.types.length > 0
-          const holeJunks = hasJunks ? junkRecords.filter(jr => jr.holeNumber === currentHole) : []
-          const holeBets = sideBets.filter(sb => sb.holeNumber === currentHole && sb.status !== 'cancelled')
-          if (!hasJunks && holeBets.length === 0 && !showSideBetForm) {
-            // Show minimal panel with just "Add Side Bet" button
-            return (
-              <div className="bg-amber-50 dark:bg-amber-900/30 border border-amber-200 dark:border-amber-700 rounded-xl p-3">
-                <div className="flex items-center justify-between">
-                  <p className="font-bold text-amber-800 dark:text-amber-300 text-sm">🎯 Hole Bets — Hole {currentHole}</p>
-                  <button
-                    onClick={() => setShowSideBetForm(true)}
-                    className="text-xs font-semibold px-2.5 py-1 rounded-lg bg-amber-500 text-white active:bg-amber-600"
-                  >
-                    + Side Bet
-                  </button>
-                </div>
-                <p className="text-xs text-amber-600 dark:text-amber-400 mt-1">No bets on this hole</p>
-              </div>
-            )
-          }
-          return (
-            <div className="bg-amber-50 dark:bg-amber-900/30 border border-amber-200 dark:border-amber-700 rounded-xl p-3 space-y-3">
-              <p className="font-bold text-amber-800 dark:text-amber-300 text-sm">🎯 Hole Bets — Hole {currentHole}</p>
-
-              {/* Quick Junks Row */}
-              {hasJunks && (
-                <div className="space-y-2">
-                  <p className="text-xs font-semibold text-indigo-700 dark:text-indigo-300">
-                    🎲 Junks <span className="text-indigo-400 font-normal">{fmtMoney(junkConfig!.valueCents)}/junk</span>
-                  </p>
-                  {junkConfig!.types.map(jt => {
-                    const info = JUNK_LABELS[jt]
-                    const isSnake = jt === 'snake'
-                    return (
-                      <div key={jt} className="space-y-1">
-                        <p className={`text-xs font-semibold ${isSnake ? 'text-red-600' : 'text-indigo-700 dark:text-indigo-300'}`}>
-                          {info.emoji} {info.name} — {info.description}
-                        </p>
-                        <div className="flex flex-wrap gap-1.5">
-                          {players.map(p => {
-                            const active = holeJunks.some(jr => jr.playerId === p.id && jr.junkType === jt)
-                            return (
-                              <button
-                                key={p.id}
-                                onClick={() => toggleJunk(jt, p.id)}
-                                className={`px-2.5 py-1 rounded-lg text-xs font-semibold transition-colors ${
-                                  active
-                                    ? isSnake ? 'bg-red-500 text-white' : 'bg-indigo-500 text-white'
-                                    : 'bg-white dark:bg-gray-700 border border-indigo-200 dark:border-indigo-600 text-indigo-700 dark:text-indigo-300'
-                                }`}
-                              >
-                                {p.name}
-                              </button>
-                            )
-                          })}
-                        </div>
-                      </div>
-                    )
-                  })}
-                </div>
-              )}
-
-              {/* Divider between junks and side bets */}
-              {hasJunks && (holeBets.length > 0 || showSideBetForm) && (
-                <div className="border-t border-amber-200 dark:border-amber-600" />
-              )}
-
-              {/* Side Bets List */}
-              {holeBets.length > 0 && (
-                <div className="space-y-2">
-                  <p className="text-xs font-semibold text-amber-700 dark:text-amber-300">💰 Side Bets</p>
-                  {holeBets.map(bet => {
-                    const participantNames = bet.participants.map(id => players.find(p => p.id === id)?.name ?? '?')
-                    const winnerName = bet.winnerPlayerId ? players.find(p => p.id === bet.winnerPlayerId)?.name : null
-                    return (
-                      <div key={bet.id} className={`rounded-lg p-2.5 ${bet.status === 'resolved' ? 'bg-green-50 dark:bg-green-900/30' : 'bg-white dark:bg-gray-800'}`}>
-                        <div className="flex items-center justify-between">
-                          <div>
-                            <p className="text-sm font-semibold text-gray-800 dark:text-gray-100">{bet.description}</p>
-                            <p className="text-xs text-gray-500 dark:text-gray-400">
-                              {fmtMoney(bet.amountCents)} · {participantNames.join(' vs ')}
-                            </p>
-                          </div>
-                          {bet.status === 'resolved' && winnerName && (
-                            <span className="text-xs font-bold text-green-700 dark:text-green-400">🏆 {winnerName}</span>
-                          )}
-                          {bet.status === 'open' && (
-                            <button
-                              onClick={() => cancelSideBet(bet.id)}
-                              className="text-xs text-red-500 font-semibold"
-                            >
-                              ✕
-                            </button>
-                          )}
-                        </div>
-                        {bet.status === 'open' && (
-                          <div className="mt-2 flex flex-wrap gap-1.5">
-                            <span className="text-xs text-gray-500 dark:text-gray-400 self-center">Winner:</span>
-                            {bet.participants.map(pid => {
-                              const pName = players.find(p => p.id === pid)?.name ?? '?'
-                              return (
-                                <button
-                                  key={pid}
-                                  onClick={() => resolveSideBet(bet.id, pid)}
-                                  className="px-2.5 py-1 rounded-lg text-xs font-semibold bg-green-100 dark:bg-green-800 text-green-700 dark:text-green-300 active:bg-green-200"
-                                >
-                                  {pName}
-                                </button>
-                              )
-                            })}
-                          </div>
-                        )}
-                      </div>
-                    )
-                  })}
-                </div>
-              )}
-
-              {/* New Side Bet Form */}
-              {showSideBetForm && (
-                <div className="space-y-2 bg-white dark:bg-gray-800 rounded-lg p-3">
-                  <input
-                    type="text"
-                    placeholder="e.g. CTP on #7, longest drive..."
-                    value={sideBetDesc}
-                    onChange={e => setSideBetDesc(e.target.value)}
-                    className="w-full text-sm border border-gray-200 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 rounded-lg px-3 py-2"
-                  />
-                  <div className="flex items-center gap-2">
-                    <span className="text-sm text-gray-600 dark:text-gray-400">$</span>
-                    <input
-                      type="number"
-                      value={sideBetAmount}
-                      onChange={e => setSideBetAmount(e.target.value)}
-                      min="1"
-                      step="1"
-                      className="w-20 text-sm border border-gray-200 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 rounded-lg px-3 py-2"
-                    />
-                    <span className="text-xs text-gray-500 dark:text-gray-400">per loser</span>
-                  </div>
-                  <p className="text-xs text-gray-500 dark:text-gray-400 font-medium">Participants:</p>
-                  <div className="flex flex-wrap gap-1.5">
-                    {players.map(p => {
-                      const active = sideBetParticipants.includes(p.id)
-                      return (
-                        <button
-                          key={p.id}
-                          onClick={() => setSideBetParticipants(prev => active ? prev.filter(id => id !== p.id) : [...prev, p.id])}
-                          className={`px-2.5 py-1 rounded-lg text-xs font-semibold transition-colors ${
-                            active ? 'bg-amber-500 text-white' : 'bg-white dark:bg-gray-700 border border-amber-200 dark:border-amber-600 text-amber-700 dark:text-amber-300'
-                          }`}
-                        >
-                          {p.name}
-                        </button>
-                      )
-                    })}
-                  </div>
-                  <button
-                    onClick={createSideBet}
-                    disabled={!sideBetDesc.trim() || sideBetParticipants.length < 2}
-                    className="w-full py-2 rounded-lg text-sm font-semibold bg-amber-500 text-white active:bg-amber-600 disabled:opacity-40"
-                  >
-                    Create Bet ({sideBetParticipants.length < 2 ? 'need 2+ players' : `$${sideBetAmount} each`})
-                  </button>
-                </div>
-              )}
-
-              {/* Add Side Bet button at bottom */}
-              {!showSideBetForm && (
-                <button
-                  onClick={() => setShowSideBetForm(true)}
-                  className="w-full text-xs font-semibold px-2.5 py-2 rounded-lg bg-amber-500 text-white active:bg-amber-600"
-                >
-                  + Add Side Bet
-                </button>
-              )}
-            </div>
-          )
-        })()}
-
-        {/* Event Approval Panel */}
-        {isEventRound && canApproveScores && pendingScores.length > 0 && (
-          <div className="bg-yellow-50 border border-yellow-200 rounded-xl p-3 space-y-2">
-            <button
-              onClick={() => setShowApprovalPanel(!showApprovalPanel)}
-              className="w-full flex items-center justify-between"
-            >
-              <p className="font-bold text-yellow-800 text-sm">
-                ⏳ {pendingScores.length} Pending Score{pendingScores.length !== 1 ? 's' : ''}
-              </p>
-              <span className="text-yellow-600 text-xs font-semibold">
-                {showApprovalPanel ? 'Hide' : 'Review'}
-              </span>
-            </button>
-            {showApprovalPanel && (
-              <div className="space-y-2 mt-2">
-                {pendingScores.map(score => {
-                  const player = players.find(p => p.id === score.playerId)
-                  const hole = snapshot?.holes.find(h => h.number === score.holeNumber)
-                  return (
-                    <div key={score.id} className="flex items-center justify-between bg-white rounded-lg p-2.5">
-                      <div>
-                        <p className="text-sm font-semibold text-gray-800">{player?.name ?? 'Unknown'}</p>
-                        <p className="text-xs text-gray-500">
-                          Hole {score.holeNumber} · Par {hole?.par ?? '?'} · Shot {score.grossScore}
-                        </p>
-                      </div>
-                      <div className="flex gap-1.5">
-                        <button
-                          onClick={async () => {
-                            setHoleScores(prev => prev.map(s => s.id === score.id ? { ...s, scoreStatus: 'approved' as ScoreStatus } : s))
-                            await supabase.rpc('approve_score', { p_score_id: score.id })
-                          }}
-                          className="px-3 py-1.5 bg-green-500 text-white text-xs font-bold rounded-lg active:bg-green-600"
-                        >
-                          Approve
-                        </button>
-                        <button
-                          onClick={async () => {
-                            setHoleScores(prev => prev.map(s => s.id === score.id ? { ...s, scoreStatus: 'rejected' as ScoreStatus } : s))
-                            await supabase.rpc('reject_score', { p_score_id: score.id })
-                          }}
-                          className="px-3 py-1.5 bg-red-500 text-white text-xs font-bold rounded-lg active:bg-red-600"
-                        >
-                          Reject
-                        </button>
-                      </div>
-                    </div>
-                  )
-                })}
-              </div>
-            )}
-          </div>
-        )}
-
         {/* Batch Entry Toggle */}
         {!readOnly && isScoremasterRole && players.length > 1 && (
           <button
@@ -2406,6 +1929,483 @@ export function Scorecard({ userId, roundId, onEndRound, onHome, readOnly: readO
       </div>
       )} {/* end scoreTab === 'scores' */}
 
+      {/* Game tab */}
+      {scoreTab === 'game' && (
+      <div className="px-4 py-4 max-w-2xl mx-auto space-y-4">
+        {/* Game Status accordion */}
+        {(skinsResult || bestBallResult || nassauResult || (wolfConfig && wolfId) || (game?.type === 'hammer' && hammerConfig) || (game?.type === 'bingo_bango_bongo') || (junkConfig && junkConfig.types.length > 0)) && (
+          <button
+            onClick={() => setShowGameStatus(!showGameStatus)}
+            className="w-full flex items-center justify-between bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl px-4 py-3 active:bg-gray-50 dark:active:bg-gray-700 transition-colors"
+          >
+            <span className="text-sm font-semibold text-gray-700 dark:text-gray-200">Game Status</span>
+            <span className="text-gray-400 text-sm">{showGameStatus ? '▾' : '▸'}</span>
+          </button>
+        )}
+        {showGameStatus && skinsResult && (
+          <div className="flex items-center gap-2">
+            <div className="flex-1">
+              <SkinsStatus carry={currentCarry} potCents={game!.buyInCents * players.length * (1 + ((game!.config as any).presses?.length ?? 0))} />
+            </div>
+            {!readOnly && (
+              <button
+                onClick={handlePress}
+                className="px-3 py-2 bg-orange-500 text-white text-xs font-bold rounded-xl active:bg-orange-600 flex-shrink-0"
+              >
+                Press{(game!.config as any).presses?.length ? ` (${(game!.config as any).presses.length})` : ''}
+              </button>
+            )}
+          </div>
+        )}
+        {showGameStatus && bestBallResult && <BestBallStatus holesWon={bestBallResult.holesWon} />}
+
+        {/* Nassau status */}
+        {showGameStatus && nassauResult && (() => {
+          const getName = (id: string | null) => id ? (players.find(p => p.id === id)?.name ?? '?') : null
+          const pressCount = (game!.config as any).presses?.length ?? 0
+          const totalHoles = snapshot?.holes.length ?? 18
+          const half = Math.ceil(totalHoles / 2)
+          const segs = [
+            { label: `F${half}`, seg: nassauResult.front },
+            { label: `B${totalHoles - half}`, seg: nassauResult.back },
+            { label: `${totalHoles}`, seg: nassauResult.total },
+          ]
+          return (
+            <div className="flex items-center gap-2">
+              <div className="flex-1 bg-teal-50 border border-teal-200 rounded-xl px-3 py-2 flex items-center gap-2">
+                <span className="font-bold text-teal-700 text-sm mr-1">Nassau</span>
+                {segs.map(({ label, seg }) => {
+                  const leaderName = seg.incomplete
+                    ? '—'
+                    : seg.winner
+                    ? getName(seg.winner)
+                    : seg.tiedPlayers.length > 1
+                    ? 'Tied'
+                    : '—'
+                  return (
+                    <div key={label} className="text-center px-2 border-l border-teal-200">
+                      <p className="text-xs text-teal-500">{label}</p>
+                      <p className="text-xs font-semibold text-teal-800 truncate max-w-[64px]">{leaderName}</p>
+                    </div>
+                  )
+                })}
+              </div>
+              {!readOnly && (
+                <button
+                  onClick={handlePress}
+                  className="px-3 py-2 bg-orange-500 text-white text-xs font-bold rounded-xl active:bg-orange-600 flex-shrink-0"
+                >
+                  Press{pressCount ? ` (${pressCount})` : ''}
+                </button>
+              )}
+            </div>
+          )
+        })()}
+
+        {/* Wolf panel */}
+        {showGameStatus && !readOnly && wolfConfig && wolfId && (() => {
+          const wolfPlayer = players.find(p => p.id === wolfId)
+          const nonWolfs = players.filter(p => p.id !== wolfId)
+          return (
+            <div className="bg-purple-50 border border-purple-200 rounded-xl p-3 space-y-2">
+              <p className="font-bold text-purple-800 text-sm">🐺 Wolf: {wolfPlayer?.name}</p>
+              <p className="text-xs text-purple-600">Pick a partner after tee shots, or go Lone Wolf:</p>
+              <div className="flex flex-wrap gap-2">
+                {nonWolfs.map(p => (
+                  <button
+                    key={p.id}
+                    onClick={() => updateWolfDecision(currentHole, p.id)}
+                    className={`px-3 py-1.5 rounded-lg text-sm font-semibold transition-colors ${
+                      wolfDecision?.partnerId === p.id
+                        ? 'bg-purple-600 text-white'
+                        : 'bg-white border border-purple-200 text-purple-700'
+                    }`}
+                  >
+                    {p.name}
+                  </button>
+                ))}
+                <button
+                  onClick={() => updateWolfDecision(currentHole, null)}
+                  className={`px-3 py-1.5 rounded-lg text-sm font-semibold transition-colors ${
+                    wolfDecision !== undefined && wolfDecision.partnerId === null
+                      ? 'bg-red-500 text-white'
+                      : 'bg-white border border-red-200 text-red-600'
+                  }`}
+                >
+                  Lone Wolf 🐺
+                </button>
+              </div>
+              {wolfDecision && (
+                <p className="text-xs text-purple-500">
+                  {wolfDecision.partnerId === null
+                    ? `${wolfPlayer?.name} going LONE WOLF`
+                    : `${wolfPlayer?.name} + ${players.find(p => p.id === wolfDecision.partnerId)?.name}`}
+                </p>
+              )}
+            </div>
+          )
+        })()}
+
+        {/* Hammer panel */}
+        {showGameStatus && game?.type === 'hammer' && hammerConfig && players.length === 2 && (() => {
+          const baseValue = hammerConfig.baseValueCents
+          const hState = currentHammerState
+          const holeValue = hState ? hState.value : baseValue
+          const holderName = hState ? (players.find(p => p.id === hState.hammerHolder)?.name ?? '?') : players[0].name
+          const receiverName = hState
+            ? (players.find(p => p.id !== hState.hammerHolder)?.name ?? '?')
+            : players[1].name
+          const receiverId = hState
+            ? players.find(p => p.id !== hState.hammerHolder)?.id
+            : players[1].id
+          const holderId = hState ? hState.hammerHolder : players[0].id
+          const canThrow = !readOnly && (!hState || (!hState.declined && (hammerConfig.maxPresses == null || hState.presses < hammerConfig.maxPresses)))
+          const canDecline = !readOnly && hState && !hState.declined && hState.presses > 0
+
+          // Running totals from hammerResult
+          const p1Total = hammerResult?.netCents[players[0].id] ?? 0
+          const p2Total = hammerResult?.netCents[players[1].id] ?? 0
+
+          return (
+            <div className="bg-orange-50 border border-orange-200 rounded-xl p-3 space-y-2">
+              <div className="flex items-center justify-between">
+                <p className="font-bold text-orange-800 text-sm">🔨 Hammer</p>
+                <span className="text-xs font-semibold text-orange-600 bg-orange-100 px-2 py-0.5 rounded-full">
+                  Hole value: {fmtMoney(holeValue)}
+                </span>
+              </div>
+
+              {hState?.declined ? (
+                <div className="bg-red-50 border border-red-200 rounded-lg p-2">
+                  <p className="text-sm text-red-700 font-semibold">
+                    {players.find(p => p.id === hState.declinedBy)?.name} declined — {holderName} wins {fmtMoney(hState.value / 2)}
+                  </p>
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  <p className="text-xs text-orange-600">
+                    {hState
+                      ? `${holderName} threw the hammer (×${hState.presses}) — ${receiverName} to respond`
+                      : `${holderName} holds the hammer`}
+                  </p>
+                  {!readOnly && (
+                    <div className="flex gap-2">
+                      <button
+                        onClick={throwHammer}
+                        disabled={!canThrow}
+                        className="flex-1 py-2 rounded-lg text-sm font-bold bg-orange-500 text-white active:bg-orange-600 disabled:opacity-40"
+                      >
+                        🔨 Throw Hammer
+                      </button>
+                      {canDecline && (
+                        <button
+                          onClick={declineHammer}
+                          className="flex-1 py-2 rounded-lg text-sm font-bold bg-red-100 text-red-700 border border-red-200 active:bg-red-200"
+                        >
+                          Decline
+                        </button>
+                      )}
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Running totals */}
+              <div className="flex gap-2 pt-1 border-t border-orange-200">
+                {players.map(p => {
+                  const net = hammerResult?.netCents[p.id] ?? 0
+                  return (
+                    <div key={p.id} className={`flex-1 text-center rounded-lg py-1 ${net > 0 ? 'bg-green-50' : net < 0 ? 'bg-red-50' : 'bg-gray-50'}`}>
+                      <p className="text-xs text-gray-500">{p.name}</p>
+                      <p className={`text-sm font-bold ${net > 0 ? 'text-green-700' : net < 0 ? 'text-red-700' : 'text-gray-600'}`}>
+                        {net >= 0 ? '+' : ''}{fmtMoney(Math.abs(net))}
+                      </p>
+                    </div>
+                  )
+                })}
+              </div>
+            </div>
+          )
+        })()}
+
+        {/* BBB panel */}
+        {showGameStatus && !readOnly && game?.type === 'bingo_bango_bongo' && (() => {
+          const BBBRow = ({
+            category,
+            icon,
+            label,
+          }: {
+            category: 'bingo' | 'bango' | 'bongo'
+            icon: string
+            label: string
+          }) => (
+            <div className="space-y-1">
+              <p className="text-xs font-semibold text-amber-700">{icon} {label}</p>
+              <div className="flex flex-wrap gap-1.5">
+                {players.map(p => (
+                  <button
+                    key={p.id}
+                    onClick={() => setBBBPoint(category, p.id)}
+                    className={`px-2.5 py-1 rounded-lg text-xs font-semibold transition-colors ${
+                      currentBBB?.[category] === p.id
+                        ? 'bg-amber-500 text-white'
+                        : 'bg-white border border-amber-200 text-amber-700'
+                    }`}
+                  >
+                    {p.name}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )
+          return (
+            <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 space-y-3">
+              <p className="font-bold text-amber-800 text-sm">⭐ Bingo Bango Bongo — Hole {currentHole}</p>
+              <BBBRow category="bingo" icon="🟢" label="Bingo — First on green" />
+              <BBBRow category="bango" icon="📍" label="Bango — Closest to pin" />
+              <BBBRow category="bongo" icon="🏆" label="Bongo — First to hole out" />
+            </div>
+          )
+        })()}
+
+        {/* Merged Hole Bets panel (junks + side bets) */}
+        {showGameStatus && !readOnly && (() => {
+          const hasJunks = junkConfig && junkConfig.types.length > 0
+          const holeJunks = hasJunks ? junkRecords.filter(jr => jr.holeNumber === currentHole) : []
+          const holeBets = sideBets.filter(sb => sb.holeNumber === currentHole && sb.status !== 'cancelled')
+          if (!hasJunks && holeBets.length === 0 && !showSideBetForm) {
+            return (
+              <div className="bg-amber-50 dark:bg-amber-900/30 border border-amber-200 dark:border-amber-700 rounded-xl p-3">
+                <div className="flex items-center justify-between">
+                  <p className="font-bold text-amber-800 dark:text-amber-300 text-sm">🎯 Hole Bets — Hole {currentHole}</p>
+                  <button
+                    onClick={() => setShowSideBetForm(true)}
+                    className="text-xs font-semibold px-2.5 py-1 rounded-lg bg-amber-500 text-white active:bg-amber-600"
+                  >
+                    + Side Bet
+                  </button>
+                </div>
+                <p className="text-xs text-amber-600 dark:text-amber-400 mt-1">No bets on this hole</p>
+              </div>
+            )
+          }
+          return (
+            <div className="bg-amber-50 dark:bg-amber-900/30 border border-amber-200 dark:border-amber-700 rounded-xl p-3 space-y-3">
+              <p className="font-bold text-amber-800 dark:text-amber-300 text-sm">🎯 Hole Bets — Hole {currentHole}</p>
+
+              {/* Quick Junks Row */}
+              {hasJunks && (
+                <div className="space-y-2">
+                  <p className="text-xs font-semibold text-indigo-700 dark:text-indigo-300">
+                    🎲 Junks <span className="text-indigo-400 font-normal">{fmtMoney(junkConfig!.valueCents)}/junk</span>
+                  </p>
+                  {junkConfig!.types.map(jt => {
+                    const info = JUNK_LABELS[jt]
+                    const isSnake = jt === 'snake'
+                    return (
+                      <div key={jt} className="space-y-1">
+                        <p className={`text-xs font-semibold ${isSnake ? 'text-red-600' : 'text-indigo-700 dark:text-indigo-300'}`}>
+                          {info.emoji} {info.name} — {info.description}
+                        </p>
+                        <div className="flex flex-wrap gap-1.5">
+                          {players.map(p => {
+                            const active = holeJunks.some(jr => jr.playerId === p.id && jr.junkType === jt)
+                            return (
+                              <button
+                                key={p.id}
+                                onClick={() => toggleJunk(jt, p.id)}
+                                className={`px-2.5 py-1 rounded-lg text-xs font-semibold transition-colors ${
+                                  active
+                                    ? isSnake ? 'bg-red-500 text-white' : 'bg-indigo-500 text-white'
+                                    : 'bg-white dark:bg-gray-700 border border-indigo-200 dark:border-indigo-600 text-indigo-700 dark:text-indigo-300'
+                                }`}
+                              >
+                                {p.name}
+                              </button>
+                            )
+                          })}
+                        </div>
+                      </div>
+                    )
+                  })}
+                </div>
+              )}
+
+              {/* Divider between junks and side bets */}
+              {hasJunks && (holeBets.length > 0 || showSideBetForm) && (
+                <div className="border-t border-amber-200 dark:border-amber-600" />
+              )}
+
+              {/* Side Bets List */}
+              {holeBets.length > 0 && (
+                <div className="space-y-2">
+                  <p className="text-xs font-semibold text-amber-700 dark:text-amber-300">💰 Side Bets</p>
+                  {holeBets.map(bet => {
+                    const participantNames = bet.participants.map(id => players.find(p => p.id === id)?.name ?? '?')
+                    const winnerName = bet.winnerPlayerId ? players.find(p => p.id === bet.winnerPlayerId)?.name : null
+                    return (
+                      <div key={bet.id} className={`rounded-lg p-2.5 ${bet.status === 'resolved' ? 'bg-green-50 dark:bg-green-900/30' : 'bg-white dark:bg-gray-800'}`}>
+                        <div className="flex items-center justify-between">
+                          <div>
+                            <p className="text-sm font-semibold text-gray-800 dark:text-gray-100">{bet.description}</p>
+                            <p className="text-xs text-gray-500 dark:text-gray-400">
+                              {fmtMoney(bet.amountCents)} · {participantNames.join(' vs ')}
+                            </p>
+                          </div>
+                          {bet.status === 'resolved' && winnerName && (
+                            <span className="text-xs font-bold text-green-700 dark:text-green-400">🏆 {winnerName}</span>
+                          )}
+                          {bet.status === 'open' && (
+                            <button
+                              onClick={() => cancelSideBet(bet.id)}
+                              className="text-xs text-red-500 font-semibold"
+                            >
+                              ✕
+                            </button>
+                          )}
+                        </div>
+                        {bet.status === 'open' && (
+                          <div className="mt-2 flex flex-wrap gap-1.5">
+                            <span className="text-xs text-gray-500 dark:text-gray-400 self-center">Winner:</span>
+                            {bet.participants.map(pid => {
+                              const pName = players.find(p => p.id === pid)?.name ?? '?'
+                              return (
+                                <button
+                                  key={pid}
+                                  onClick={() => resolveSideBet(bet.id, pid)}
+                                  className="px-2.5 py-1 rounded-lg text-xs font-semibold bg-green-100 dark:bg-green-800 text-green-700 dark:text-green-300 active:bg-green-200"
+                                >
+                                  {pName}
+                                </button>
+                              )
+                            })}
+                          </div>
+                        )}
+                      </div>
+                    )
+                  })}
+                </div>
+              )}
+
+              {/* New Side Bet Form */}
+              {showSideBetForm && (
+                <div className="space-y-2 bg-white dark:bg-gray-800 rounded-lg p-3">
+                  <input
+                    type="text"
+                    placeholder="e.g. CTP on #7, longest drive..."
+                    value={sideBetDesc}
+                    onChange={e => setSideBetDesc(e.target.value)}
+                    className="w-full text-sm border border-gray-200 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 rounded-lg px-3 py-2"
+                  />
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm text-gray-600 dark:text-gray-400">$</span>
+                    <input
+                      type="number"
+                      value={sideBetAmount}
+                      onChange={e => setSideBetAmount(e.target.value)}
+                      min="1"
+                      step="1"
+                      className="w-20 text-sm border border-gray-200 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 rounded-lg px-3 py-2"
+                    />
+                    <span className="text-xs text-gray-500 dark:text-gray-400">per loser</span>
+                  </div>
+                  <p className="text-xs text-gray-500 dark:text-gray-400 font-medium">Participants:</p>
+                  <div className="flex flex-wrap gap-1.5">
+                    {players.map(p => {
+                      const active = sideBetParticipants.includes(p.id)
+                      return (
+                        <button
+                          key={p.id}
+                          onClick={() => setSideBetParticipants(prev => active ? prev.filter(id => id !== p.id) : [...prev, p.id])}
+                          className={`px-2.5 py-1 rounded-lg text-xs font-semibold transition-colors ${
+                            active ? 'bg-amber-500 text-white' : 'bg-white dark:bg-gray-700 border border-amber-200 dark:border-amber-600 text-amber-700 dark:text-amber-300'
+                          }`}
+                        >
+                          {p.name}
+                        </button>
+                      )
+                    })}
+                  </div>
+                  <button
+                    onClick={createSideBet}
+                    disabled={!sideBetDesc.trim() || sideBetParticipants.length < 2}
+                    className="w-full py-2 rounded-lg text-sm font-semibold bg-amber-500 text-white active:bg-amber-600 disabled:opacity-40"
+                  >
+                    Create Bet ({sideBetParticipants.length < 2 ? 'need 2+ players' : `$${sideBetAmount} each`})
+                  </button>
+                </div>
+              )}
+
+              {/* Add Side Bet button at bottom */}
+              {!showSideBetForm && (
+                <button
+                  onClick={() => setShowSideBetForm(true)}
+                  className="w-full text-xs font-semibold px-2.5 py-2 rounded-lg bg-amber-500 text-white active:bg-amber-600"
+                >
+                  + Add Side Bet
+                </button>
+              )}
+            </div>
+          )
+        })()}
+
+        {/* Event Approval Panel */}
+        {isEventRound && canApproveScores && pendingScores.length > 0 && (
+          <div className="bg-yellow-50 border border-yellow-200 rounded-xl p-3 space-y-2">
+            <button
+              onClick={() => setShowApprovalPanel(!showApprovalPanel)}
+              className="w-full flex items-center justify-between"
+            >
+              <p className="font-bold text-yellow-800 text-sm">
+                ⏳ {pendingScores.length} Pending Score{pendingScores.length !== 1 ? 's' : ''}
+              </p>
+              <span className="text-yellow-600 text-xs font-semibold">
+                {showApprovalPanel ? 'Hide' : 'Review'}
+              </span>
+            </button>
+            {showApprovalPanel && (
+              <div className="space-y-2 mt-2">
+                {pendingScores.map(score => {
+                  const player = players.find(p => p.id === score.playerId)
+                  const hole = snapshot?.holes.find(h => h.number === score.holeNumber)
+                  return (
+                    <div key={score.id} className="flex items-center justify-between bg-white rounded-lg p-2.5">
+                      <div>
+                        <p className="text-sm font-semibold text-gray-800">{player?.name ?? 'Unknown'}</p>
+                        <p className="text-xs text-gray-500">
+                          Hole {score.holeNumber} · Par {hole?.par ?? '?'} · Shot {score.grossScore}
+                        </p>
+                      </div>
+                      <div className="flex gap-1.5">
+                        <button
+                          onClick={async () => {
+                            setHoleScores(prev => prev.map(s => s.id === score.id ? { ...s, scoreStatus: 'approved' as ScoreStatus } : s))
+                            await supabase.rpc('approve_score', { p_score_id: score.id })
+                          }}
+                          className="px-3 py-1.5 bg-green-500 text-white text-xs font-bold rounded-lg active:bg-green-600"
+                        >
+                          Approve
+                        </button>
+                        <button
+                          onClick={async () => {
+                            setHoleScores(prev => prev.map(s => s.id === score.id ? { ...s, scoreStatus: 'rejected' as ScoreStatus } : s))
+                            await supabase.rpc('reject_score', { p_score_id: score.id })
+                          }}
+                          className="px-3 py-1.5 bg-red-500 text-white text-xs font-bold rounded-lg active:bg-red-600"
+                        >
+                          Reject
+                        </button>
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+      )} {/* end scoreTab === 'game' */}
+
       <div className="fixed bottom-0 inset-x-0 bg-white/95 dark:bg-gray-800/95 backdrop-blur-sm border-t border-gray-200 dark:border-gray-700 safe-bottom">
         <div className="p-4 max-w-2xl mx-auto flex gap-3">
           <button onClick={() => goToHole(Math.max(1, currentHole - 1))} disabled={currentHole === 1}
@@ -2417,6 +2417,11 @@ export function Scorecard({ userId, roundId, onEndRound, onHome, readOnly: readO
               <span className="text-[10px] text-amber-500 font-semibold">H{undoStack[0].holeNumber} {undoStack[0].playerName} {undoStack[0].newScore}→{undoStack[0].previousScore}</span>
             </button>
           )}
+          <button
+            onClick={() => goToHole(Math.min(snapshot?.holes.length ?? 18, currentHole + 1))}
+            disabled={currentHole === (snapshot?.holes.length ?? 18)}
+            className="flex-1 h-14 bg-gray-100 rounded-2xl font-bold text-xl text-gray-600 disabled:opacity-30 active:bg-gray-200"
+          >Next &rarr;</button>
         </div>
       </div>
 

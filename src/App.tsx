@@ -285,27 +285,33 @@ function Home({
               <StatChip label="Handicap" value={userProfile.handicapIndex} accent onClick={onHandicapDetail} />
             )}
           </div>
-          <div className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-1">
-            <button onClick={onPersonalDashboard} className={`text-sm font-medium flex items-center gap-1.5 transition-colors ${roundCount > 0 ? 'text-gray-300 hover:text-white' : 'text-gray-500'}`}>
-              <span>📈</span> My Stats
+          <div className="mt-3 grid grid-cols-3 gap-2">
+            <button onClick={onPersonalDashboard} className={`flex flex-col items-center justify-center min-h-[60px] rounded-xl transition-colors ${roundCount > 0 ? 'bg-gray-700/50 text-gray-200 active:bg-gray-600' : 'bg-gray-700/30 text-gray-500'}`}>
+              <span className="text-lg">📈</span>
+              <span className="text-xs font-medium mt-0.5">My Stats</span>
             </button>
             {roundCount > 0 && (
               <>
-                <button onClick={onRoundHistory} className="text-gray-300 text-sm font-medium flex items-center gap-1.5 hover:text-white transition-colors">
-                  <span>📋</span> Round History
-                  {(notificationCount ?? 0) > 0 && <NotificationBadge count={notificationCount!} />}
+                <button onClick={onRoundHistory} className="flex flex-col items-center justify-center min-h-[60px] rounded-xl bg-gray-700/50 text-gray-200 active:bg-gray-600 transition-colors relative">
+                  <span className="text-lg">📋</span>
+                  <span className="text-xs font-medium mt-0.5">History</span>
+                  {(notificationCount ?? 0) > 0 && <span className="absolute top-1 right-1"><NotificationBadge count={notificationCount!} /></span>}
                 </button>
-                <button onClick={onStats} className="text-gray-300 text-sm font-medium flex items-center gap-1.5 hover:text-white transition-colors">
-                  <span>📊</span> Leaderboard
+                <button onClick={onStats} className="flex flex-col items-center justify-center min-h-[60px] rounded-xl bg-gray-700/50 text-gray-200 active:bg-gray-600 transition-colors">
+                  <span className="text-lg">📊</span>
+                  <span className="text-xs font-medium mt-0.5">Leaderboard</span>
                 </button>
-                <button onClick={onLedger} className="text-gray-300 text-sm font-medium flex items-center gap-1.5 hover:text-white transition-colors">
-                  <span>💰</span> Ledger
+                <button onClick={onLedger} className="flex flex-col items-center justify-center min-h-[60px] rounded-xl bg-gray-700/50 text-gray-200 active:bg-gray-600 transition-colors">
+                  <span className="text-lg">💰</span>
+                  <span className="text-xs font-medium mt-0.5">Ledger</span>
                 </button>
-                <button onClick={onPlayers} className="text-gray-300 text-sm font-medium flex items-center gap-1.5 hover:text-white transition-colors">
-                  <span>🏌️</span> Players
+                <button onClick={onPlayers} className="flex flex-col items-center justify-center min-h-[60px] rounded-xl bg-gray-700/50 text-gray-200 active:bg-gray-600 transition-colors">
+                  <span className="text-lg">🏌️</span>
+                  <span className="text-xs font-medium mt-0.5">Players</span>
                 </button>
-                <button onClick={onTournaments} className="text-gray-300 text-sm font-medium flex items-center gap-1.5 hover:text-white transition-colors">
-                  <span>🏆</span> Tournaments
+                <button onClick={onTournaments} className="flex flex-col items-center justify-center min-h-[60px] rounded-xl bg-gray-700/50 text-gray-200 active:bg-gray-600 transition-colors">
+                  <span className="text-lg">🏆</span>
+                  <span className="text-xs font-medium mt-0.5">Tournaments</span>
                 </button>
               </>
             )}
@@ -577,8 +583,19 @@ function Home({
           )}
         </section>
 
-        <p className="text-center text-xs text-gray-400 pb-4">Fore Skins Golf · Data synced to cloud</p>
+        <p className="text-center text-xs text-gray-400 pb-28">Fore Skins Golf · Data synced to cloud</p>
       </main>
+
+      <div className="fixed bottom-0 inset-x-0 bg-white/95 dark:bg-gray-800/95 backdrop-blur-sm border-t border-gray-200 dark:border-gray-700 safe-bottom z-20">
+        <div className="p-4 max-w-2xl mx-auto">
+          <button
+            onClick={onNewRound}
+            className="w-full h-14 bg-gray-800 dark:bg-white text-white dark:text-gray-800 text-lg font-bold rounded-2xl active:bg-gray-900 dark:active:bg-gray-100 transition-colors shadow-lg"
+          >
+            Start New Round
+          </button>
+        </div>
+      </div>
     </div>
   )
 }

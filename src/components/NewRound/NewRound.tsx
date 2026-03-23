@@ -756,6 +756,12 @@ function GameSetup({
   const [gamePresets, setGamePresets] = useState<GamePreset[]>([])
   const [stakesMode, setStakesMode] = useState<StakesMode>(initialGame?.stakesMode ?? initialStakesMode)
   const [type, setType] = useState<GameType>(initialGame?.type ?? 'skins')
+  const TOP_4_GAMES: GameType[] = ['skins', 'best_ball', 'nassau', 'wolf']
+  const [showAllGames, setShowAllGames] = useState(() => {
+    // Auto-show all if initial game is not in top 4
+    if (initialGame && !['skins', 'best_ball', 'nassau', 'wolf'].includes(initialGame.type)) return true
+    return false
+  })
   const [buyInDollars, setBuyInDollars] = useState(
     initialGame ? String(initialGame.buyInCents / 100) : (initialStakesMode === 'high_roller' ? '100' : '10')
   )
@@ -872,6 +878,7 @@ function GameSetup({
 
   const applyPreset = (preset: GamePreset) => {
     setType(preset.gameType)
+    if (!TOP_4_GAMES.includes(preset.gameType)) setShowAllGames(true)
     setStakesMode(preset.stakesMode)
     setBuyInDollars(String(preset.buyInCents / 100))
     setShowCustomBuyIn(false)
@@ -1147,14 +1154,26 @@ function GameSetup({
             <GameButton gameType="best_ball" label="🤝 Best Ball" disabled={!bestBallAllowed} />
             <GameButton gameType="nassau" label="🏳️ Nassau" />
             <GameButton gameType="wolf" label="🐺 Wolf" disabled={!wolfAllowed} />
-            <GameButton gameType="bingo_bango_bongo" label="⭐ BBB" />
-            <GameButton gameType="hammer" label="🔨 Hammer" disabled={!hammerAllowed} />
-            <GameButton gameType="vegas" label="🎲 Vegas" disabled={!vegasAllowed} />
-            <GameButton gameType="stableford" label="📊 Stableford" />
-            <GameButton gameType="dots" label="🔴 Dots" />
-            <GameButton gameType="banker" label="🏦 Banker" disabled={!bankerAllowed} />
-            <GameButton gameType="quota" label="📋 Quota" />
+            {showAllGames && (
+              <>
+                <GameButton gameType="bingo_bango_bongo" label="⭐ BBB" />
+                <GameButton gameType="hammer" label="🔨 Hammer" disabled={!hammerAllowed} />
+                <GameButton gameType="vegas" label="🎲 Vegas" disabled={!vegasAllowed} />
+                <GameButton gameType="stableford" label="📊 Stableford" />
+                <GameButton gameType="dots" label="🔴 Dots" />
+                <GameButton gameType="banker" label="🏦 Banker" disabled={!bankerAllowed} />
+                <GameButton gameType="quota" label="📋 Quota" />
+              </>
+            )}
           </div>
+          {!showAllGames && (
+            <button
+              onClick={() => setShowAllGames(true)}
+              className="w-full text-sm font-semibold text-gray-500 py-2 rounded-xl bg-gray-50 active:bg-gray-100 transition-colors"
+            >
+              Show all games (7 more)
+            </button>
+          )}
           {!bestBallAllowed && type === 'best_ball' && (
             <p className="text-sm text-gray-400">Best Ball requires an even number of players (2, 4, 6…).</p>
           )}
