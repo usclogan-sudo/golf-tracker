@@ -170,6 +170,10 @@ export const ShareCard = forwardRef<HTMLDivElement, ShareCardProps>(function Sha
         <span style={{ fontSize: 10, color: '#d1d5db', fontWeight: 600, letterSpacing: 1 }}>
           FORE SKINS GOLF TRACKER
         </span>
+        <br />
+        <span style={{ fontSize: 8, color: '#e5e7eb', fontWeight: 400, letterSpacing: 0.5 }}>
+          usclogan-sudo.github.io/golf-tracker
+        </span>
       </div>
     </div>
   )

@@ -163,8 +163,6 @@ export function Scorecard({ userId, roundId, onEndRound, onHome, readOnly: readO
   const [showRulesModal, setShowRulesModal] = useState(false)
   const [saveError, setSaveError] = useState<string | null>(null)
   const [lastFailedSave, setLastFailedSave] = useState<{ playerId: string; grossScore: number } | null>(null)
-  const MAX_UNDO = 5
-  const [undoStack, setUndoStack] = useState<{ playerId: string; holeNumber: number; previousScore: number; playerName: string; newScore: number }[]>([])
   const [activeGroupTab, setActiveGroupTab] = useState<number | 'all'>(1)
   const [celebration, setCelebration] = useState<{ level: 'toast' | 'fullscreen'; title: string; subtitle?: string; emoji: string; playerName: string } | null>(null)
   const [confirmModal, setConfirmModal] = useState<{ title: string; message: string; onConfirm: () => void; destructive?: boolean } | null>(null)
@@ -195,6 +193,8 @@ export function Scorecard({ userId, roundId, onEndRound, onHome, readOnly: readO
   const [localHole, setLocalHole] = useState<number | null>(null)
   const [showApprovalPanel, setShowApprovalPanel] = useState(false)
   const [showContextBanner, setShowContextBanner] = useState(true)
+  const [showHeaderMenu, setShowHeaderMenu] = useState(false)
+  const headerMenuRef = useRef<HTMLDivElement>(null)
   const { shareRef, sharing, shareImage } = useShareImage('fore-skins-leaderboard')
   const [scoreToast, setScoreToast] = useState<{ message: string; type: 'info' | 'success' | 'error' } | null>(null)
   const [showRoundSummary, setShowRoundSummary] = useState(true)
@@ -399,6 +399,18 @@ export function Scorecard({ userId, roundId, onEndRound, onHome, readOnly: readO
     }
   }, [isEventRound, round?.currentHole])
 
+  // Close header menu on outside click
+  useEffect(() => {
+    if (!showHeaderMenu) return
+    const handleClick = (e: MouseEvent) => {
+      if (headerMenuRef.current && !headerMenuRef.current.contains(e.target as Node)) {
+        setShowHeaderMenu(false)
+      }
+    }
+    document.addEventListener('click', handleClick, true)
+    return () => document.removeEventListener('click', handleClick, true)
+  }, [showHeaderMenu])
+
   // Auto-scroll hole nav bar to current hole
   useEffect(() => {
     if (!showHoleGrid || !holeNavRef.current) return
@@ -425,8 +437,6 @@ export function Scorecard({ userId, roundId, onEndRound, onHome, readOnly: readO
     const existing = holeScores.find(s => s.playerId === playerId && s.holeNumber === currentHole)
     const previousScore = existing?.grossScore ?? par
     const playerName = players.find(p => p.id === playerId)?.name ?? ''
-    setUndoStack(prev => [{ playerId, holeNumber: currentHole, previousScore, playerName, newScore: grossScore }, ...prev].slice(0, MAX_UNDO))
-
     // Trigger celebration
     const celeb = getCelebration(grossScore, par)
     if (celeb) {
@@ -521,30 +531,6 @@ export function Scorecard({ userId, roundId, onEndRound, onHome, readOnly: readO
       } else {
         setSaveError('Score failed to save — check your connection')
         setLastFailedSave({ playerId, grossScore })
-      }
-    }
-  }
-
-  const undoLastChange = async () => {
-    if (undoStack.length === 0) return
-    const [top, ...rest] = undoStack
-    setUndoStack(rest)
-    const existing = holeScores.find(s => s.playerId === top.playerId && s.holeNumber === top.holeNumber)
-    if (existing) {
-      setHoleScores(prev => prev.map(s => s.id === existing.id ? { ...s, grossScore: top.previousScore } : s))
-      try {
-        await supabase.from('hole_scores').update({ gross_score: top.previousScore }).eq('id', existing.id)
-      } catch {
-        if (!isOnline) {
-          enqueue({
-            table: 'hole_scores',
-            method: 'update',
-            data: { gross_score: top.previousScore },
-            matchColumn: 'id',
-            matchValue: existing.id,
-          })
-          setPendingCount(getPending())
-        }
       }
     }
   }
@@ -909,93 +895,120 @@ export function Scorecard({ userId, roundId, onEndRound, onHome, readOnly: readO
 
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-900 pb-32">
-      <header className={`${headerClass} text-white px-4 py-3 sticky top-0 z-10 shadow-xl`}>
+      <header className={`${headerClass} text-white px-4 py-2 sticky top-0 z-10 shadow-xl`}>
         <div className="max-w-2xl mx-auto flex items-center justify-between">
-          <div>
-            <p className="text-xs text-gray-300 font-medium flex items-center gap-1.5">
-              {event ? `${event.name} · ` : ''}{snapshot.courseName}
-              <span className="inline-flex items-center gap-1 text-[10px] bg-amber-500/30 px-1.5 py-0.5 rounded-full">
-                <span className="w-1.5 h-1.5 bg-amber-400 rounded-full animate-pulse" />
-                {readOnly ? 'Spectating' : isEventRound ? (canApproveScores ? 'Scorekeeper' : 'Self-Entry') : selfEntryOnly ? 'Self-Entry' : 'Live'}
-              </span>
-            </p>
-            <h1 className="text-xl font-bold flex items-center gap-2">
-              Hole {currentHole}
-              <span className="text-gray-300 font-normal text-base">Par {par} · <Tooltip term="SI">SI {strokeIndex}</Tooltip></span>
-              {game?.stakesMode === 'high_roller' && (
-                <span className="text-xs font-bold px-2 py-0.5 rounded-full"
-                  style={{ background: 'linear-gradient(135deg,#d97706,#fbbf24)', color: '#000' }}>
-                  💎
-                </span>
-              )}
-            </h1>
-          </div>
           <div className="flex items-center gap-2">
-            {isScoremasterRole && (
-              <button
-                onClick={async () => {
-                  // Use event invite code when in event context, else round code
-                  let code = (event?.inviteCode) ?? round.inviteCode
-                  if (!code) {
-                    code = generateInviteCode()
-                    const { error } = await supabase.from('rounds').update({ invite_code: code }).eq('id', roundId)
-                    if (error) {
-                      // Conflict — another device generated a code first, fetch it
-                      const { data } = await supabase.from('rounds').select('invite_code').eq('id', roundId).single()
-                      code = data?.invite_code ?? code
-                    }
-                    setRound(prev => prev ? { ...prev, inviteCode: code! } : prev)
-                  }
-                  const title = event ? `Join ${event.name}!` : 'Join my round!'
-                  const text = event
-                    ? `Join ${event.name} on Fore Skins! Code: ${code}`
-                    : `Join my round on Fore Skins! Code: ${code}`
-                  const url = `${window.location.origin}${window.location.pathname}?join=${code}`
-                  if (navigator.share) {
-                    try { await navigator.share({ title, text, url }) } catch {}
-                  } else {
-                    await navigator.clipboard.writeText(url)
-                  }
-                  setInviteToast(`Link copied! Code: ${code}`)
-                  setTimeout(() => setInviteToast(null), 3000)
-                }}
-                className="text-cyan-300 text-sm font-medium px-3 min-h-[44px] rounded-lg hover:bg-gray-600"
-              >
-                Invite
-              </button>
+            <button onClick={confirmGoHome} className="min-w-[44px] min-h-[44px] flex items-center justify-center rounded-full hover:bg-black/20 text-xl" aria-label="Back">←</button>
+            <div>
+              <p className="text-xs text-gray-300 font-medium flex items-center gap-1.5">
+                {event ? `${event.name} · ` : ''}{snapshot.courseName}
+                <span className="inline-flex items-center gap-1 text-[10px] bg-amber-500/30 px-1.5 py-0.5 rounded-full">
+                  <span className="w-1.5 h-1.5 bg-amber-400 rounded-full animate-pulse" />
+                  {readOnly ? 'Spectating' : isEventRound ? (canApproveScores ? 'Scorekeeper' : 'Self-Entry') : selfEntryOnly ? 'Self-Entry' : 'Live'}
+                </span>
+              </p>
+              <h1 className="text-xl font-bold flex items-center gap-2">
+                Hole {currentHole}
+                <span className="text-gray-300 font-normal text-base">Par {par} · <Tooltip term="SI">SI {strokeIndex}</Tooltip></span>
+                {game?.stakesMode === 'high_roller' && (
+                  <span className="text-xs font-bold px-2 py-0.5 rounded-full"
+                    style={{ background: 'linear-gradient(135deg,#d97706,#fbbf24)', color: '#000' }}>
+                    💎
+                  </span>
+                )}
+              </h1>
+            </div>
+          </div>
+          <div className="relative" ref={headerMenuRef}>
+            <button
+              onClick={() => setShowHeaderMenu(v => !v)}
+              className="min-w-[44px] min-h-[44px] flex items-center justify-center rounded-full hover:bg-black/20 text-xl"
+              aria-label="Menu"
+            >
+              ⋮
+            </button>
+            {showHeaderMenu && (
+              <div className="absolute right-0 top-full mt-1 bg-gray-800 rounded-xl shadow-2xl border border-gray-600 min-w-[180px] z-50 py-1 overflow-hidden">
+                {isScoremasterRole && (
+                  <button
+                    onClick={async () => {
+                      setShowHeaderMenu(false)
+                      let code = (event?.inviteCode) ?? round.inviteCode
+                      if (!code) {
+                        code = generateInviteCode()
+                        const { error } = await supabase.from('rounds').update({ invite_code: code }).eq('id', roundId)
+                        if (error) {
+                          const { data } = await supabase.from('rounds').select('invite_code').eq('id', roundId).single()
+                          code = data?.invite_code ?? code
+                        }
+                        setRound(prev => prev ? { ...prev, inviteCode: code! } : prev)
+                      }
+                      const title = event ? `Join ${event.name}!` : 'Join my round!'
+                      const text = event
+                        ? `Join ${event.name} on Fore Skins! Code: ${code}`
+                        : `Join my round on Fore Skins! Code: ${code}`
+                      const url = `${window.location.origin}${window.location.pathname}?join=${code}`
+                      if (navigator.share) {
+                        try { await navigator.share({ title, text, url }) } catch {}
+                      } else {
+                        await navigator.clipboard.writeText(url)
+                      }
+                      setInviteToast(`Link copied! Code: ${code}`)
+                      setTimeout(() => setInviteToast(null), 3000)
+                    }}
+                    className="w-full px-4 py-3 text-left text-sm font-medium text-cyan-300 hover:bg-gray-700 active:bg-gray-700"
+                  >
+                    Invite Players
+                  </button>
+                )}
+                {!readOnly && (
+                  <button
+                    onClick={async () => {
+                      setShowHeaderMenu(false)
+                      let code = (event?.inviteCode) ?? round.inviteCode
+                      if (!code) {
+                        code = generateInviteCode()
+                        const { error } = await supabase.from('rounds').update({ invite_code: code }).eq('id', roundId)
+                        if (error) {
+                          const { data } = await supabase.from('rounds').select('invite_code').eq('id', roundId).single()
+                          code = data?.invite_code ?? code
+                        }
+                        setRound(prev => prev ? { ...prev, inviteCode: code! } : prev)
+                      }
+                      const url = `${window.location.origin}${window.location.pathname}?spectate=${code}`
+                      const title = 'Watch live leaderboard!'
+                      const text = `Follow the round live on Fore Skins!`
+                      if (navigator.share) {
+                        try { await navigator.share({ title, text, url }) } catch {}
+                      } else {
+                        await navigator.clipboard.writeText(url)
+                      }
+                      setInviteToast('Spectator link copied!')
+                      setTimeout(() => setInviteToast(null), 3000)
+                    }}
+                    className="w-full px-4 py-3 text-left text-sm font-medium text-green-300 hover:bg-gray-700 active:bg-gray-700"
+                  >
+                    📡 Live Spectator Link
+                  </button>
+                )}
+                {game && (
+                  <button
+                    onClick={() => { setShowHeaderMenu(false); setShowRulesModal(true) }}
+                    className="w-full px-4 py-3 text-left text-sm font-medium text-cyan-300 hover:bg-gray-700 active:bg-gray-700"
+                  >
+                    Rules
+                  </button>
+                )}
+                {!readOnly && !selfEntryOnly && (
+                  <button
+                    onClick={() => { setShowHeaderMenu(false); confirmEndRound() }}
+                    className="w-full px-4 py-3 text-left text-sm font-medium text-yellow-300 hover:bg-gray-700 active:bg-gray-700"
+                  >
+                    End Round
+                  </button>
+                )}
+              </div>
             )}
-            {!readOnly && (
-              <button
-                onClick={async () => {
-                  let code = (event?.inviteCode) ?? round.inviteCode
-                  if (!code) {
-                    code = generateInviteCode()
-                    const { error } = await supabase.from('rounds').update({ invite_code: code }).eq('id', roundId)
-                    if (error) {
-                      const { data } = await supabase.from('rounds').select('invite_code').eq('id', roundId).single()
-                      code = data?.invite_code ?? code
-                    }
-                    setRound(prev => prev ? { ...prev, inviteCode: code! } : prev)
-                  }
-                  const url = `${window.location.origin}${window.location.pathname}?spectate=${code}`
-                  const title = 'Watch live leaderboard!'
-                  const text = `Follow the round live on Fore Skins!`
-                  if (navigator.share) {
-                    try { await navigator.share({ title, text, url }) } catch {}
-                  } else {
-                    await navigator.clipboard.writeText(url)
-                  }
-                  setInviteToast('Spectator link copied!')
-                  setTimeout(() => setInviteToast(null), 3000)
-                }}
-                className="text-green-300 text-sm font-medium px-2 min-h-[44px] rounded-lg hover:bg-gray-600"
-              >
-                📡 Live
-              </button>
-            )}
-            {game && <button onClick={() => setShowRulesModal(true)} className="text-cyan-300 text-sm font-medium px-2 min-h-[44px] rounded-lg hover:bg-gray-600">Rules</button>}
-            {!readOnly && !selfEntryOnly && <button onClick={confirmEndRound} className="text-yellow-300 text-sm font-medium px-3 min-h-[44px] rounded-lg hover:bg-gray-600">End Round</button>}
-            <button onClick={confirmGoHome} className="text-gray-300 text-sm font-medium px-3 min-h-[44px] rounded-lg hover:bg-gray-600">← Back</button>
           </div>
         </div>
         <div className="max-w-2xl mx-auto mt-2 flex items-center justify-center gap-3">
@@ -1008,7 +1021,7 @@ export function Scorecard({ userId, roundId, onEndRound, onHome, readOnly: readO
             onClick={() => setShowHoleGrid(!showHoleGrid)}
             className="text-white font-bold text-sm px-3 py-1.5 rounded-lg active:bg-gray-600 transition-colors"
           >
-            Hole {currentHole} of {snapshot?.holes.length ?? 18}
+            Hole {currentHole} · Par {par}
           </button>
           <button
             onClick={() => goToHole(Math.min(snapshot?.holes.length ?? 18, currentHole + 1))}
@@ -1061,8 +1074,9 @@ export function Scorecard({ userId, roundId, onEndRound, onHome, readOnly: readO
         </div>
       </div>
 
-      {/* Buy-In Payment Banner */}
+      {/* Buy-In Payment Banner — hidden for points mode */}
       {(() => {
+        if (game?.stakesMode === 'points') return null
         if (!userId || !round?.treasurerPlayerId || !treasurerProfile) return null
         // Find current user's player ID via round_participants
         const myParticipant = roundParticipants.find(rp => rp.userId === userId)
@@ -2480,13 +2494,6 @@ export function Scorecard({ userId, roundId, onEndRound, onHome, readOnly: readO
         <div className="p-4 max-w-2xl mx-auto flex gap-3">
           <button onClick={() => goToHole(Math.max(1, currentHole - 1))} disabled={currentHole === 1}
             className="flex-1 h-14 bg-gray-100 rounded-2xl font-bold text-xl text-gray-600 disabled:opacity-30 active:bg-gray-200">&larr; Prev</button>
-          {!readOnly && undoStack.length > 0 && (
-            <button onClick={undoLastChange}
-              className="flex-1 h-14 bg-amber-100 rounded-2xl text-amber-700 font-bold text-sm active:bg-amber-200 flex flex-col items-center justify-center" aria-label="Undo">
-              <span>Undo</span>
-              <span className="text-[10px] text-amber-500 font-semibold">H{undoStack[0].holeNumber} {undoStack[0].playerName} {undoStack[0].newScore}→{undoStack[0].previousScore}</span>
-            </button>
-          )}
           <button
             onClick={() => goToHole(Math.min(snapshot?.holes.length ?? 18, currentHole + 1))}
             disabled={currentHole === (snapshot?.holes.length ?? 18)}

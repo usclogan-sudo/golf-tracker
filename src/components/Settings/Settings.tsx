@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { supabase, rowToUserProfile } from '../../lib/supabase'
 import { AvatarPicker, UserAvatar } from '../AvatarPicker'
+import { ConfirmModal } from '../ConfirmModal'
 import { useDarkMode } from '../../hooks/useDarkMode'
 import type { UserProfile } from '../../types'
 
@@ -40,6 +41,10 @@ export function Settings({ userId, email, onBack, onSignOut, isAdmin, onAdmin, i
   const [deleteConfirm, setDeleteConfirm] = useState('')
   const [deleting, setDeleting] = useState(false)
   const [deleteError, setDeleteError] = useState('')
+
+  // Manage Data state
+  const [manageConfirm, setManageConfirm] = useState<{ title: string; message: string; action: () => Promise<void> } | null>(null)
+  const [manageRunning, setManageRunning] = useState(false)
 
   useEffect(() => {
     supabase.from('user_profiles').select('*').eq('user_id', userId).maybeSingle().then(({ data, error }) => {
@@ -104,6 +109,78 @@ export function Settings({ userId, email, onBack, onSignOut, isAdmin, onAdmin, i
       setNewPassword('')
       setConfirmPassword('')
     }
+  }
+
+  const handleResetStats = async () => {
+    setManageRunning(true)
+    try {
+      const { data: roundRows } = await supabase.from('rounds').select('id').eq('status', 'complete')
+      const roundIds = (roundRows ?? []).map((r: any) => r.id)
+      if (roundIds.length > 0) {
+        await Promise.all([
+          supabase.from('settlements').delete().in('round_id', roundIds),
+          supabase.from('hole_scores').delete().in('round_id', roundIds),
+          supabase.from('bbb_points').delete().in('round_id', roundIds),
+          supabase.from('junk_records').delete().in('round_id', roundIds),
+          supabase.from('round_players').delete().in('round_id', roundIds),
+          supabase.from('buy_ins').delete().in('round_id', roundIds),
+          supabase.from('side_bets').delete().in('round_id', roundIds),
+          supabase.from('round_participants').delete().in('round_id', roundIds),
+          supabase.from('notifications').delete().in('round_id', roundIds),
+        ])
+        await supabase.from('rounds').delete().in('id', roundIds)
+      }
+    } catch (err) {
+      console.error('Reset stats failed:', err)
+    }
+    setManageRunning(false)
+    setManageConfirm(null)
+    onBack()
+  }
+
+  const handleDeleteCourses = async () => {
+    setManageRunning(true)
+    try {
+      await supabase.from('courses').delete().eq('user_id', userId)
+    } catch (err) {
+      console.error('Delete courses failed:', err)
+    }
+    setManageRunning(false)
+    setManageConfirm(null)
+    onBack()
+  }
+
+  const handleResetEverything = async () => {
+    setManageRunning(true)
+    try {
+      // Delete all rounds and related data
+      const { data: roundRows } = await supabase.from('rounds').select('id')
+      const roundIds = (roundRows ?? []).map((r: any) => r.id)
+      if (roundIds.length > 0) {
+        await Promise.all([
+          supabase.from('settlements').delete().in('round_id', roundIds),
+          supabase.from('hole_scores').delete().in('round_id', roundIds),
+          supabase.from('bbb_points').delete().in('round_id', roundIds),
+          supabase.from('junk_records').delete().in('round_id', roundIds),
+          supabase.from('round_players').delete().in('round_id', roundIds),
+          supabase.from('buy_ins').delete().in('round_id', roundIds),
+          supabase.from('side_bets').delete().in('round_id', roundIds),
+          supabase.from('round_participants').delete().in('round_id', roundIds),
+          supabase.from('notifications').delete().in('round_id', roundIds),
+        ])
+        await supabase.from('rounds').delete().in('id', roundIds)
+      }
+      // Delete courses and players
+      await Promise.all([
+        supabase.from('courses').delete().eq('user_id', userId),
+        supabase.from('players').delete().eq('user_id', userId),
+      ])
+    } catch (err) {
+      console.error('Reset everything failed:', err)
+    }
+    setManageRunning(false)
+    setManageConfirm(null)
+    onBack()
   }
 
   const handleDeleteAccount = async () => {
@@ -332,6 +409,43 @@ export function Settings({ userId, email, onBack, onSignOut, isAdmin, onAdmin, i
           </section>
         )}
 
+        {/* Manage Data */}
+        {!adminOnly && (
+          <section className="bg-white dark:bg-gray-800 rounded-2xl shadow-sm p-4 space-y-3">
+            <p className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">Manage Data</p>
+            <button
+              onClick={() => setManageConfirm({
+                title: 'Reset Stats & History?',
+                message: 'This will permanently delete all completed rounds, scores, and settlements. Your courses and players will be kept.',
+                action: handleResetStats,
+              })}
+              className="w-full h-12 border-2 border-red-200 text-red-600 font-semibold rounded-xl active:bg-red-50 transition-colors"
+            >
+              Reset Stats & History
+            </button>
+            <button
+              onClick={() => setManageConfirm({
+                title: 'Delete All Courses?',
+                message: 'This will permanently delete all your saved courses. Your rounds and players will be kept.',
+                action: handleDeleteCourses,
+              })}
+              className="w-full h-12 border-2 border-red-200 text-red-600 font-semibold rounded-xl active:bg-red-50 transition-colors"
+            >
+              Delete All Courses
+            </button>
+            <button
+              onClick={() => setManageConfirm({
+                title: 'Reset Everything?',
+                message: 'This will permanently delete ALL your data: rounds, scores, courses, and guest players. This cannot be undone.',
+                action: handleResetEverything,
+              })}
+              className="w-full h-12 bg-red-600 text-white font-semibold rounded-xl active:bg-red-700 transition-colors"
+            >
+              Reset Everything
+            </button>
+          </section>
+        )}
+
         {/* Delete account */}
         {!adminOnly && <section className="bg-white dark:bg-gray-800 rounded-2xl shadow-sm p-4 space-y-3 border border-red-200">
           <p className="text-xs font-semibold text-red-500 uppercase tracking-wide">Danger Zone</p>
@@ -375,6 +489,16 @@ export function Settings({ userId, email, onBack, onSignOut, isAdmin, onAdmin, i
           onClose={() => setShowAvatarPicker(false)}
         />
       )}
+
+      <ConfirmModal
+        open={!!manageConfirm}
+        title={manageConfirm?.title ?? ''}
+        message={manageConfirm?.message ?? ''}
+        confirmLabel={manageRunning ? 'Working...' : 'Confirm'}
+        destructive
+        onConfirm={() => manageConfirm?.action()}
+        onCancel={() => { if (!manageRunning) setManageConfirm(null) }}
+      />
     </div>
   )
 }

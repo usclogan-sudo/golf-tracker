@@ -112,6 +112,7 @@ function StepIndicator({ current, skipGroups, stakesMode }: { current: string; s
 
 const STANDARD_PRESETS = [500, 1000, 2000, 5000]
 const HIGH_ROLLER_PRESETS = [10000, 25000, 50000, 100000]
+const POINTS_PRESETS = [10, 25, 50, 100]
 
 // ─── Step 1: Course Picker ────────────────────────────────────────────────────
 
@@ -326,6 +327,8 @@ function PlayerPicker({
   const [allPlayers, setAllPlayers] = useState<Player[]>([])
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set(preSelectedIds ?? []))
   const [query, setQuery] = useState('')
+  const [recentFriendIds, setRecentFriendIds] = useState<Set<string>>(new Set())
+  const [showAllPlayers, setShowAllPlayers] = useState(false)
 
   const [showAddForm, setShowAddForm] = useState(false)
   const [newName, setNewName] = useState('')
@@ -334,7 +337,7 @@ function PlayerPicker({
   const [addError, setAddError] = useState('')
   const [saving, setSaving] = useState(false)
 
-  const MAX_PLAYERS = 20
+  const MAX_PLAYERS = 6
   const headerClass = stakesMode === 'high_roller' ? 'hr-header' : 'app-header'
 
   useEffect(() => {
@@ -362,14 +365,61 @@ function PlayerPicker({
       const registeredIds = new Set(registeredPlayers.map(p => p.id))
       const uniqueGuests = guestPlayers.filter(g => !registeredIds.has(g.id))
 
-      setAllPlayers([...registeredPlayers, ...uniqueGuests].sort((a, b) => a.name.localeCompare(b.name)))
+      const all = [...registeredPlayers, ...uniqueGuests].sort((a, b) => a.name.localeCompare(b.name))
+      setAllPlayers(all)
+
+      // Auto-select the logged-in user if no pre-selected IDs provided
+      if (!preSelectedIds || preSelectedIds.length === 0) {
+        const me = all.find(p => p.id === userId)
+        if (me) {
+          setSelectedIds(prev => {
+            const next = new Set(prev)
+            next.add(me.id)
+            return next
+          })
+        }
+      }
+
+      // Fetch recent friends — player IDs from user's last 5 rounds
+      try {
+        const { data: recentRounds } = await supabase
+          .from('rounds')
+          .select('id')
+          .eq('user_id', userId)
+          .order('date', { ascending: false })
+          .limit(5)
+        if (recentRounds && recentRounds.length > 0) {
+          const roundIds = recentRounds.map((r: any) => r.id)
+          const { data: rpData } = await supabase
+            .from('round_players')
+            .select('player_id')
+            .in('round_id', roundIds)
+          if (rpData) {
+            const friendIds = new Set<string>()
+            for (const rp of rpData) {
+              const pid = (rp as any).player_id
+              if (pid && pid !== userId) friendIds.add(pid)
+            }
+            setRecentFriendIds(friendIds)
+          }
+        }
+      } catch {
+        // Non-critical — continue without recent friends
+      }
     }
     loadPlayers()
   }, [userId])
 
-  const filtered = query.trim()
+  // When searching, show all players flat (no tiers)
+  const isSearching = query.trim().length > 0
+  const filtered = isSearching
     ? allPlayers.filter(p => p.name.toLowerCase().includes(query.toLowerCase()))
     : allPlayers
+
+  // Tier the players for non-search display
+  const me = allPlayers.find(p => p.id === userId)
+  const friends = allPlayers.filter(p => p.id !== userId && recentFriendIds.has(p.id)).slice(0, 10)
+  const others = allPlayers.filter(p => p.id !== userId && !recentFriendIds.has(p.id))
 
   const toggle = (id: string) => {
     setSelectedIds(prev => {
@@ -441,66 +491,121 @@ function PlayerPicker({
           {selectedIds.size === 0
             ? `Select up to ${MAX_PLAYERS} players`
             : `${selectedIds.size} player${selectedIds.size !== 1 ? 's' : ''} selected`}
-          {selectedIds.size === MAX_PLAYERS && ' (max)'}
+          {selectedIds.size === MAX_PLAYERS && ' (max — Create Event for larger groups)'}
         </p>
 
-        {filtered.length > 0 && (
-          <div className="space-y-2">
-            {filtered.map(player => {
-              const selected = selectedIds.has(player.id)
-              const activeTee = playerTees[player.id] ?? player.tee
-              return (
-                <div
-                  key={player.id}
-                  className={`bg-white rounded-2xl shadow-sm border transition-colors ${
-                    selected ? 'border-amber-400 bg-amber-50' : 'border-gray-100'
-                  }`}
+        {(() => {
+          const renderPlayerCard = (player: Player, badge?: string) => {
+            const selected = selectedIds.has(player.id)
+            const activeTee = playerTees[player.id] ?? player.tee
+            return (
+              <div
+                key={player.id}
+                className={`bg-white rounded-2xl shadow-sm border transition-colors ${
+                  selected ? 'border-amber-400 bg-amber-50' : 'border-gray-100'
+                }`}
+              >
+                <button
+                  onClick={() => toggle(player.id)}
+                  disabled={!selected && selectedIds.size >= MAX_PLAYERS}
+                  className="w-full p-4 text-left flex items-center gap-3 disabled:opacity-40"
                 >
-                  <button
-                    onClick={() => toggle(player.id)}
-                    disabled={!selected && selectedIds.size >= MAX_PLAYERS}
-                    className="w-full p-4 text-left flex items-center gap-3 disabled:opacity-40"
+                  <div
+                    className={`w-6 h-6 rounded-full border-2 flex items-center justify-center flex-shrink-0 transition-colors ${
+                      selected ? 'border-gray-500 bg-amber-600' : 'border-gray-300'
+                    }`}
                   >
-                    <div
-                      className={`w-6 h-6 rounded-full border-2 flex items-center justify-center flex-shrink-0 transition-colors ${
-                        selected ? 'border-gray-500 bg-amber-600' : 'border-gray-300'
-                      }`}
-                    >
-                      {selected && <span className="text-white text-xs font-bold">✓</span>}
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <p className="font-semibold text-gray-800">{player.name}</p>
-                      <p className="text-sm text-gray-500">HCP {player.handicapIndex}</p>
-                    </div>
-                  </button>
+                    {selected && <span className="text-white text-xs font-bold">✓</span>}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="font-semibold text-gray-800">
+                      {player.name}
+                      {badge && (
+                        <span className="ml-2 text-[10px] font-bold uppercase px-1.5 py-0.5 rounded bg-amber-100 text-amber-700">{badge}</span>
+                      )}
+                    </p>
+                    <p className="text-sm text-gray-500">HCP {player.handicapIndex}</p>
+                  </div>
+                </button>
 
-                  {selected && course.tees.length > 1 && (
-                    <div className="px-4 pb-3 flex items-center gap-2">
-                      <span className="text-xs text-gray-500">Tee:</span>
-                      <div className="flex gap-1.5 flex-wrap">
-                        {course.tees.map(t => (
-                          <button
-                            key={t.name}
-                            onClick={() => onPlayerTeesChange({ ...playerTees, [player.id]: t.name })}
-                            className={`px-3 py-1 rounded-lg text-sm font-medium transition-colors ${
-                              activeTee === t.name
-                                ? 'bg-gray-800 text-white'
-                                : 'bg-gray-100 text-gray-600 active:bg-gray-200'
-                            }`}
-                          >
-                            {t.name}
-                          </button>
-                        ))}
-                      </div>
+                {selected && course.tees.length > 1 && (
+                  <div className="px-4 pb-3 flex items-center gap-2">
+                    <span className="text-xs text-gray-500">Tee:</span>
+                    <div className="flex gap-1.5 flex-wrap">
+                      {course.tees.map(t => (
+                        <button
+                          key={t.name}
+                          onClick={() => onPlayerTeesChange({ ...playerTees, [player.id]: t.name })}
+                          className={`px-3 py-1 rounded-lg text-sm font-medium transition-colors ${
+                            activeTee === t.name
+                              ? 'bg-gray-800 text-white'
+                              : 'bg-gray-100 text-gray-600 active:bg-gray-200'
+                          }`}
+                        >
+                          {t.name}
+                        </button>
+                      ))}
                     </div>
+                  </div>
+                )}
+              </div>
+            )
+          }
+
+          if (isSearching) {
+            // Flat search results
+            return filtered.length > 0 ? (
+              <div className="space-y-2">{filtered.map(p => renderPlayerCard(p))}</div>
+            ) : (
+              <p className="text-center text-gray-400 py-8">No players match "{query}"</p>
+            )
+          }
+
+          // Tiered display
+          return (
+            <div className="space-y-4">
+              {/* Tier 1: You */}
+              {me && (
+                <div className="space-y-2">
+                  {renderPlayerCard(me, 'You')}
+                </div>
+              )}
+
+              {/* Tier 2: Recent Friends */}
+              {friends.length > 0 && (
+                <div className="space-y-2">
+                  <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide px-1">Recent Friends</p>
+                  {friends.map(p => renderPlayerCard(p))}
+                </div>
+              )}
+
+              {/* Tier 3: All Other Players */}
+              {others.length > 0 && (
+                <div className="space-y-2">
+                  {!showAllPlayers ? (
+                    <button
+                      onClick={() => setShowAllPlayers(true)}
+                      className="w-full text-sm font-semibold text-gray-500 py-3 rounded-xl bg-gray-100 active:bg-gray-200 transition-colors"
+                    >
+                      Show all players ({others.length} more)
+                    </button>
+                  ) : (
+                    <>
+                      <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide px-1">All Players</p>
+                      {others.map(p => renderPlayerCard(p))}
+                    </>
                   )}
                 </div>
-              )
-            })}
-          </div>
-        )}
+              )}
 
-        {filtered.length === 0 && query.trim() && (
+              {allPlayers.length === 0 && (
+                <p className="text-center text-gray-400 py-8">No players found</p>
+              )}
+            </div>
+          )
+        })()}
+
+        {isSearching && filtered.length === 0 && (
           <p className="text-center text-gray-400 py-8">No players match "{query}"</p>
         )}
 
@@ -906,21 +1011,33 @@ function GameSetup({
     }
   }
 
-  const presets = stakesMode === 'high_roller' ? HIGH_ROLLER_PRESETS : STANDARD_PRESETS
+  const presets = stakesMode === 'points' ? POINTS_PRESETS : stakesMode === 'high_roller' ? HIGH_ROLLER_PRESETS : STANDARD_PRESETS
 
   const handleStakesChange = (mode: StakesMode) => {
     setStakesMode(mode)
-    const newPresets = mode === 'high_roller' ? HIGH_ROLLER_PRESETS : STANDARD_PRESETS
-    setBuyInDollars(String(newPresets[0] / 100))
+    if (mode === 'points') {
+      setBuyInDollars(String(POINTS_PRESETS[0]))
+      setShowCustomBuyIn(false)
+    } else {
+      const newPresets = mode === 'high_roller' ? HIGH_ROLLER_PRESETS : STANDARD_PRESETS
+      setBuyInDollars(String(newPresets[0] / 100))
+      setShowCustomBuyIn(false)
+    }
+  }
+
+  const selectPreset = (value: number) => {
+    if (stakesMode === 'points') {
+      setBuyInDollars(String(value))
+    } else {
+      setBuyInDollars(String(value / 100))
+    }
     setShowCustomBuyIn(false)
   }
 
-  const selectPreset = (cents: number) => {
-    setBuyInDollars(String(cents / 100))
-    setShowCustomBuyIn(false)
-  }
-
-  const buyInCents = Math.max(0, Math.round(parseFloat(buyInDollars || '0') * 100))
+  // In points mode, buyInCents stores raw point value; in money mode, stores cents
+  const buyInCents = stakesMode === 'points'
+    ? Math.max(0, Math.round(parseFloat(buyInDollars || '0')))
+    : Math.max(0, Math.round(parseFloat(buyInDollars || '0') * 100))
   const activePreset = presets.find(p => p === buyInCents) ?? null
 
   const bestBallAllowed = players.length >= 2 && players.length % 2 === 0
@@ -950,7 +1067,7 @@ function GameSetup({
   const vegasTeamsValid = vegasTeamCounts.a >= 1 && vegasTeamCounts.a === vegasTeamCounts.b
 
   const canContinue =
-    (type === 'hammer' || type === 'dots' || buyInCents > 0) &&
+    (type === 'hammer' || type === 'dots' || buyInCents >= 0) &&
     (type === 'skins' ||
       type === 'nassau' ||
       type === 'bingo_bango_bongo' ||
@@ -1123,7 +1240,7 @@ function GameSetup({
         {/* Stakes Mode */}
         <section className="bg-white dark:bg-gray-800 rounded-2xl shadow-sm p-4 space-y-3">
           <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Stakes</p>
-          <div className="grid grid-cols-2 gap-2">
+          <div className="grid grid-cols-3 gap-2">
             <button
               onClick={() => handleStakesChange('standard')}
               className={`h-14 rounded-xl font-semibold ${
@@ -1142,6 +1259,14 @@ function GameSetup({
                 : undefined}
             >
               💎 High Roller
+            </button>
+            <button
+              onClick={() => handleStakesChange('points')}
+              className={`h-14 rounded-xl font-semibold ${
+                stakesMode === 'points' ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-700'
+              }`}
+            >
+              🏆 Points
             </button>
           </div>
         </section>
@@ -1191,29 +1316,116 @@ function GameSetup({
           )}
         </section>
 
+        {/* Junk Side Bets */}
+        <section className="bg-white dark:bg-gray-800 rounded-2xl shadow-sm p-4 space-y-3">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">
+                Junk Side Bets
+                {junksEnabled && junkTypes.size > 0 && (
+                  <span className="ml-2 text-amber-600 font-normal">({junkTypes.size} active)</span>
+                )}
+              </p>
+              <p className="text-xs text-gray-400 mt-0.5">Optional peer-to-peer bets tracked per hole</p>
+            </div>
+            <button
+              role="switch"
+              aria-checked={junksEnabled}
+              onClick={() => {
+                if (junksEnabled) {
+                  setJunkTypes(new Set(['sandy', 'greenie', 'snake']))
+                  setJunkValueDollars('1')
+                }
+                setJunksEnabled(v => !v)
+              }}
+              className={`relative w-12 h-7 rounded-full transition-colors ${junksEnabled ? 'bg-amber-600' : 'bg-gray-300'}`}
+            >
+              <span className={`absolute top-0.5 w-6 h-6 bg-white rounded-full shadow transition-transform ${junksEnabled ? 'translate-x-5' : 'translate-x-0.5'}`} />
+            </button>
+          </div>
+
+          {junksEnabled && (
+            <>
+              <div className="flex flex-wrap gap-2">
+                {(Object.keys(JUNK_LABELS) as JunkType[]).map(jt => {
+                  const info = JUNK_LABELS[jt]
+                  const active = junkTypes.has(jt)
+                  return (
+                    <button
+                      key={jt}
+                      onClick={() => toggleJunkType(jt)}
+                      className={`px-3 py-2 rounded-xl text-sm font-semibold transition-colors ${
+                        active
+                          ? jt === 'snake' ? 'bg-red-100 border-2 border-red-300 text-red-700' : 'bg-amber-100 border-2 border-amber-300 text-gray-800'
+                          : 'bg-gray-100 border-2 border-transparent text-gray-500'
+                      }`}
+                    >
+                      {info.emoji} {info.name}
+                    </button>
+                  )
+                })}
+              </div>
+
+              <div>
+                <p className="text-sm text-gray-600 mb-2">Value per junk</p>
+                <div className="flex gap-2">
+                  {[50, 100, 200, 500].map(cents => (
+                    <button
+                      key={cents}
+                      onClick={() => setJunkValueDollars(String(cents / 100))}
+                      className={`px-3 h-10 rounded-xl font-semibold text-sm transition-colors ${
+                        Math.round(parseFloat(junkValueDollars || '0') * 100) === cents
+                          ? 'bg-gray-800 text-white'
+                          : 'bg-gray-100 text-gray-700'
+                      }`}
+                    >
+                      {fmtMoney(cents)}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div className="bg-indigo-50 rounded-xl p-3 text-xs text-indigo-700 space-y-1">
+                <p className="font-semibold">How junks work:</p>
+                {Array.from(junkTypes).map(jt => {
+                  const info = JUNK_LABELS[jt]
+                  return <p key={jt}>{info.emoji} <strong>{info.name}</strong> — {info.description}</p>
+                })}
+                {junkTypes.has('snake') && (
+                  <p className="text-red-600 font-medium mt-1">Snake is negative — the player pays everyone else!</p>
+                )}
+              </div>
+            </>
+          )}
+        </section>
+
         {/* Buy-in */}
         <section className="bg-white dark:bg-gray-800 rounded-2xl shadow-sm p-4 space-y-3">
           <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">
-            <Tooltip term="Buy-in">Buy-in Per Player</Tooltip>{type === 'nassau' ? ' (covers all 3 bets)' : ''}
+            {stakesMode === 'points'
+              ? 'Points Per Player'
+              : <><Tooltip term="Buy-in">Buy-in Per Player</Tooltip>{type === 'nassau' ? ' (covers all 3 bets)' : ''}</>}
           </p>
 
           <div className="flex gap-2 flex-wrap">
-            {presets.map(cents => (
+            {presets.map(value => (
               <button
-                key={cents}
-                onClick={() => selectPreset(cents)}
+                key={value}
+                onClick={() => selectPreset(value)}
                 className={`px-4 h-10 rounded-xl font-semibold text-sm transition-colors ${
-                  activePreset === cents
+                  activePreset === value
                     ? stakesMode === 'high_roller'
                       ? 'text-black'
+                      : stakesMode === 'points'
+                      ? 'bg-blue-600 text-white'
                       : 'bg-gray-800 text-white'
                     : 'bg-gray-100 text-gray-700'
                 }`}
-                style={activePreset === cents && stakesMode === 'high_roller'
+                style={activePreset === value && stakesMode === 'high_roller'
                   ? { background: 'linear-gradient(135deg,#d97706,#fbbf24)' }
                   : undefined}
               >
-                {fmtMoney(cents)}
+                {stakesMode === 'points' ? `${value} pts` : fmtMoney(value)}
               </button>
             ))}
             <button
@@ -1230,11 +1442,11 @@ function GameSetup({
 
           {showCustomBuyIn && (
             <div className="flex items-center gap-2">
-              <span className="text-xl font-bold text-gray-500">$</span>
+              <span className="text-xl font-bold text-gray-500">{stakesMode === 'points' ? 'pts' : '$'}</span>
               <input
                 type="number"
                 inputMode="decimal"
-                min="1"
+                min="0"
                 step="1"
                 autoFocus
                 value={buyInDollars}
@@ -1245,11 +1457,13 @@ function GameSetup({
           )}
 
           <div className="bg-amber-50 rounded-xl px-4 py-3 flex items-center justify-between">
-            <span className="text-sm text-gray-600">Total pot</span>
-            <span className="font-bold text-gray-800 text-lg">{fmtMoney(buyInCents * players.length)}</span>
+            <span className="text-sm text-gray-600">{stakesMode === 'points' ? 'Total points' : 'Total pot'}</span>
+            <span className="font-bold text-gray-800 text-lg">
+              {stakesMode === 'points' ? `${buyInCents * players.length} pts` : fmtMoney(buyInCents * players.length)}
+            </span>
           </div>
 
-          {type === 'nassau' && (
+          {type === 'nassau' && stakesMode !== 'points' && (
             <p className="text-xs text-gray-500">
               = {fmtMoney(Math.floor(buyInCents / 3))} per bet × 3 bets (Front 9, Back 9, Total)
             </p>
@@ -1719,88 +1933,6 @@ function GameSetup({
           </section>
         )}
 
-        {/* Junk Side Bets */}
-        <section className="bg-white dark:bg-gray-800 rounded-2xl shadow-sm p-4 space-y-3">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">
-                Junk Side Bets
-                {junksEnabled && junkTypes.size > 0 && (
-                  <span className="ml-2 text-amber-600 font-normal">({junkTypes.size} active)</span>
-                )}
-              </p>
-              <p className="text-xs text-gray-400 mt-0.5">Optional peer-to-peer bets tracked per hole</p>
-            </div>
-            <button
-              role="switch"
-              aria-checked={junksEnabled}
-              onClick={() => {
-                if (junksEnabled) {
-                  setJunkTypes(new Set(['sandy', 'greenie', 'snake']))
-                  setJunkValueDollars('1')
-                }
-                setJunksEnabled(v => !v)
-              }}
-              className={`relative w-12 h-7 rounded-full transition-colors ${junksEnabled ? 'bg-amber-600' : 'bg-gray-300'}`}
-            >
-              <span className={`absolute top-0.5 w-6 h-6 bg-white rounded-full shadow transition-transform ${junksEnabled ? 'translate-x-5' : 'translate-x-0.5'}`} />
-            </button>
-          </div>
-
-          {junksEnabled && (
-            <>
-              <div className="flex flex-wrap gap-2">
-                {(Object.keys(JUNK_LABELS) as JunkType[]).map(jt => {
-                  const info = JUNK_LABELS[jt]
-                  const active = junkTypes.has(jt)
-                  return (
-                    <button
-                      key={jt}
-                      onClick={() => toggleJunkType(jt)}
-                      className={`px-3 py-2 rounded-xl text-sm font-semibold transition-colors ${
-                        active
-                          ? jt === 'snake' ? 'bg-red-100 border-2 border-red-300 text-red-700' : 'bg-amber-100 border-2 border-amber-300 text-gray-800'
-                          : 'bg-gray-100 border-2 border-transparent text-gray-500'
-                      }`}
-                    >
-                      {info.emoji} {info.name}
-                    </button>
-                  )
-                })}
-              </div>
-
-              <div>
-                <p className="text-sm text-gray-600 mb-2">Value per junk</p>
-                <div className="flex gap-2">
-                  {[50, 100, 200, 500].map(cents => (
-                    <button
-                      key={cents}
-                      onClick={() => setJunkValueDollars(String(cents / 100))}
-                      className={`px-3 h-10 rounded-xl font-semibold text-sm transition-colors ${
-                        Math.round(parseFloat(junkValueDollars || '0') * 100) === cents
-                          ? 'bg-gray-800 text-white'
-                          : 'bg-gray-100 text-gray-700'
-                      }`}
-                    >
-                      {fmtMoney(cents)}
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              <div className="bg-indigo-50 rounded-xl p-3 text-xs text-indigo-700 space-y-1">
-                <p className="font-semibold">How junks work:</p>
-                {Array.from(junkTypes).map(jt => {
-                  const info = JUNK_LABELS[jt]
-                  return <p key={jt}>{info.emoji} <strong>{info.name}</strong> — {info.description}</p>
-                })}
-                {junkTypes.has('snake') && (
-                  <p className="text-red-600 font-medium mt-1">Snake is negative — the player pays everyone else!</p>
-                )}
-              </div>
-            </>
-          )}
-        </section>
       </div>
 
       <div className="fixed bottom-0 inset-x-0 p-4 bg-white/95 dark:bg-gray-800/95 backdrop-blur-sm border-t border-gray-200 dark:border-gray-700">
@@ -1815,7 +1947,7 @@ function GameSetup({
             disabled={!canContinue}
             className="w-full h-14 bg-gray-800 text-white text-lg font-bold rounded-2xl shadow-lg disabled:opacity-40 active:bg-gray-900 transition-colors"
           >
-            Next: Collect Buy-ins
+            {buyInCents === 0 || stakesMode === 'points' ? 'Next: Start Round' : 'Next: Collect Buy-ins'}
           </button>
         </div>
       </div>
@@ -2000,6 +2132,30 @@ function TreasurerAndBuyIns({
           )}
         </section>
 
+        {/* Payment info card — shown after treasurer is selected */}
+        {treasurerId && treasurer && (
+          <section className="bg-amber-50 dark:bg-amber-900/20 rounded-2xl shadow-sm p-4 space-y-2 border border-amber-200">
+            <p className="font-bold text-gray-800 dark:text-gray-100 text-lg">
+              {fmtMoney(game.buyInCents)} per player
+            </p>
+            <p className="text-sm text-gray-600 dark:text-gray-300">
+              Pay <strong>{treasurer.name}</strong>
+            </p>
+            {(() => {
+              const methods: string[] = []
+              if (treasurer.venmoUsername) methods.push(`Venmo: ${treasurer.venmoUsername}`)
+              if (treasurer.zelleIdentifier) methods.push(`Zelle: ${treasurer.zelleIdentifier}`)
+              if (treasurer.cashAppUsername) methods.push(`Cash App: ${treasurer.cashAppUsername}`)
+              if (treasurer.paypalEmail) methods.push(`PayPal: ${treasurer.paypalEmail}`)
+              return methods.length > 0 ? (
+                <div className="text-sm text-gray-500 dark:text-gray-400 space-y-0.5">
+                  {methods.map((m, i) => <p key={i}>{m}</p>)}
+                </div>
+              ) : null
+            })()}
+          </section>
+        )}
+
         {/* Game Master */}
         <section className="bg-white dark:bg-gray-800 rounded-2xl shadow-sm p-4 space-y-3">
           <div>
@@ -2024,13 +2180,6 @@ function TreasurerAndBuyIns({
               </button>
             ))}
           </div>
-        </section>
-
-        <section className="bg-white dark:bg-gray-800 rounded-2xl shadow-sm p-4 space-y-3">
-          <p className="text-sm text-gray-500">
-            {fmtMoney(game.buyInCents)} per player → pay{' '}
-            <strong>{treasurer?.name ?? '…'}</strong>
-          </p>
         </section>
 
         <section className="bg-white dark:bg-gray-800 rounded-2xl shadow-sm p-4 space-y-3">
@@ -2119,6 +2268,7 @@ export function NewRound({ userId, onStart, onCancel, onAddCourse, initialStakes
   const [playerTees, setPlayerTees] = useState<Record<string, string>>({})
 
   const preSelectedPlayerIds = templateRound?.players?.map(p => p.id)
+  const [creatingDirect, setCreatingDirect] = useState(false)
 
   const skipGroups = !players || players.length <= MAX_PER_GROUP_CONST
 
@@ -2131,6 +2281,52 @@ export function NewRound({ userId, onStart, onCancel, onAddCourse, initialStakes
       setStep('game')
     } else {
       setStep('groups')
+    }
+  }
+
+  const createRoundDirect = async (g: Game, jc?: JunkConfig) => {
+    if (!course || !players || creatingDirect) return
+    setCreatingDirect(true)
+    try {
+      const roundId = uuidv4()
+      const inviteCode = generateInviteCode()
+      const gameMasterId = players.find(p => p.id === userId)?.id ?? players[0]?.id ?? userId
+      const round: Round = {
+        id: roundId,
+        courseId: course.id,
+        date: new Date(),
+        status: 'active',
+        currentHole: 1,
+        courseSnapshot: {
+          courseId: course.id,
+          courseName: course.name,
+          tees: course.tees,
+          holes: course.holes,
+        },
+        players,
+        game: g,
+        junkConfig: jc,
+        groups,
+        gameMasterId,
+        inviteCode,
+      }
+      const roundPlayers = players.map(p => ({
+        id: uuidv4(),
+        roundId,
+        playerId: p.id,
+        teePlayed: p.tee,
+      }))
+      const [roundResult, rpResult] = await Promise.all([
+        supabase.from('rounds').insert(roundToRow(round, userId)),
+        supabase.from('round_players').insert(roundPlayers.map(rp => roundPlayerToRow(rp, userId))),
+      ])
+      if (roundResult.error || rpResult.error) {
+        setCreatingDirect(false)
+        return
+      }
+      onStart(roundId)
+    } finally {
+      setCreatingDirect(false)
     }
   }
 
@@ -2184,7 +2380,15 @@ export function NewRound({ userId, onStart, onCancel, onAddCourse, initialStakes
       <GameSetup
         players={players}
         initialStakesMode={initialStakesMode}
-        onNext={(g, jc) => { setGame(g); setJunkConfig(jc); setStep('money') }}
+        onNext={(g, jc) => {
+          setGame(g); setJunkConfig(jc)
+          if (g.buyInCents === 0 || g.stakesMode === 'points') {
+            // Skip TreasurerAndBuyIns — create round directly with no treasurer
+            createRoundDirect(g, jc)
+          } else {
+            setStep('money')
+          }
+        }}
         onBack={() => players.length > MAX_PER_GROUP_CONST ? setStep('groups') : setStep('players')}
         initialGame={templateRound?.game}
         initialJunkConfig={junkConfig}

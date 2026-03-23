@@ -2,7 +2,7 @@ import { useState, useRef, useEffect } from 'react'
 
 const GOLF_TERMS: Record<string, string> = {
   SI: 'Stroke Index — difficulty ranking of each hole (1 = hardest)',
-  Net: 'Your score after handicap strokes are subtracted',
+  Net: 'Total strokes minus handicap strokes received. Lower is better. Example: 90 gross − 12 strokes = 78 net.',
   Gross: 'Your actual score before any handicap adjustment',
   Skins: 'Each hole is worth a set amount — win the hole outright to win the skin',
   Nassau: 'Three separate bets: front 9, back 9, and overall 18',
@@ -36,7 +36,9 @@ let activeTooltipSetter: ((open: boolean) => void) | null = null
 
 export function Tooltip({ term, children }: TooltipProps) {
   const [open, setOpen] = useState(false)
+  const [flipBelow, setFlipBelow] = useState(false)
   const ref = useRef<HTMLDivElement>(null)
+  const popoverRef = useRef<HTMLDivElement>(null)
   const definition = GOLF_TERMS[term]
 
   useEffect(() => {
@@ -48,6 +50,20 @@ export function Tooltip({ term, children }: TooltipProps) {
     }
     document.addEventListener('click', handleClick, true)
     return () => document.removeEventListener('click', handleClick, true)
+  }, [open])
+
+  // Detect if tooltip overflows viewport top and flip below
+  useEffect(() => {
+    if (!open || !popoverRef.current) return
+    const rect = popoverRef.current.getBoundingClientRect()
+    if (rect.top < 0) {
+      setFlipBelow(true)
+    }
+  }, [open])
+
+  // Reset flip when closing
+  useEffect(() => {
+    if (!open) setFlipBelow(false)
   }, [open])
 
   if (!definition) return <>{children}</>
@@ -69,16 +85,26 @@ export function Tooltip({ term, children }: TooltipProps) {
       {children}
       <button
         onClick={handleToggle}
-        className="inline-flex items-center justify-center w-4 h-4 rounded-full bg-amber-100 text-amber-600 text-[10px] font-bold leading-none flex-shrink-0 active:bg-amber-200"
+        className="inline-flex items-center justify-center w-7 h-7 min-h-[44px] min-w-[44px] rounded-full bg-amber-100 text-amber-600 text-[10px] font-bold leading-none flex-shrink-0 active:bg-amber-200"
+        style={{ padding: 0 }}
         aria-label={`What is ${term}?`}
       >
         ?
       </button>
       {open && (
-        <div className="absolute z-50 bottom-full left-1/2 -translate-x-1/2 mb-1.5 w-56 bg-gray-800 text-white text-xs rounded-xl px-3 py-2 shadow-lg">
+        <div
+          ref={popoverRef}
+          className={`absolute z-50 left-1/2 -translate-x-1/2 w-56 bg-gray-800 text-white text-xs rounded-xl px-3 py-2 shadow-lg ${
+            flipBelow ? 'top-full mt-1.5' : 'bottom-full mb-1.5'
+          }`}
+        >
           <p className="font-bold mb-0.5">{term}</p>
           <p className="text-gray-300 leading-relaxed">{definition}</p>
-          <div className="absolute top-full left-1/2 -translate-x-1/2 w-0 h-0 border-l-[6px] border-r-[6px] border-t-[6px] border-transparent border-t-gray-800" />
+          {flipBelow ? (
+            <div className="absolute bottom-full left-1/2 -translate-x-1/2 w-0 h-0 border-l-[6px] border-r-[6px] border-b-[6px] border-transparent border-b-gray-800" />
+          ) : (
+            <div className="absolute top-full left-1/2 -translate-x-1/2 w-0 h-0 border-l-[6px] border-r-[6px] border-t-[6px] border-transparent border-t-gray-800" />
+          )}
         </div>
       )}
     </span>

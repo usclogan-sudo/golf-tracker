@@ -32,7 +32,7 @@ import {
   calculateSideBetSettlements,
   buildUnifiedSettlements,
   JUNK_LABELS,
-  fmtMoney,
+  fmtAmount,
 } from '../../lib/gameLogic'
 import type { PlayerPayout, JunkResult, SideBetSettlement, HammerResult } from '../../lib/gameLogic'
 import type {
@@ -108,7 +108,7 @@ function NudgeButton({ playerName, amountCents, toPlayer }: { playerName: string
     : toPlayer.paypalEmail
     ? `paypal.me/${toPlayer.paypalEmail}`
     : null
-  const msg = `Hey ${playerName}! You owe ${fmtMoney(amountCents)} for golf.${paymentLink ? ` Pay here: ${paymentLink}` : ''}`
+  const msg = `Hey ${playerName}! You owe ${fmtAmount(amountCents)} for golf.${paymentLink ? ` Pay here: ${paymentLink}` : ''}`
   const handleNudge = () => {
     navigator.clipboard.writeText(msg).then(() => { setNudgeCopied(true); setTimeout(() => setNudgeCopied(false), 2000) })
   }
@@ -512,6 +512,8 @@ export function SettleUp({ roundId, userId, eventId, onDone, onContinue }: Props
 
   const gameLabel = GAME_LABELS[game.type] ?? game.type
   const isHighRoller = game.stakesMode === 'high_roller'
+  const isPoints = game.stakesMode === 'points'
+  const fmt = (cents: number) => fmtAmount(cents, game.stakesMode)
   const headerClass = isHighRoller ? 'hr-header' : 'app-header'
 
   const owedSettlements = settlementRecords.filter(s => s.status === 'owed')
@@ -561,7 +563,7 @@ export function SettleUp({ roundId, userId, eventId, onDone, onContinue }: Props
             return (
               <section className="bg-gray-50 dark:bg-gray-700 rounded-2xl p-4 text-center">
                 <p className="text-sm text-gray-500">Total in play</p>
-                <p className="text-2xl font-bold text-gray-800 dark:text-gray-100">{fmtMoney(totalOwed)}</p>
+                <p className="text-2xl font-bold text-gray-800 dark:text-gray-100">{fmt(totalOwed)}</p>
                 <p className="text-xs text-gray-400 mt-1">{owedSettlements.length} settlement{owedSettlements.length !== 1 ? 's' : ''} remaining</p>
               </section>
             )
@@ -591,16 +593,16 @@ export function SettleUp({ roundId, userId, eventId, onDone, onContinue }: Props
               <p className={`text-2xl font-bold ${
                 net > 0 ? 'text-green-700' : net < 0 ? 'text-red-700' : 'text-gray-600'
               }`}>
-                {net > 0 ? `You collect ${fmtMoney(net)}` : net < 0 ? `You owe ${fmtMoney(Math.abs(net))}` : "You're even"}
+                {net > 0 ? `You collect ${fmt(net)}` : net < 0 ? `You owe ${fmt(Math.abs(net))}` : "You're even"}
               </p>
               {collectFrom.length > 0 && (
                 <p className="text-sm text-green-600">
-                  {collectFrom.map(c => `From ${c.name}: ${fmtMoney(c.cents)}`).join(' · ')}
+                  {collectFrom.map(c => `From ${c.name}: ${fmt(c.cents)}`).join(' · ')}
                 </p>
               )}
               {oweTo.length > 0 && (
                 <p className="text-sm text-red-600">
-                  {oweTo.map(c => `To ${c.name}: ${fmtMoney(c.cents)}`).join(' · ')}
+                  {oweTo.map(c => `To ${c.name}: ${fmt(c.cents)}`).join(' · ')}
                 </p>
               )}
             </section>
@@ -638,9 +640,9 @@ export function SettleUp({ roundId, userId, eventId, onDone, onContinue }: Props
                       <div>
                         <p className="font-semibold text-gray-800 dark:text-gray-100 text-sm">
                           {item.isDirect ? item.directLabel : item.netCents > 0
-                            ? `Collect ${fmtMoney(item.netCents)} from ${item.playerName}`
+                            ? `Collect ${fmt(item.netCents)} from ${item.playerName}`
                             : item.netCents < 0
-                            ? `Pay ${fmtMoney(Math.abs(item.netCents))} to ${item.playerName}`
+                            ? `Pay ${fmt(Math.abs(item.netCents))} to ${item.playerName}`
                             : `Settle with ${item.playerName}`}
                         </p>
                         {pref && !item.isDirect && (
@@ -648,10 +650,10 @@ export function SettleUp({ roundId, userId, eventId, onDone, onContinue }: Props
                         )}
                       </div>
                       <p className={`text-2xl font-bold ${item.netCents > 0 ? 'text-green-600' : item.netCents < 0 ? 'text-red-600' : 'text-gray-500'}`}>
-                        {item.isDirect ? fmtMoney(item.netCents) : fmtMoney(Math.abs(item.netCents))}
+                        {item.isDirect ? fmt(item.netCents) : fmt(Math.abs(item.netCents))}
                       </p>
                     </div>
-                    {!item.isDirect && item.player && item.netCents < 0 && (
+                    {!isPoints && !item.isDirect && item.player && item.netCents < 0 && (
                       <PaymentButtons toPlayer={item.player} amountCents={Math.abs(item.netCents)} note={`Golf — ${snapshot.courseName}`} />
                     )}
                     <button
@@ -688,7 +690,7 @@ export function SettleUp({ roundId, userId, eventId, onDone, onContinue }: Props
                 {isTreasurer && unpaidBuyIns.length > 0 && (
                   <div className="bg-red-50 border border-red-200 rounded-xl p-3">
                     <p className="text-red-700 text-sm font-semibold">
-                      {unpaidBuyIns.length} unpaid — collect {fmtMoney(unpaidBuyIns.length * game.buyInCents)} before distributing
+                      {unpaidBuyIns.length} unpaid — collect {fmt(unpaidBuyIns.length * game.buyInCents)} before distributing
                     </p>
                   </div>
                 )}
@@ -702,7 +704,7 @@ export function SettleUp({ roundId, userId, eventId, onDone, onContinue }: Props
                         <div>
                           <p className="font-semibold text-gray-800 text-sm">{p?.name ?? 'Unknown'}</p>
                           <p className="text-xs text-gray-500">
-                            {fmtMoney(b.amountCents)}
+                            {fmt(b.amountCents)}
                             {p?.venmoUsername && <span className="ml-1 text-blue-500">Venmo</span>}
                             {p?.zelleIdentifier && <span className="ml-1 text-purple-500">Zelle</span>}
                             {p?.cashAppUsername && <span className="ml-1 text-green-500">CashApp</span>}
@@ -757,11 +759,11 @@ export function SettleUp({ roundId, userId, eventId, onDone, onContinue }: Props
             </div>
             <div className={`rounded-xl p-3 ${isHighRoller ? 'bg-black/30' : 'bg-gray-50'}`}>
               <p className={`text-xs ${isHighRoller ? 'text-amber-400' : 'text-gray-500'}`}>Buy-in</p>
-              <p className={`text-xl font-bold ${isHighRoller ? 'text-white' : 'text-gray-800'}`}>{fmtMoney(game.buyInCents)}</p>
+              <p className={`text-xl font-bold ${isHighRoller ? 'text-white' : 'text-gray-800'}`}>{fmt(game.buyInCents)}</p>
             </div>
             <div className={`rounded-xl p-3 ${isHighRoller ? 'bg-amber-900/40' : 'bg-green-50'}`}>
               <p className={`text-xs ${isHighRoller ? 'text-amber-400' : 'text-gray-500'}`}>Total pot</p>
-              <p className={`text-xl font-bold ${isHighRoller ? 'text-amber-400' : 'text-green-800'}`}>{fmtMoney(potCents)}</p>
+              <p className={`text-xl font-bold ${isHighRoller ? 'text-amber-400' : 'text-green-800'}`}>{fmt(potCents)}</p>
             </div>
           </div>
           <p className={`text-sm mt-3 ${isHighRoller ? 'text-amber-200' : 'text-gray-500'}`}>
@@ -1014,7 +1016,7 @@ export function SettleUp({ roundId, userId, eventId, onDone, onContinue }: Props
                     <div key={p.id} className={`flex items-center justify-between p-3 rounded-xl ${net > 0 ? 'bg-green-50' : net < 0 ? 'bg-red-50' : 'bg-gray-50'}`}>
                       <span className="font-semibold text-gray-800">{p.name}</span>
                       <span className={`font-bold ${net > 0 ? 'text-green-700' : net < 0 ? 'text-red-600' : 'text-gray-400'}`}>
-                        {net > 0 ? '+' : ''}{fmtMoney(Math.abs(net))}
+                        {net > 0 ? '+' : ''}{fmt(Math.abs(net))}
                       </span>
                     </div>
                   )
@@ -1027,7 +1029,7 @@ export function SettleUp({ roundId, userId, eventId, onDone, onContinue }: Props
         {junkResult && round?.junkConfig && (
           <section className="bg-white dark:bg-gray-800 rounded-2xl shadow-sm overflow-hidden">
             <button onClick={() => toggleSection('junk')} className="w-full flex items-center justify-between p-4 active:bg-gray-50 dark:active:bg-gray-700">
-              <span className="text-sm font-semibold text-gray-700 dark:text-gray-200">🎲 Junks · {fmtMoney(round.junkConfig.valueCents)}/junk</span>
+              <span className="text-sm font-semibold text-gray-700 dark:text-gray-200">🎲 Junks · {fmt(round.junkConfig.valueCents)}/junk</span>
               <span className="text-gray-400 text-sm">{expandedSections.has('junk') ? '▾' : '▸'}</span>
             </button>
             {expandedSections.has('junk') && (
@@ -1045,7 +1047,7 @@ export function SettleUp({ roundId, userId, eventId, onDone, onContinue }: Props
                         {junkDetails && <span className="text-xs ml-2">{junkDetails}</span>}
                       </div>
                       <span className={`font-bold ${net > 0 ? 'text-indigo-700' : net < 0 ? 'text-red-600' : 'text-gray-400'}`}>
-                        {net === 0 ? '$0' : `${net > 0 ? '+' : ''}${fmtMoney(Math.abs(net))}`}
+                        {net === 0 ? fmt(0) : `${net > 0 ? '+' : ''}${fmt(Math.abs(net))}`}
                       </span>
                     </div>
                   )
@@ -1071,7 +1073,7 @@ export function SettleUp({ roundId, userId, eventId, onDone, onContinue }: Props
                       <div className="flex items-center justify-between">
                         <div>
                           <p className="font-semibold text-gray-800 text-sm">{bet.description}</p>
-                          <p className="text-xs text-gray-500">Hole {bet.holeNumber} · {fmtMoney(bet.amountCents)}/loser</p>
+                          <p className="text-xs text-gray-500">Hole {bet.holeNumber} · {fmt(bet.amountCents)}/loser</p>
                         </div>
                         <span className="text-sm font-bold text-amber-700">🏆 {winnerName}</span>
                       </div>
@@ -1096,7 +1098,7 @@ export function SettleUp({ roundId, userId, eventId, onDone, onContinue }: Props
                 return (
                   <div key={payout.playerId} className="bg-green-50 rounded-xl p-3 flex items-center justify-between">
                     <div><p className="font-bold text-gray-800">{winner?.name}</p><p className="text-xs text-gray-500">{payout.reason}</p></div>
-                    <p className="text-2xl font-bold text-green-700">{fmtMoney(payout.amountCents)}</p>
+                    <p className="text-2xl font-bold text-green-700">{fmt(payout.amountCents)}</p>
                   </div>
                 )
               })}
@@ -1164,7 +1166,7 @@ export function SettleUp({ roundId, userId, eventId, onDone, onContinue }: Props
                       })()}
                     </div>
                     <div className="flex items-center gap-2">
-                      <p className={`text-2xl font-bold ${isPaid ? 'text-green-700' : 'text-gray-800'}`}>{fmtMoney(s.amountCents)}</p>
+                      <p className={`text-2xl font-bold ${isPaid ? 'text-green-700' : 'text-gray-800'}`}>{fmt(s.amountCents)}</p>
                       {isTreasurer ? (
                         <button
                           onClick={() => toggleSettlementPaid(s)}
@@ -1183,10 +1185,10 @@ export function SettleUp({ roundId, userId, eventId, onDone, onContinue }: Props
                       )}
                     </div>
                   </div>
-                  {!isPaid && (
+                  {!isPoints && !isPaid && (
                     <PaymentButtons toPlayer={toPlayer} amountCents={s.amountCents} note={s.reason ?? 'settlement'} compact />
                   )}
-                  {!isPaid && isTreasurer && (
+                  {!isPoints && !isPaid && isTreasurer && (
                     <NudgeButton playerName={fromPlayer.name} amountCents={s.amountCents} toPlayer={toPlayer} />
                   )}
                   {expandedSettlement === s.id && s.reason && (
@@ -1203,7 +1205,7 @@ export function SettleUp({ roundId, userId, eventId, onDone, onContinue }: Props
                       })}
                       <div className="flex items-center justify-between text-xs font-bold text-gray-800 dark:text-gray-100 pl-2 pt-1 border-t border-gray-100 dark:border-gray-600">
                         <span>Total</span>
-                        <span>{fmtMoney(s.amountCents)}</span>
+                        <span>{fmt(s.amountCents)}</span>
                       </div>
                     </div>
                   )}
@@ -1217,7 +1219,7 @@ export function SettleUp({ roundId, userId, eventId, onDone, onContinue }: Props
           const keep = payouts.find(p => p.playerId === treasurerId)!
           return (
             <section className="bg-green-50 border border-green-200 rounded-2xl p-4">
-              <p className="font-bold text-green-800">{treasurer?.name} keeps {fmtMoney(keep.amountCents)}</p>
+              <p className="font-bold text-green-800">{treasurer?.name} keeps {fmt(keep.amountCents)}</p>
               <p className="text-sm text-green-700">{keep.reason} — taken from the pot directly</p>
             </section>
           )
@@ -1226,7 +1228,7 @@ export function SettleUp({ roundId, userId, eventId, onDone, onContinue }: Props
         {payouts.length === 0 && settlementRecords.length === 0 && (
           <section className="bg-gray-50 rounded-2xl p-4 text-center">
             <p className="text-gray-600 font-semibold">No winners calculated yet</p>
-            <p className="text-gray-500 text-sm mt-1">Each player gets {fmtMoney(game.buyInCents)} back from the treasurer.</p>
+            <p className="text-gray-500 text-sm mt-1">Each player gets {fmt(game.buyInCents)} back from the treasurer.</p>
           </section>
         )}
 
@@ -1291,7 +1293,7 @@ export function SettleUp({ roundId, userId, eventId, onDone, onContinue }: Props
           if (hammerResult) {
             players.slice().sort((a, b) => (hammerResult.netCents[b.id] ?? 0) - (hammerResult.netCents[a.id] ?? 0)).forEach(p => {
               const net = hammerResult.netCents[p.id] ?? 0
-              gameResults.push(`${p.name}: ${net > 0 ? '+' : ''}${fmtMoney(Math.abs(net))}`)
+              gameResults.push(`${p.name}: ${net > 0 ? '+' : ''}${fmt(Math.abs(net))}`)
             })
           }
           if (vegasResult) {
@@ -1307,13 +1309,13 @@ export function SettleUp({ roundId, userId, eventId, onDone, onContinue }: Props
           if (dotsResult) {
             players.slice().sort((a, b) => (dotsResult.netCents[b.id] ?? 0) - (dotsResult.netCents[a.id] ?? 0)).forEach(p => {
               const net = dotsResult.netCents[p.id] ?? 0
-              gameResults.push(`${p.name}: ${net > 0 ? '+' : ''}${fmtMoney(Math.abs(net))}`)
+              gameResults.push(`${p.name}: ${net > 0 ? '+' : ''}${fmt(Math.abs(net))}`)
             })
           }
           if (bankerResult) {
             players.slice().sort((a, b) => (bankerResult.netCents[b.id] ?? 0) - (bankerResult.netCents[a.id] ?? 0)).forEach(p => {
               const net = bankerResult.netCents[p.id] ?? 0
-              gameResults.push(`${p.name}: ${net > 0 ? '+' : ''}${fmtMoney(Math.abs(net))}`)
+              gameResults.push(`${p.name}: ${net > 0 ? '+' : ''}${fmt(Math.abs(net))}`)
             })
           }
           if (quotaResult) {

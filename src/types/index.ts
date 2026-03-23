@@ -189,7 +189,7 @@ export interface BBBPoint {
   bongo: string | null
 }
 
-export type StakesMode = 'standard' | 'high_roller'
+export type StakesMode = 'standard' | 'high_roller' | 'points'
 
 export interface Game {
   id: string

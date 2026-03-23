@@ -1547,3 +1547,11 @@ export function fmtMoney(cents: number): string {
     cents / 100,
   )
 }
+
+/** Format amount as money or points depending on stakes mode */
+export function fmtAmount(cents: number, stakesMode?: string): string {
+  if (stakesMode === 'points') {
+    return `${cents} pts`
+  }
+  return fmtMoney(cents)
+}
