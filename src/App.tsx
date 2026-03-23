@@ -621,6 +621,9 @@ export default function App() {
   const [showResetPassword, setShowResetPassword] = useState(false)
   const { unreadCount: notificationCount, latestToast, dismissToast, markRead } = useNotifications(session?.user?.id ?? null)
 
+  // Derived early so hooks can safely reference it in dependency arrays
+  const userId = session?.user?.id ?? null
+
   const handleToastAction = useCallback(async (n: AppNotification) => {
     if (n.type === 'round_invite' && n.inviteCode) {
       dismissToast()
@@ -827,7 +830,7 @@ export default function App() {
     )
   }
 
-  const userId = session.user.id
+  // userId already derived above (before hooks); safe to assert non-null here after early returns
   const isAnonymous = session.user.is_anonymous ?? false
 
   // Onboarding gate (admin-only accounts and invited users skip onboarding)
