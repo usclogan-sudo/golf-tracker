@@ -1935,6 +1935,9 @@ function TreasurerAndBuyIns({
             p_course_name: course.name,
             p_creator_name: creatorName,
             p_player_ids: playerIds,
+            p_game_type: game?.type ?? null,
+            p_buy_in_cents: game?.buyInCents ?? 0,
+            p_player_count: players.length,
           }).then(({ error }) => {
             if (error) console.warn('Failed to send round invite notifications:', error)
           })

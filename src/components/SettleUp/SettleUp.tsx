@@ -696,8 +696,9 @@ export function SettleUp({ roundId, userId, eventId, onDone, onContinue }: Props
                   {buyIns.map(b => {
                     const p = playerById(b.playerId)
                     const isPaid = b.status === 'marked_paid'
+                    const playerReported = b.playerReportedAt && b.status === 'unpaid'
                     return (
-                      <div key={b.id} className={`flex items-center justify-between p-3 rounded-xl ${isPaid ? 'bg-green-50' : 'bg-red-50'}`}>
+                      <div key={b.id} className={`flex items-center justify-between p-3 rounded-xl ${isPaid ? 'bg-green-50' : playerReported ? 'bg-amber-50' : 'bg-red-50'}`}>
                         <div>
                           <p className="font-semibold text-gray-800 text-sm">{p?.name ?? 'Unknown'}</p>
                           <p className="text-xs text-gray-500">
@@ -707,6 +708,11 @@ export function SettleUp({ roundId, userId, eventId, onDone, onContinue }: Props
                             {p?.cashAppUsername && <span className="ml-1 text-green-500">CashApp</span>}
                             {p?.paypalEmail && <span className="ml-1 text-yellow-600">PayPal</span>}
                           </p>
+                          {playerReported && (
+                            <p className="text-xs text-amber-600 font-semibold mt-0.5">
+                              Player says they paid via {b.method ?? 'cash'}
+                            </p>
+                          )}
                         </div>
                         <div className="flex items-center gap-2">
                           {isTreasurer && !isPaid && p?.venmoUsername && (

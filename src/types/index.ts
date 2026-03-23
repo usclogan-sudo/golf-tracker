@@ -212,6 +212,7 @@ export interface BuyIn {
   method?: PaymentMethod
   status: PaymentStatus
   paidAt?: Date
+  playerReportedAt?: Date
 }
 
 // ─── Events ──────────────────────────────────────────────────────────────────

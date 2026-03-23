@@ -94,6 +94,7 @@ export function rowToBuyIn(row: any): BuyIn {
     method: row.method ?? undefined,
     status: row.status,
     paidAt: row.paid_at ? new Date(row.paid_at) : undefined,
+    playerReportedAt: row.player_reported_at ? new Date(row.player_reported_at) : undefined,
   }
 }
 

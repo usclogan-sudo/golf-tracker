@@ -2,12 +2,13 @@ import { useEffect, useMemo, useState, useCallback, useRef } from 'react'
 import { v4 as uuidv4 } from 'uuid'
 import { useOnlineStatus } from '../../hooks/useOnlineStatus'
 import { enqueue, flush, getPending } from '../../lib/offlineQueue'
-import { supabase, rowToRound, rowToRoundPlayer, rowToHoleScore, rowToBBBPoint, rowToJunkRecord, rowToSideBet, rowToRoundParticipant, rowToEvent, rowToEventParticipant, holeScoreToRow, bbbPointToRow, junkRecordToRow, sideBetToRow, generateInviteCode } from '../../lib/supabase'
+import { supabase, rowToRound, rowToRoundPlayer, rowToHoleScore, rowToBuyIn, rowToBBBPoint, rowToJunkRecord, rowToSideBet, rowToRoundParticipant, rowToEvent, rowToEventParticipant, rowToUserProfile, holeScoreToRow, bbbPointToRow, junkRecordToRow, sideBetToRow, generateInviteCode } from '../../lib/supabase'
 import { getCelebration, CelebrationToast, CelebrationFullscreen } from '../Celebrations'
 import { Tooltip } from '../ui/Tooltip'
 import { ConfirmModal } from '../ConfirmModal'
 import { GameRulesModal } from '../GameRulesModal'
 import { NumberPad } from './NumberPad'
+import { BuyInBanner } from './BuyInBanner'
 import {
   buildCourseHandicaps,
   calculateSkins,
@@ -29,6 +30,7 @@ import type {
   Round,
   RoundPlayer,
   HoleScore,
+  BuyIn,
   BBBPoint,
   JunkRecord,
   JunkType,
@@ -47,6 +49,8 @@ import type {
   GolfEvent,
   EventParticipant,
   ScoreStatus,
+  UserProfile,
+  Player,
 } from '../../types'
 import { ShareCard, useShareImage } from '../ShareCard'
 import type { ShareCardLeaderboardEntry } from '../ShareCard'
@@ -181,6 +185,10 @@ export function Scorecard({ userId, roundId, onEndRound, onHome, readOnly: readO
   const holeNavRef = useRef<HTMLDivElement>(null)
   const [showHoleGrid, setShowHoleGrid] = useState(false)
 
+  // Buy-in / payment state
+  const [buyIns, setBuyIns] = useState<BuyIn[]>([])
+  const [treasurerProfile, setTreasurerProfile] = useState<Player | null>(null)
+
   // Event-related state
   const [event, setEvent] = useState<GolfEvent | null>(null)
   const [eventParticipants, setEventParticipants] = useState<EventParticipant[]>([])
@@ -205,7 +213,8 @@ export function Scorecard({ userId, roundId, onEndRound, onHome, readOnly: readO
       supabase.from('junk_records').select('*').eq('round_id', roundId),
       supabase.from('side_bets').select('*').eq('round_id', roundId),
       supabase.from('round_participants').select('*').eq('round_id', roundId),
-    ]).then(([roundRes, rpRes, hsRes, bbbRes, junkRes, sbRes, partRes]) => {
+      supabase.from('buy_ins').select('*').eq('round_id', roundId),
+    ]).then(([roundRes, rpRes, hsRes, bbbRes, junkRes, sbRes, partRes, biRes]) => {
       if (roundRes.error || !roundRes.data) {
         setLoadError(true)
         setLoading(false)
@@ -218,6 +227,7 @@ export function Scorecard({ userId, roundId, onEndRound, onHome, readOnly: readO
       if (junkRes.data) setJunkRecords(junkRes.data.map(rowToJunkRecord))
       if (sbRes.data) setSideBets(sbRes.data.map(rowToSideBet))
       if (partRes.data) setRoundParticipants(partRes.data.map(rowToRoundParticipant))
+      if (biRes.data) setBuyIns(biRes.data.map(rowToBuyIn))
       setLoading(false)
     }).catch(() => {
       setLoadError(true)
@@ -240,6 +250,34 @@ export function Scorecard({ userId, roundId, onEndRound, onHome, readOnly: readO
       if (epRes.data) setEventParticipants(epRes.data.map(rowToEventParticipant))
     })
   }, [round?.eventId])
+
+  // ─── Fetch treasurer payment info for BuyInBanner ──────────────────────────
+  useEffect(() => {
+    if (!round?.treasurerPlayerId || !round.players) return
+    const treasurerPlayer = round.players.find(p => p.id === round.treasurerPlayerId)
+    if (!treasurerPlayer) return
+    // Try to get fresh payment info from user_profiles (treasurer's player ID = their user ID for registered users)
+    const participantMap = new Map(roundParticipants.map(rp => [rp.playerId, rp.userId]))
+    const linkedUserId = participantMap.get(round.treasurerPlayerId)
+    if (linkedUserId) {
+      supabase.from('user_profiles').select('*').eq('user_id', linkedUserId).single().then(({ data }) => {
+        if (data) {
+          const profile = rowToUserProfile(data)
+          setTreasurerProfile({
+            ...treasurerPlayer,
+            venmoUsername: profile.venmoUsername ?? treasurerPlayer.venmoUsername,
+            zelleIdentifier: profile.zelleIdentifier ?? treasurerPlayer.zelleIdentifier,
+            cashAppUsername: profile.cashAppUsername ?? treasurerPlayer.cashAppUsername,
+            paypalEmail: profile.paypalEmail ?? treasurerPlayer.paypalEmail,
+          })
+        } else {
+          setTreasurerProfile(treasurerPlayer)
+        }
+      })
+    } else {
+      setTreasurerProfile(treasurerPlayer)
+    }
+  }, [round?.treasurerPlayerId, round?.players, roundParticipants])
 
   // ─── Realtime subscriptions for multi-device sync ──────────────────────────
   useEffect(() => {
@@ -320,6 +358,10 @@ export function Scorecard({ userId, roundId, onEndRound, onHome, readOnly: readO
           const row = payload.old as any
           setRoundParticipants(prev => prev.filter(p => p.id !== row.id))
         }
+      })
+      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'buy_ins', filter: `round_id=eq.${roundId}` }, (payload) => {
+        const row = payload.new as any
+        setBuyIns(prev => prev.map(b => b.id === row.id ? rowToBuyIn(row) : b))
       })
       .subscribe()
 
@@ -1018,6 +1060,34 @@ export function Scorecard({ userId, roundId, onEndRound, onHome, readOnly: readO
           </button>
         </div>
       </div>
+
+      {/* Buy-In Payment Banner */}
+      {(() => {
+        if (!userId || !round?.treasurerPlayerId || !treasurerProfile) return null
+        // Find current user's player ID via round_participants
+        const myParticipant = roundParticipants.find(rp => rp.userId === userId)
+        if (!myParticipant) return null
+        const myPlayerId = myParticipant.playerId
+        // Don't show to treasurer
+        if (myPlayerId === round.treasurerPlayerId) return null
+        const myBuyIn = buyIns.find(b => b.playerId === myPlayerId)
+        if (!myBuyIn) return null
+        return (
+          <BuyInBanner
+            buyIn={myBuyIn}
+            treasurerPlayer={treasurerProfile}
+            roundId={roundId}
+            playerId={myPlayerId}
+            onReported={(method) => {
+              setBuyIns(prev => prev.map(b =>
+                b.playerId === myPlayerId
+                  ? { ...b, method: method as any, playerReportedAt: new Date() }
+                  : b
+              ))
+            }}
+          />
+        )
+      })()}
 
       {/* Round Complete Summary */}
       {showRoundSummary && (() => {

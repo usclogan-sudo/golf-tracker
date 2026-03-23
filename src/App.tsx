@@ -621,14 +621,31 @@ export default function App() {
   const [showResetPassword, setShowResetPassword] = useState(false)
   const { unreadCount: notificationCount, latestToast, dismissToast, markRead } = useNotifications(session?.user?.id ?? null)
 
-  const handleToastAction = useCallback((n: AppNotification) => {
+  const handleToastAction = useCallback(async (n: AppNotification) => {
     if (n.type === 'round_invite' && n.inviteCode) {
       dismissToast()
       markRead(n.id)
+      // Try auto-join: registered users' player IDs are their auth UUIDs
+      if (userId && n.roundId) {
+        try {
+          const { error } = await supabase.rpc('join_round', {
+            p_invite_code: n.inviteCode,
+            p_player_id: userId,
+          })
+          if (!error) {
+            setActiveRoundId(n.roundId)
+            setScreen('scorecard')
+            return
+          }
+        } catch {
+          // Fall through to manual join
+        }
+      }
+      // Fallback: open JoinRound wizard
       setPendingJoinCode(n.inviteCode)
       setScreen('join-round')
     }
-  }, [dismissToast, markRead])
+  }, [dismissToast, markRead, userId])
 
   const [pendingJoinCode, setPendingJoinCode] = useState<string | null>(() => {
     // Check sessionStorage first (survives auth redirect)

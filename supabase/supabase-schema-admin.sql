@@ -357,13 +357,42 @@ $$;
 -- Add invite_code column to notifications
 ALTER TABLE notifications ADD COLUMN IF NOT EXISTS invite_code text;
 
+-- Add player_reported_at column to buy_ins (player self-reports payment)
+ALTER TABLE buy_ins ADD COLUMN IF NOT EXISTS player_reported_at timestamptz;
+
+-- Player self-reports buy-in payment (does NOT mark as paid — treasurer confirms)
+CREATE OR REPLACE FUNCTION player_report_buyin(p_round_id uuid, p_player_id text, p_method text)
+RETURNS void
+LANGUAGE plpgsql
+SECURITY DEFINER
+AS $$
+BEGIN
+  -- Verify caller owns this player slot via round_participants
+  IF NOT EXISTS (
+    SELECT 1 FROM round_participants
+    WHERE round_id = p_round_id AND player_id = p_player_id AND user_id = auth.uid()
+  ) THEN
+    RAISE EXCEPTION 'Not authorized — you are not this player in this round';
+  END IF;
+
+  -- Update the buy-in: set method + player_reported_at timestamp
+  UPDATE buy_ins
+  SET method = p_method,
+      player_reported_at = now()
+  WHERE round_id = p_round_id AND player_id = p_player_id;
+END;
+$$;
+
 -- Send round invite notifications to registered players (bypasses RLS)
 CREATE OR REPLACE FUNCTION send_round_invite_notifications(
   p_round_id uuid,
   p_invite_code text,
   p_course_name text,
   p_creator_name text,
-  p_player_ids text[]
+  p_player_ids text[],
+  p_game_type text DEFAULT NULL,
+  p_buy_in_cents int DEFAULT 0,
+  p_player_count int DEFAULT 0
 )
 RETURNS int
 LANGUAGE plpgsql
@@ -373,7 +402,19 @@ DECLARE
   pid text;
   pid_uuid uuid;
   sent int := 0;
+  v_body text;
 BEGIN
+  -- Build richer notification body
+  IF p_game_type IS NOT NULL AND p_buy_in_cents > 0 THEN
+    v_body := initcap(replace(p_game_type, '_', ' '));
+    v_body := v_body || ' · $' || (p_buy_in_cents / 100)::text || ' buy-in';
+    IF p_player_count > 0 THEN
+      v_body := v_body || ' · ' || p_player_count::text || ' players';
+    END IF;
+  ELSE
+    v_body := 'Tap Join to enter the round';
+  END IF;
+
   FOREACH pid IN ARRAY p_player_ids
   LOOP
     -- Try casting to uuid; skip if invalid
@@ -407,7 +448,7 @@ BEGIN
       pid_uuid,
       'round_invite',
       p_creator_name || ' invited you to play at ' || p_course_name,
-      'Tap Join to enter the round',
+      v_body,
       p_round_id,
       p_invite_code,
       false,
