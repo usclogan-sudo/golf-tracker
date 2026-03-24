@@ -1,7 +1,7 @@
 import { useState } from 'react'
 
 const DISMISS_KEY = 'install-banner-dismissed'
-const DISMISS_DAYS = 30
+const DISMISS_DAYS = 7
 
 function isDismissed(): boolean {
   const ts = localStorage.getItem(DISMISS_KEY)
