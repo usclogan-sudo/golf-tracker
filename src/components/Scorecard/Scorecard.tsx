@@ -495,8 +495,22 @@ export function Scorecard({ userId, roundId, onEndRound, onHome, readOnly: readO
         setTimeout(() => setScoreToast(null), 2000)
       } else if (existing) {
         setHoleScores(prev => prev.map(s => s.id === existing.id ? { ...s, grossScore } : s))
-        const { error } = await supabase.from('hole_scores').update({ gross_score: grossScore }).eq('id', existing.id)
+        const query = supabase.from('hole_scores').update({ gross_score: grossScore }).eq('id', existing.id)
+        // Conflict detection: only update if row hasn't changed since we last read it
+        if (existing.updatedAt) query.eq('updated_at', existing.updatedAt)
+        const { data, error } = await query.select()
         if (error) throw error
+        if (!data || data.length === 0) {
+          // Someone else updated this score — revert optimistic update from realtime state
+          const current = holeScores.find(s => s.playerId === playerId && s.holeNumber === currentHole)
+          if (current) setHoleScores(prev => prev.map(s => s.id === existing.id ? current : s))
+          setScoreToast({ message: 'Score was updated by someone else', type: 'error' })
+          setTimeout(() => setScoreToast(null), 3000)
+          return
+        }
+        // Update local state with fresh updated_at for subsequent saves
+        const updated = rowToHoleScore(data[0])
+        setHoleScores(prev => prev.map(s => s.id === existing.id ? { ...s, grossScore, updatedAt: updated.updatedAt } : s))
         setScoreToast({ message: 'Score saved', type: 'success' })
         setTimeout(() => setScoreToast(null), 2000)
       } else {
@@ -518,6 +532,7 @@ export function Scorecard({ userId, roundId, onEndRound, onHome, readOnly: readO
             data: { gross_score: grossScore },
             matchColumn: 'id',
             matchValue: existing.id,
+            _expectedUpdatedAt: existing.updatedAt,
           })
         } else {
           enqueue({

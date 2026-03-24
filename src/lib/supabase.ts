@@ -82,6 +82,7 @@ export function rowToHoleScore(row: any): HoleScore {
     grossScore: row.gross_score,
     scoreStatus: row.score_status ?? undefined,
     submittedBy: row.submitted_by ?? undefined,
+    updatedAt: row.updated_at ?? undefined,
   }
 }
 

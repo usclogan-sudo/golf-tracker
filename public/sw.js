@@ -1,4 +1,4 @@
-const CACHE_NAME = 'fore-skins-v3'
+const CACHE_NAME = '__BUILD_HASH__'
 const SHELL_URLS = [
   '/golf-tracker/',
   '/golf-tracker/index.html',
@@ -21,6 +21,10 @@ self.addEventListener('activate', (event) => {
     )
   )
   self.clients.claim()
+})
+
+self.addEventListener('message', (event) => {
+  if (event.data === 'SKIP_WAITING') self.skipWaiting()
 })
 
 self.addEventListener('fetch', (event) => {

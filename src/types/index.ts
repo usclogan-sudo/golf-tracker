@@ -318,6 +318,7 @@ export interface HoleScore {
   grossScore: number
   scoreStatus?: ScoreStatus
   submittedBy?: string
+  updatedAt?: string
 }
 
 // ─── Settlements ─────────────────────────────────────────────────────────────
