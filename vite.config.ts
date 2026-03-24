@@ -1,3 +1,4 @@
+/// <reference types="vitest" />
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 import { readFileSync, writeFileSync } from 'fs'
@@ -23,4 +24,7 @@ function stampServiceWorker(): Plugin {
 export default defineConfig({
   plugins: [react(), stampServiceWorker()],
   base: '/golf-tracker/',
+  test: {
+    globals: true,
+  },
 })
