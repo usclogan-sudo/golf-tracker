@@ -3,6 +3,8 @@ import { v4 as uuidv4 } from 'uuid'
 import { useOnlineStatus } from '../../hooks/useOnlineStatus'
 import { enqueue, flush, getPending } from '../../lib/offlineQueue'
 import { supabase, rowToRound, rowToRoundPlayer, rowToHoleScore, rowToBuyIn, rowToBBBPoint, rowToJunkRecord, rowToSideBet, rowToRoundParticipant, rowToEvent, rowToEventParticipant, rowToUserProfile, holeScoreToRow, bbbPointToRow, junkRecordToRow, sideBetToRow, generateInviteCode } from '../../lib/supabase'
+import { computeScorecardPermissions } from '../../lib/permissions'
+import { applyHoleScorePayload, applyBBBPointPayload, applyJunkRecordPayload, applySideBetPayload, applyRoundParticipantPayload, applyBuyInPayload } from '../../lib/realtimeReducers'
 import { getCelebration, CelebrationToast, CelebrationFullscreen } from '../Celebrations'
 import { Tooltip } from '../ui/Tooltip'
 import { ConfirmModal } from '../ConfirmModal'
@@ -192,7 +194,10 @@ export function Scorecard({ userId, roundId, onEndRound, onHome, readOnly: readO
   const [eventParticipants, setEventParticipants] = useState<EventParticipant[]>([])
   const [localHole, setLocalHole] = useState<number | null>(null)
   const [showApprovalPanel, setShowApprovalPanel] = useState(false)
-  const [showContextBanner, setShowContextBanner] = useState(true)
+  const [showContextBanner, setShowContextBanner] = useState(() => {
+    try { return localStorage.getItem('scorecard-selfentry-dismissed') !== 'true' } catch { return true }
+  })
+  const [pendingPopover, setPendingPopover] = useState(false)
   const [showHeaderMenu, setShowHeaderMenu] = useState(false)
   const headerMenuRef = useRef<HTMLDivElement>(null)
   const { shareRef, sharing, shareImage } = useShareImage('fore-skins-leaderboard')
@@ -284,16 +289,9 @@ export function Scorecard({ userId, roundId, onEndRound, onHome, readOnly: readO
     const channel = supabase
       .channel(`round-${roundId}`)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'hole_scores', filter: `round_id=eq.${roundId}` }, (payload) => {
-        if (payload.eventType === 'INSERT') {
-          const row = payload.new as any
-          setHoleScores(prev => {
-            if (prev.some(s => s.id === row.id)) return prev
-            return [...prev, rowToHoleScore(row)]
-          })
-        } else if (payload.eventType === 'UPDATE') {
+        if (payload.eventType === 'UPDATE') {
           const row = payload.new as any
           const oldRow = payload.old as any
-          // Detect score status transitions for toast notifications
           if (oldRow?.score_status === 'pending' && row.score_status === 'approved') {
             setScoreToast({ message: `Score approved! Hole ${row.hole_number}`, type: 'success' })
             setTimeout(() => setScoreToast(null), 3000)
@@ -301,67 +299,27 @@ export function Scorecard({ userId, roundId, onEndRound, onHome, readOnly: readO
             setScoreToast({ message: `Score rejected on Hole ${row.hole_number} — re-enter your score`, type: 'error' })
             setTimeout(() => setScoreToast(null), 3000)
           }
-          setHoleScores(prev => prev.map(s => s.id === row.id ? rowToHoleScore(row) : s))
-        } else if (payload.eventType === 'DELETE') {
-          const row = payload.old as any
-          setHoleScores(prev => prev.filter(s => s.id !== row.id))
         }
+        setHoleScores(prev => applyHoleScorePayload(prev, payload as any))
       })
       .on('postgres_changes', { event: '*', schema: 'public', table: 'bbb_points', filter: `round_id=eq.${roundId}` }, (payload) => {
-        if (payload.eventType === 'INSERT') {
-          const row = payload.new as any
-          setBbbPoints(prev => prev.some(p => p.id === row.id) ? prev : [...prev, rowToBBBPoint(row)])
-        } else if (payload.eventType === 'UPDATE') {
-          const row = payload.new as any
-          setBbbPoints(prev => prev.map(p => p.id === row.id ? rowToBBBPoint(row) : p))
-        } else if (payload.eventType === 'DELETE') {
-          const row = payload.old as any
-          setBbbPoints(prev => prev.filter(p => p.id !== row.id))
-        }
+        setBbbPoints(prev => applyBBBPointPayload(prev, payload as any))
       })
       .on('postgres_changes', { event: '*', schema: 'public', table: 'junk_records', filter: `round_id=eq.${roundId}` }, (payload) => {
-        if (payload.eventType === 'INSERT') {
-          const row = payload.new as any
-          setJunkRecords(prev => prev.some(jr => jr.id === row.id) ? prev : [...prev, rowToJunkRecord(row)])
-        } else if (payload.eventType === 'UPDATE') {
-          const row = payload.new as any
-          setJunkRecords(prev => prev.map(jr => jr.id === row.id ? rowToJunkRecord(row) : jr))
-        } else if (payload.eventType === 'DELETE') {
-          const row = payload.old as any
-          setJunkRecords(prev => prev.filter(jr => jr.id !== row.id))
-        }
+        setJunkRecords(prev => applyJunkRecordPayload(prev, payload as any))
       })
       .on('postgres_changes', { event: '*', schema: 'public', table: 'side_bets', filter: `round_id=eq.${roundId}` }, (payload) => {
-        if (payload.eventType === 'INSERT') {
-          const row = payload.new as any
-          setSideBets(prev => prev.some(sb => sb.id === row.id) ? prev : [...prev, rowToSideBet(row)])
-        } else if (payload.eventType === 'UPDATE') {
-          const row = payload.new as any
-          setSideBets(prev => prev.map(sb => sb.id === row.id ? rowToSideBet(row) : sb))
-        } else if (payload.eventType === 'DELETE') {
-          const row = payload.old as any
-          setSideBets(prev => prev.filter(sb => sb.id !== row.id))
-        }
+        setSideBets(prev => applySideBetPayload(prev, payload as any))
       })
       .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'rounds', filter: `id=eq.${roundId}` }, (payload) => {
         const row = payload.new as any
         setRound(rowToRound(row))
       })
       .on('postgres_changes', { event: '*', schema: 'public', table: 'round_participants', filter: `round_id=eq.${roundId}` }, (payload) => {
-        if (payload.eventType === 'INSERT') {
-          const row = payload.new as any
-          setRoundParticipants(prev => prev.some(p => p.id === row.id) ? prev : [...prev, rowToRoundParticipant(row)])
-        } else if (payload.eventType === 'UPDATE') {
-          const row = payload.new as any
-          setRoundParticipants(prev => prev.map(p => p.id === row.id ? rowToRoundParticipant(row) : p))
-        } else if (payload.eventType === 'DELETE') {
-          const row = payload.old as any
-          setRoundParticipants(prev => prev.filter(p => p.id !== row.id))
-        }
+        setRoundParticipants(prev => applyRoundParticipantPayload(prev, payload as any))
       })
       .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'buy_ins', filter: `round_id=eq.${roundId}` }, (payload) => {
-        const row = payload.new as any
-        setBuyIns(prev => prev.map(b => b.id === row.id ? rowToBuyIn(row) : b))
+        setBuyIns(prev => applyBuyInPayload(prev, payload as any))
       })
       .subscribe()
 
@@ -410,6 +368,14 @@ export function Scorecard({ userId, roundId, onEndRound, onHome, readOnly: readO
     document.addEventListener('click', handleClick, true)
     return () => document.removeEventListener('click', handleClick, true)
   }, [showHeaderMenu])
+
+  // Close pending popover on outside click
+  useEffect(() => {
+    if (!pendingPopover) return
+    const handleClick = () => setPendingPopover(false)
+    document.addEventListener('click', handleClick, true)
+    return () => document.removeEventListener('click', handleClick, true)
+  }, [pendingPopover])
 
   // Auto-scroll hole nav bar to current hole
   useEffect(() => {
@@ -716,21 +682,17 @@ export function Scorecard({ userId, roundId, onEndRound, onHome, readOnly: readO
   }
 
   // Role-based access (must be before approvedScores which depends on isEventRound)
-  const isCreator = userId === round?.createdBy
-  const isGameMaster = userId === round?.gameMasterId
-  const isScoremasterRole = isCreator || isGameMaster
-  const myParticipant = roundParticipants.find(p => p.userId === userId)
-  const selfEntryOnly = !!myParticipant && !isScoremasterRole
-
-  // Event role detection
-  const myEventParticipant = eventParticipants.find(ep => ep.userId === userId)
-  const isEventManager = myEventParticipant?.role === 'manager' || isCreator
-  const isGroupScorekeeper = myEventParticipant?.role === 'scorekeeper'
-  const canApproveScores = isEventRound && (isEventManager || isGroupScorekeeper || isScoremasterRole)
-  const myEventGroupNumber = myEventParticipant?.groupNumber
-
-  // For event rounds, participants can self-score (not read-only)
-  const readOnly = readOnlyProp || (!isScoremasterRole && !myParticipant && !myEventParticipant)
+  const {
+    isCreator,
+    isGameMaster,
+    isScoremasterRole,
+    selfEntryOnly,
+    isEventManager,
+    isGroupScorekeeper,
+    canApproveScores,
+    readOnly,
+    myEventGroupNumber,
+  } = computeScorecardPermissions(userId, round, roundParticipants, eventParticipants, isEventRound, readOnlyProp)
 
   // Filter scores for game logic: only use approved scores
   const approvedScores = useMemo(() => {
@@ -1655,8 +1617,8 @@ export function Scorecard({ userId, roundId, onEndRound, onHome, readOnly: readO
             )
             if (myEventParticipant && !canApproveScores) return (
               <div className="bg-yellow-50 border border-yellow-200 rounded-lg px-3 py-2 flex items-center justify-between">
-                <p className="text-yellow-800 text-sm font-semibold">Self-Entry · Pending approval</p>
-                <button onClick={() => setShowContextBanner(false)} className="text-yellow-400 font-bold ml-2">&times;</button>
+                <p className="text-yellow-800 text-sm font-semibold">You're in self-entry mode — scores need scorekeeper approval before counting</p>
+                <button onClick={() => { setShowContextBanner(false); try { localStorage.setItem('scorecard-selfentry-dismissed', 'true') } catch {} }} className="text-yellow-400 font-bold ml-2">&times;</button>
               </div>
             )
           }
@@ -1824,7 +1786,23 @@ export function Scorecard({ userId, roundId, onEndRound, onHome, readOnly: readO
                   {hasGroups && groupNums.length > 1 && (
                     <span className="text-[10px] font-bold uppercase px-1.5 py-0.5 rounded bg-gray-100 text-gray-500">G{playerGroup}</span>
                   )}
-                  {isPending && <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-yellow-200 text-yellow-700">PENDING</span>}
+                  {isPending && (
+                      <span className="relative inline-flex">
+                        <button
+                          onClick={(e) => { e.stopPropagation(); setPendingPopover(prev => !prev) }}
+                          className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-yellow-200 text-yellow-700 active:bg-yellow-300"
+                        >
+                          PENDING
+                        </button>
+                        {pendingPopover && (
+                          <div className="absolute z-50 left-1/2 -translate-x-1/2 top-full mt-1.5 w-56 bg-gray-800 text-white text-xs rounded-xl px-3 py-2 shadow-lg">
+                            <p className="font-bold mb-0.5">Pending Score</p>
+                            <p className="text-gray-300 leading-relaxed">Your score is awaiting approval from your group's scorekeeper</p>
+                            <div className="absolute bottom-full left-1/2 -translate-x-1/2 w-0 h-0 border-l-[6px] border-r-[6px] border-b-[6px] border-transparent border-b-gray-800" />
+                          </div>
+                        )}
+                      </span>
+                    )}
                   {isRejected && <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-red-200 text-red-700">REJECTED</span>}
                 </div>
                 <div className="flex items-center gap-3 text-right">
@@ -1851,7 +1829,23 @@ export function Scorecard({ userId, roundId, onEndRound, onHome, readOnly: readO
                 <div>
                   <div className="flex items-center gap-2">
                     <p className="font-bold text-gray-800 text-lg">{player.name}</p>
-                    {isPending && <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-yellow-200 text-yellow-700">PENDING</span>}
+                    {isPending && (
+                      <span className="relative inline-flex">
+                        <button
+                          onClick={(e) => { e.stopPropagation(); setPendingPopover(prev => !prev) }}
+                          className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-yellow-200 text-yellow-700 active:bg-yellow-300"
+                        >
+                          PENDING
+                        </button>
+                        {pendingPopover && (
+                          <div className="absolute z-50 left-1/2 -translate-x-1/2 top-full mt-1.5 w-56 bg-gray-800 text-white text-xs rounded-xl px-3 py-2 shadow-lg">
+                            <p className="font-bold mb-0.5">Pending Score</p>
+                            <p className="text-gray-300 leading-relaxed">Your score is awaiting approval from your group's scorekeeper</p>
+                            <div className="absolute bottom-full left-1/2 -translate-x-1/2 w-0 h-0 border-l-[6px] border-r-[6px] border-b-[6px] border-transparent border-b-gray-800" />
+                          </div>
+                        )}
+                      </span>
+                    )}
                     {isRejected && <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-red-200 text-red-700">REJECTED</span>}
                   </div>
                   {editingHcpPlayerId === player.id ? (

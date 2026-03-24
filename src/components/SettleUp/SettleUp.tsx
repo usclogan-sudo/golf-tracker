@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState, useCallback, useRef } from 'react'
 import { v4 as uuidv4 } from 'uuid'
-import { supabase, rowToRound, rowToRoundPlayer, rowToHoleScore, rowToBuyIn, rowToBBBPoint, rowToJunkRecord, rowToSideBet, rowToSettlementRecord, settlementRecordToRow, rowToUserProfile, rowToEvent } from '../../lib/supabase'
+import { supabase, rowToRound, rowToRoundPlayer, rowToHoleScore, rowToBuyIn, rowToBBBPoint, rowToJunkRecord, rowToSideBet, rowToSettlementRecord, settlementRecordToRow, rowToUserProfile, rowToEvent, notificationToRow } from '../../lib/supabase'
+import type { AppNotification } from '../../types'
 import { PaymentButtons, getPreferredPayment } from '../PaymentButtons'
 import { Tooltip } from '../ui/Tooltip'
 import {
@@ -99,8 +100,12 @@ function mergePaymentInfo(player: Player, profiles: Map<string, UserProfile>, pa
   }
 }
 
-function NudgeButton({ playerName, amountCents, toPlayer }: { playerName: string; amountCents: number; toPlayer: Player }) {
-  const [nudgeCopied, setNudgeCopied] = useState(false)
+function NudgeButton({ playerName, amountCents, toPlayer, fromPlayerId, roundId, treasurerName, participantMap, nudgedPlayerIds, onNudged }: {
+  playerName: string; amountCents: number; toPlayer: Player; fromPlayerId: string; roundId: string; treasurerName: string
+  participantMap: Map<string, string>; nudgedPlayerIds: Set<string>; onNudged: (playerId: string) => void
+}) {
+  const [sending, setSending] = useState(false)
+  const alreadyNudged = nudgedPlayerIds.has(fromPlayerId)
   const paymentLink = toPlayer.venmoUsername
     ? `venmo.com/${toPlayer.venmoUsername.replace('@', '')}`
     : toPlayer.cashAppUsername
@@ -109,13 +114,48 @@ function NudgeButton({ playerName, amountCents, toPlayer }: { playerName: string
     ? `paypal.me/${toPlayer.paypalEmail}`
     : null
   const msg = `Hey ${playerName}! You owe ${fmtAmount(amountCents)} for golf.${paymentLink ? ` Pay here: ${paymentLink}` : ''}`
-  const handleNudge = () => {
-    navigator.clipboard.writeText(msg).then(() => { setNudgeCopied(true); setTimeout(() => setNudgeCopied(false), 2000) })
+
+  const handleSendReminder = async () => {
+    const targetUserId = participantMap.get(fromPlayerId)
+    if (!targetUserId) {
+      // No linked user — fall back to clipboard
+      await navigator.clipboard.writeText(msg)
+      onNudged(fromPlayerId)
+      return
+    }
+    setSending(true)
+    const notification: AppNotification = {
+      id: uuidv4(),
+      userId: targetUserId,
+      type: 'unsettled_round',
+      title: `You owe ${fmtAmount(amountCents)} to ${treasurerName}`,
+      body: `Settle up for your round`,
+      roundId,
+      read: false,
+      createdAt: new Date(),
+    }
+    await supabase.from('notifications').insert(notificationToRow(notification, targetUserId))
+    setSending(false)
+    onNudged(fromPlayerId)
   }
+
+  const handleCopyMessage = () => {
+    navigator.clipboard.writeText(msg)
+  }
+
   return (
-    <button onClick={handleNudge} className={`text-xs transition-colors ${nudgeCopied ? 'text-green-600 font-semibold' : 'text-amber-600 underline'}`}>
-      {nudgeCopied ? 'Copied!' : '📨 Nudge'}
-    </button>
+    <div className="flex items-center gap-3">
+      <button
+        onClick={handleSendReminder}
+        disabled={alreadyNudged || sending}
+        className={`text-xs font-semibold transition-colors ${alreadyNudged ? 'text-green-600' : 'text-amber-600 active:text-amber-700'} disabled:opacity-60`}
+      >
+        {sending ? 'Sending...' : alreadyNudged ? 'Reminder Sent' : 'Send Reminder'}
+      </button>
+      <button onClick={handleCopyMessage} className="text-xs text-gray-400 underline">
+        Copy message
+      </button>
+    </div>
   )
 }
 
@@ -143,6 +183,10 @@ export function SettleUp({ roundId, userId, eventId, onDone, onContinue }: Props
     return next
   })
   const [mutationError, setMutationError] = useState<string | null>(null)
+  const [nudgedPlayerIds, setNudgedPlayerIds] = useState<Set<string>>(new Set())
+  const [calculatingSettlements, setCalculatingSettlements] = useState(false)
+  const [pendingAction, setPendingAction] = useState<{ type: 'settlement' | 'buyin' | 'bulk_buyin'; id: string; ids?: string[]; name: string; timer: ReturnType<typeof setTimeout>; prevBuyIns?: BuyIn[]; prevRecords?: SettlementRecord[] } | null>(null)
+  const [showMarkAllPaidConfirm, setShowMarkAllPaidConfirm] = useState(false)
   const { shareRef, sharing, shareImage } = useShareImage('fore-skins-results')
 
   const loadSettleUpData = () => {
@@ -352,8 +396,9 @@ export function SettleUp({ roundId, userId, eventId, onDone, onContinue }: Props
     // No payouts and no junk and no side bets → nothing to settle
     if (payouts.length === 0 && !junkResult && sideBetSettlements.length === 0) return
 
+    setCalculatingSettlements(true)
     const unified = buildUnifiedSettlements(payouts, treasurerId, junkResult, sideBetSettlements)
-    if (unified.length === 0) return
+    if (unified.length === 0) { setCalculatingSettlements(false); return }
 
     const records: SettlementRecord[] = unified.map(s => ({
       id: uuidv4(),
@@ -369,7 +414,32 @@ export function SettleUp({ roundId, userId, eventId, onDone, onContinue }: Props
     setSettlementRecords(records)
     const { error } = await supabase.from('settlements').insert(records.map(r => settlementRecordToRow(r, userId)))
     if (error) console.error('Failed to persist settlements:', error)
-  }, [treasurerId, userId, settlementsInitialized, settlementRecords.length, payouts, junkResult, sideBetSettlements, roundId])
+
+    // Auto-notify all debtors
+    const debtorNotifications: AppNotification[] = []
+    const treasurerName = players.find(p => p.id === treasurerId)?.name ?? 'the treasurer'
+    for (const record of records) {
+      const debtorUserId = participantMap.get(record.fromPlayerId)
+      if (!debtorUserId || debtorUserId === userId) continue
+      debtorNotifications.push({
+        id: uuidv4(),
+        userId: debtorUserId,
+        type: 'unsettled_round',
+        title: `You owe ${fmtAmount(record.amountCents)} to ${treasurerName}`,
+        body: 'Round complete — settle up!',
+        roundId,
+        read: false,
+        createdAt: new Date(),
+      })
+    }
+    if (debtorNotifications.length > 0) {
+      await supabase.from('notifications').insert(
+        debtorNotifications.map(n => notificationToRow(n, n.userId))
+      )
+    }
+
+    setCalculatingSettlements(false)
+  }, [treasurerId, userId, settlementsInitialized, settlementRecords.length, payouts, junkResult, sideBetSettlements, roundId, participantMap, players])
 
   useEffect(() => {
     if (!loading && round && game && snapshot) {
@@ -384,43 +454,83 @@ export function SettleUp({ roundId, userId, eventId, onDone, onContinue }: Props
   // Treasurer access control
   const isTreasurer = userId === treasurerId || userId === round?.createdBy
 
-  const toggleBuyInPaid = async (buyIn: BuyIn) => {
+  // Cancel any pending undo action
+  const cancelPendingAction = () => {
+    if (pendingAction) {
+      clearTimeout(pendingAction.timer)
+      setPendingAction(null)
+    }
+  }
+
+  const toggleBuyInPaid = (buyIn: BuyIn) => {
+    cancelPendingAction()
     const newStatus = buyIn.status === 'unpaid' ? 'marked_paid' : 'unpaid'
     const newPaidAt = newStatus === 'marked_paid' ? new Date().toISOString() : null
-    const prevBuyIns = buyIns
+    const prevBuyIns = [...buyIns]
+    const playerName = playerById(buyIn.playerId)?.name ?? 'Player'
+
     setBuyIns(prev => prev.map(b =>
       b.id === buyIn.id
         ? { ...b, status: newStatus as BuyIn['status'], paidAt: newPaidAt ? new Date(newPaidAt) : undefined }
         : b
     ))
     setMutationError(null)
-    const { error } = await supabase.from('buy_ins').update({ status: newStatus, paid_at: newPaidAt }).eq('id', buyIn.id)
-    if (error) {
-      setBuyIns(prevBuyIns)
-      setMutationError('Failed to update buy-in status. Please try again.')
-    }
+
+    const timer = setTimeout(async () => {
+      setPendingAction(null)
+      const { error } = await supabase.from('buy_ins').update({ status: newStatus, paid_at: newPaidAt }).eq('id', buyIn.id)
+      if (error) {
+        setBuyIns(prevBuyIns)
+        setMutationError('Failed to update buy-in status. Please try again.')
+      }
+    }, 4000)
+
+    setPendingAction({ type: 'buyin', id: buyIn.id, name: playerName, timer, prevBuyIns })
   }
 
-  const toggleSettlementPaid = async (settlement: SettlementRecord) => {
+  const toggleSettlementPaid = (settlement: SettlementRecord) => {
+    cancelPendingAction()
     const newStatus = settlement.status === 'owed' ? 'paid' : 'owed'
     const newPaidAt = newStatus === 'paid' ? new Date().toISOString() : null
-    const prevRecords = settlementRecords
+    const prevRecords = [...settlementRecords]
+    const fromName = playerById(settlement.fromPlayerId)?.name ?? 'Player'
+
     setSettlementRecords(prev => prev.map(s =>
       s.id === settlement.id
         ? { ...s, status: newStatus as SettlementRecord['status'], paidAt: newPaidAt ? new Date(newPaidAt) : undefined }
         : s
     ))
     setMutationError(null)
-    const { error } = await supabase.from('settlements').update({ status: newStatus, paid_at: newPaidAt }).eq('id', settlement.id)
-    if (error) {
-      setSettlementRecords(prevRecords)
-      setMutationError('Failed to update settlement. Please try again.')
+
+    const timer = setTimeout(async () => {
+      setPendingAction(null)
+      const { error } = await supabase.from('settlements').update({ status: newStatus, paid_at: newPaidAt }).eq('id', settlement.id)
+      if (error) {
+        setSettlementRecords(prevRecords)
+        setMutationError('Failed to update settlement. Please try again.')
+      }
+    }, 4000)
+
+    setPendingAction({ type: 'settlement', id: settlement.id, name: fromName, timer, prevRecords })
+  }
+
+  const undoPendingAction = () => {
+    if (!pendingAction) return
+    clearTimeout(pendingAction.timer)
+    if (pendingAction.type === 'buyin' && pendingAction.prevBuyIns) {
+      setBuyIns(pendingAction.prevBuyIns)
+    } else if (pendingAction.type === 'settlement' && pendingAction.prevRecords) {
+      setSettlementRecords(pendingAction.prevRecords)
+    } else if (pendingAction.type === 'bulk_buyin' && pendingAction.prevBuyIns) {
+      setBuyIns(pendingAction.prevBuyIns)
     }
+    setPendingAction(null)
   }
 
   const markPlayerSettled = async (settlementIds: string[]) => {
+    cancelPendingAction()
     const paidAt = new Date().toISOString()
-    const prevRecords = settlementRecords
+    const prevRecords = [...settlementRecords]
     setSettlementRecords(prev => prev.map(s =>
       settlementIds.includes(s.id) ? { ...s, status: 'paid' as SettlementRecord['status'], paidAt: new Date(paidAt) } : s
     ))
@@ -430,6 +540,31 @@ export function SettleUp({ roundId, userId, eventId, onDone, onContinue }: Props
       setSettlementRecords(prevRecords)
       setMutationError('Failed to mark settlements as paid. Please try again.')
     }
+  }
+
+  const markAllBuyInsPaid = () => {
+    cancelPendingAction()
+    const prevBuyIns = [...buyIns]
+    const unpaidIds = unpaidBuyIns.map(b => b.id)
+
+    setBuyIns(prev => prev.map(b =>
+      unpaidIds.includes(b.id)
+        ? { ...b, status: 'marked_paid' as BuyIn['status'], paidAt: new Date() }
+        : b
+    ))
+    setMutationError(null)
+    setShowMarkAllPaidConfirm(false)
+
+    const timer = setTimeout(async () => {
+      setPendingAction(null)
+      const { error } = await supabase.from('buy_ins').update({ status: 'marked_paid', paid_at: new Date().toISOString() }).in('id', unpaidIds)
+      if (error) {
+        setBuyIns(prevBuyIns)
+        setMutationError('Failed to mark all buy-ins as paid. Please try again.')
+      }
+    }, 4000)
+
+    setPendingAction({ type: 'bulk_buyin', id: 'bulk', ids: unpaidIds, name: `${unpaidIds.length} buy-ins`, timer, prevBuyIns })
   }
 
   // Collection Checklist: aggregate settlements by counterparty from treasurer's perspective
@@ -508,6 +643,15 @@ export function SettleUp({ roundId, userId, eventId, onDone, onContinue }: Props
 
   if (loading || !round || !game || !snapshot) {
     return <div className="min-h-screen bg-gray-50 dark:bg-gray-900 flex items-center justify-center"><p className="text-gray-400">Loading…</p></div>
+  }
+
+  if (calculatingSettlements) {
+    return (
+      <div className="min-h-screen bg-gray-50 dark:bg-gray-900 flex flex-col items-center justify-center gap-3">
+        <div className="w-8 h-8 border-4 border-amber-500 border-t-transparent rounded-full animate-spin" />
+        <p className="text-gray-500 font-semibold">Calculating settlements...</p>
+      </div>
+    )
   }
 
   const gameLabel = GAME_LABELS[game.type] ?? game.type
@@ -672,6 +816,15 @@ export function SettleUp({ roundId, userId, eventId, onDone, onContinue }: Props
         {buyIns.length > 0 && (() => {
           const allBuyInsPaid = unpaidBuyIns.length === 0
           const isExpanded = showBuyInDetails !== null ? showBuyInDetails : !allBuyInsPaid
+          // Sort buy-ins: unpaid (red) → self-reported (amber) → paid (green), then alphabetical
+          const sortedBuyIns = [...buyIns].sort((a, b) => {
+            const statusOrder = (s: BuyIn) => s.status === 'unpaid' && !s.playerReportedAt ? 0 : s.status === 'unpaid' && s.playerReportedAt ? 1 : 2
+            const diff = statusOrder(a) - statusOrder(b)
+            if (diff !== 0) return diff
+            const aName = playerById(a.playerId)?.name ?? ''
+            const bName = playerById(b.playerId)?.name ?? ''
+            return aName.localeCompare(bName)
+          })
           return (
           <section className="bg-white dark:bg-gray-800 rounded-2xl shadow-sm p-4 space-y-3">
             <button
@@ -688,14 +841,29 @@ export function SettleUp({ roundId, userId, eventId, onDone, onContinue }: Props
             {isExpanded && (
               <>
                 {isTreasurer && unpaidBuyIns.length > 0 && (
-                  <div className="bg-red-50 border border-red-200 rounded-xl p-3">
+                  <div className="bg-red-50 border border-red-200 rounded-xl p-3 space-y-2">
                     <p className="text-red-700 text-sm font-semibold">
                       {unpaidBuyIns.length} unpaid — collect {fmt(unpaidBuyIns.length * game.buyInCents)} before distributing
                     </p>
+                    <button
+                      onClick={() => setShowMarkAllPaidConfirm(true)}
+                      className="w-full h-10 bg-green-600 text-white text-sm font-semibold rounded-xl active:bg-green-700"
+                    >
+                      Mark All {unpaidBuyIns.length} Paid
+                    </button>
+                  </div>
+                )}
+                {showMarkAllPaidConfirm && (
+                  <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 space-y-2">
+                    <p className="text-amber-800 text-sm font-semibold">Mark all {unpaidBuyIns.length} unpaid buy-ins as paid?</p>
+                    <div className="flex gap-2">
+                      <button onClick={markAllBuyInsPaid} className="flex-1 h-10 bg-green-600 text-white text-sm font-semibold rounded-xl active:bg-green-700">Confirm</button>
+                      <button onClick={() => setShowMarkAllPaidConfirm(false)} className="flex-1 h-10 bg-gray-200 text-gray-700 text-sm font-semibold rounded-xl active:bg-gray-300">Cancel</button>
+                    </div>
                   </div>
                 )}
                 <div className="space-y-2">
-                  {buyIns.map(b => {
+                  {sortedBuyIns.map(b => {
                     const p = playerById(b.playerId)
                     const isPaid = b.status === 'marked_paid'
                     const playerReported = b.playerReportedAt && b.status === 'unpaid'
@@ -1189,7 +1357,17 @@ export function SettleUp({ roundId, userId, eventId, onDone, onContinue }: Props
                     <PaymentButtons toPlayer={toPlayer} amountCents={s.amountCents} note={s.reason ?? 'settlement'} compact />
                   )}
                   {!isPoints && !isPaid && isTreasurer && (
-                    <NudgeButton playerName={fromPlayer.name} amountCents={s.amountCents} toPlayer={toPlayer} />
+                    <NudgeButton
+                      playerName={fromPlayer.name}
+                      amountCents={s.amountCents}
+                      toPlayer={toPlayer}
+                      fromPlayerId={s.fromPlayerId}
+                      roundId={roundId}
+                      treasurerName={treasurer?.name ?? 'the treasurer'}
+                      participantMap={participantMap}
+                      nudgedPlayerIds={nudgedPlayerIds}
+                      onNudged={(pid) => setNudgedPlayerIds(prev => new Set(prev).add(pid))}
+                    />
                   )}
                   {expandedSettlement === s.id && s.reason && (
                     <div className="border-t border-gray-200 dark:border-gray-600 pt-2 mt-1 space-y-1">
@@ -1367,6 +1545,21 @@ export function SettleUp({ roundId, userId, eventId, onDone, onContinue }: Props
           )
         })()}
       </div>
+
+      {/* Undo toast */}
+      {pendingAction && (
+        <div className="fixed bottom-24 inset-x-0 z-50 flex justify-center px-4">
+          <div className="bg-gray-800 text-white px-5 py-3 rounded-2xl shadow-xl flex items-center gap-3 max-w-sm">
+            <p className="text-sm font-semibold flex-1">{pendingAction.name} marked as paid</p>
+            <button
+              onClick={undoPendingAction}
+              className="text-amber-400 font-bold text-sm active:text-amber-300"
+            >
+              Undo
+            </button>
+          </div>
+        </div>
+      )}
 
       <div className="fixed bottom-0 inset-x-0 p-4 bg-white/95 dark:bg-gray-800/95 backdrop-blur-sm border-t border-gray-200 dark:border-gray-700 safe-bottom">
         <div className="max-w-2xl mx-auto flex gap-3">

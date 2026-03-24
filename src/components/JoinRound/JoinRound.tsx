@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { supabase } from '../../lib/supabase'
 import type { RoundParticipant } from '../../types'
 
@@ -150,6 +150,8 @@ export function JoinRound({ userId, initialCode, onJoined, onCancel }: Props) {
     }
   }
 
+  const [playerSearch, setPlayerSearch] = useState('')
+
   const activePreview = eventPreview ?? preview
   const activePlayers = eventPreview?.players ?? preview?.players ?? []
   const activeParticipants = eventPreview?.participants ?? preview?.participants ?? []
@@ -159,6 +161,26 @@ export function JoinRound({ userId, initialCode, onJoined, onCancel }: Props) {
   }
 
   const isAlreadyJoined = activeParticipants.some((p: any) => p.userId === userId)
+
+  // Filter by search and sort: own player first → unclaimed alphabetically → claimed alphabetically
+  const sortedPlayers = useMemo(() => {
+    const filtered = activePlayers.filter(p =>
+      p.name.toLowerCase().includes(playerSearch.toLowerCase())
+    )
+    return filtered.sort((a, b) => {
+      const aIsMine = activeParticipants.some((p: any) => p.playerId === a.id && p.userId === userId)
+      const bIsMine = activeParticipants.some((p: any) => p.playerId === b.id && p.userId === userId)
+      if (aIsMine && !bIsMine) return -1
+      if (!aIsMine && bIsMine) return 1
+
+      const aClaimed = isPlayerClaimed(a.id)
+      const bClaimed = isPlayerClaimed(b.id)
+      if (!aClaimed && bClaimed) return -1
+      if (aClaimed && !bClaimed) return 1
+
+      return a.name.localeCompare(b.name)
+    })
+  }, [activePlayers, playerSearch, activeParticipants, userId])
 
   const GAME_LABELS: Record<string, string> = {
     skins: 'Skins',
@@ -249,6 +271,16 @@ export function JoinRound({ userId, initialCode, onJoined, onCancel }: Props) {
             <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700 p-5 space-y-3">
               <h3 className="font-display font-semibold text-gray-800 dark:text-gray-100">Which player are you?</h3>
 
+              {activePlayers.length > 6 && (
+                <input
+                  type="text"
+                  placeholder="Search players..."
+                  value={playerSearch}
+                  onChange={e => setPlayerSearch(e.target.value)}
+                  className="w-full h-12 px-4 rounded-xl border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 text-sm focus:outline-none focus:ring-2 focus:ring-amber-500"
+                />
+              )}
+
               {isAlreadyJoined && (
                 <div className="bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-xl px-4 py-3 text-sm text-green-800 dark:text-green-400">
                   You've already joined! Tap your name to continue.
@@ -258,7 +290,7 @@ export function JoinRound({ userId, initialCode, onJoined, onCancel }: Props) {
               {error && <p className="text-red-500 text-sm">{error}</p>}
 
               <div className="space-y-2">
-                {activePlayers.map(player => {
+                {sortedPlayers.map(player => {
                   const claimed = isPlayerClaimed(player.id)
                   const isMine = activeParticipants.some((p: any) => p.playerId === player.id && p.userId === userId)
                   const groupNum = eventPreview?.groups?.[player.id]

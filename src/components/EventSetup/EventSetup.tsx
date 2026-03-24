@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { v4 as uuidv4 } from 'uuid'
 import { supabase, rowToCourse, rowToPlayer, rowToSharedCourse, roundToRow, roundPlayerToRow, buyInToRow, eventToRow, generateInviteCode, rowToUserProfile } from '../../lib/supabase'
 import { fmtMoney } from '../../lib/gameLogic'
+import { autoAssignGroups, MAX_PER_GROUP } from '../../lib/eventUtils'
 import { venturaCourses } from '../../data/venturaCourses'
 import { NearMeCourses } from '../NearMeCourses/NearMeCourses'
 import { GameRulesModal } from '../GameRulesModal'
@@ -32,8 +33,6 @@ interface Props {
 }
 
 type Step = 'name' | 'course' | 'players' | 'groups' | 'game' | 'review' | 'share'
-
-const MAX_PER_GROUP = 5
 
 export function EventSetup({ userId, onStart, onCancel, onAddCourse }: Props) {
   const [step, setStep] = useState<Step>('name')
@@ -133,16 +132,7 @@ export function EventSetup({ userId, onStart, onCancel, onAddCourse }: Props) {
 
   // Auto-assign groups when players change
   useEffect(() => {
-    if (selectedPlayers.length <= MAX_PER_GROUP) {
-      const g: Record<string, number> = {}
-      selectedPlayers.forEach(p => { g[p.id] = 1 })
-      setGroups(g)
-    } else {
-      const numGroups = Math.ceil(selectedPlayers.length / MAX_PER_GROUP)
-      const g: Record<string, number> = {}
-      selectedPlayers.forEach((p, i) => { g[p.id] = (i % numGroups) + 1 })
-      setGroups(g)
-    }
+    setGroups(autoAssignGroups(selectedPlayers.map(p => p.id)))
   }, [selectedPlayers.length])
 
   const togglePlayer = (player: Player) => {
@@ -712,6 +702,26 @@ export function EventSetup({ userId, onStart, onCancel, onAddCourse }: Props) {
             </p>
           </section>
 
+          {/* Treasurer (before game-specific config so it's easy to find) */}
+          <section className="bg-white dark:bg-gray-800 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700 p-4 space-y-3">
+            <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Treasurer</p>
+            <div className="space-y-2">
+              {selectedPlayers.map(p => (
+                <button
+                  key={p.id}
+                  onClick={() => setTreasurerId(p.id)}
+                  className={`w-full p-3 rounded-xl border-2 text-left font-semibold text-sm transition-colors ${
+                    treasurerId === p.id
+                      ? 'border-amber-500 bg-amber-50 text-gray-900'
+                      : 'border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-300'
+                  }`}
+                >
+                  {p.name}{treasurerId === p.id ? ' ✓' : ''}
+                </button>
+              ))}
+            </div>
+          </section>
+
           {/* Game-specific config */}
           {gameType === 'skins' && (
             <section className="bg-white dark:bg-gray-800 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700 p-4 space-y-3">
@@ -731,29 +741,12 @@ export function EventSetup({ userId, onStart, onCancel, onAddCourse }: Props) {
               </label>
             </section>
           )}
-
-          {/* Treasurer */}
-          <section className="bg-white dark:bg-gray-800 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700 p-4 space-y-3">
-            <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Treasurer</p>
-            <div className="space-y-2">
-              {selectedPlayers.map(p => (
-                <button
-                  key={p.id}
-                  onClick={() => setTreasurerId(p.id)}
-                  className={`w-full p-3 rounded-xl border-2 text-left font-semibold text-sm transition-colors ${
-                    treasurerId === p.id
-                      ? 'border-amber-500 bg-amber-50 text-gray-900'
-                      : 'border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-300'
-                  }`}
-                >
-                  {p.name}{treasurerId === p.id ? ' ✓' : ''}
-                </button>
-              ))}
-            </div>
-          </section>
         </div>
         <div className="fixed bottom-0 inset-x-0 p-4 bg-white/95 dark:bg-gray-800/95 backdrop-blur-sm border-t border-gray-200 safe-bottom">
           <div className="max-w-2xl mx-auto">
+            {!treasurerId && (
+              <p className="text-amber-600 text-sm font-semibold text-center mb-2">Select a treasurer to continue</p>
+            )}
             <button
               onClick={() => setStep('review')}
               disabled={!treasurerId}
@@ -770,17 +763,29 @@ export function EventSetup({ userId, onStart, onCancel, onAddCourse }: Props) {
 
   // ─── Share Step ────────────────────────────────────────────────────────────
   if (step === 'share' && createdInviteCode && createdRoundId && createdEventId) {
+    const inviteUrl = `${window.location.origin}${window.location.pathname}?join=${createdInviteCode}`
+
     const shareInvite = async () => {
-      const code = createdInviteCode
-      const url = `${window.location.origin}${window.location.pathname}?join=${code}`
       const title = `Join ${eventName}!`
-      const text = `Join ${eventName} on Fore Skins! Code: ${code}`
+      const text = `Join ${eventName} on Fore Skins! Code: ${createdInviteCode}\n${inviteUrl}`
       if (navigator.share) {
-        try { await navigator.share({ title, text, url }) } catch {}
+        try { await navigator.share({ title, text }) } catch {}
       } else {
-        await navigator.clipboard.writeText(url)
+        await navigator.clipboard.writeText(inviteUrl)
+        setShareToast('Link copied!')
+        setTimeout(() => setShareToast(null), 3000)
       }
-      setShareToast(`Link copied! Code: ${code}`)
+    }
+
+    const copyCode = async () => {
+      await navigator.clipboard.writeText(createdInviteCode)
+      setShareToast('Code copied!')
+      setTimeout(() => setShareToast(null), 3000)
+    }
+
+    const copyLink = async () => {
+      await navigator.clipboard.writeText(inviteUrl)
+      setShareToast('Link copied!')
       setTimeout(() => setShareToast(null), 3000)
     }
 
@@ -795,10 +800,23 @@ export function EventSetup({ userId, onStart, onCancel, onAddCourse }: Props) {
             <p className="text-4xl">🎉</p>
             <h2 className="font-display font-bold text-2xl text-gray-900 dark:text-gray-100">{eventName}</h2>
             <p className="text-gray-500 text-sm">Share this code so players can join from their phones</p>
-            <div className="bg-gray-100 dark:bg-gray-700 rounded-2xl py-6 px-4">
-              <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Invite Code</p>
+            <div className="bg-gray-100 dark:bg-gray-700 rounded-2xl py-6 px-4 space-y-3">
+              <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Invite Code</p>
               <p className="text-4xl font-mono font-bold tracking-[0.3em] text-gray-900 dark:text-gray-100">{createdInviteCode}</p>
+              <button
+                onClick={copyCode}
+                className="text-xs text-amber-600 font-semibold underline active:text-amber-700"
+              >
+                Copy Code
+              </button>
             </div>
+            <button
+              onClick={copyLink}
+              className="w-full flex items-center justify-between bg-gray-50 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-xl px-4 py-3 active:bg-gray-100 dark:active:bg-gray-600"
+            >
+              <p className="text-xs text-gray-500 dark:text-gray-400 truncate text-left flex-1 mr-2 font-mono">{inviteUrl}</p>
+              <span className="text-amber-600 text-sm font-semibold flex-shrink-0">Copy Link</span>
+            </button>
             <button
               onClick={shareInvite}
               className="w-full h-14 bg-amber-500 text-white text-lg font-bold rounded-2xl active:bg-amber-600 shadow-lg flex items-center justify-center gap-2"
