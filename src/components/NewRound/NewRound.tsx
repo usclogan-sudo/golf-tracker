@@ -56,7 +56,7 @@ function StepIndicator({ current, skipGroups, stakesMode }: { current: string; s
   const goldColor = isHR ? '#fbbf24' : '#f59e0b'
 
   return (
-    <div className="py-4 px-4 bg-white/5">
+    <div className="py-4 px-4 bg-white/5 relative z-0">
       <div className="max-w-2xl mx-auto">
         {/* Dots and connecting lines */}
         <div className="flex items-center justify-between relative">
@@ -66,7 +66,7 @@ function StepIndicator({ current, skipGroups, stakesMode }: { current: string; s
             return (
               <div key={s} className="flex items-center flex-1 last:flex-none">
                 {/* Dot */}
-                <div className="relative z-10 flex flex-col items-center">
+                <div className="relative z-[1] flex flex-col items-center">
                   <div
                     className={`w-8 h-8 rounded-full flex items-center justify-center border-2 transition-all ${
                       isDone
