@@ -24,8 +24,8 @@ import { ConfirmModal } from './components/ConfirmModal'
 import { UserAvatar } from './components/AvatarPicker'
 import { InstallBanner } from './components/InstallBanner'
 import { PlayerDirectory } from './components/PlayerDirectory/PlayerDirectory'
-import { RoundsDetail } from './components/RoundsDetail/RoundsDetail'
-import { CoursesDetail } from './components/CoursesDetail/CoursesDetail'
+
+
 import { HandicapDetail } from './components/HandicapDetail/HandicapDetail'
 import { PersonalDashboard } from './components/PersonalDashboard/PersonalDashboard'
 import { TournamentList } from './components/TournamentList/TournamentList'
@@ -37,7 +37,7 @@ import { Ledger } from './components/Ledger/Ledger'
 import { LiveLeaderboard } from './components/LiveLeaderboard/LiveLeaderboard'
 import type { AppNotification, Course, Round, HoleScore, UserProfile, GameType, StakesMode } from './types'
 
-type Screen = 'home' | 'course-catalog' | 'course-setup' | 'new-round' | 'scorecard' | 'settle-up' | 'round-history' | 'stats' | 'settings' | 'onboarding' | 'admin' | 'upgrade-account' | 'player-directory' | 'rounds-detail' | 'courses-detail' | 'handicap-detail' | 'join-round' | 'tournament-list' | 'tournament-setup' | 'tournament-detail' | 'personal-dashboard' | 'event-setup' | 'event-leaderboard' | 'ledger' | 'spectate'
+type Screen = 'home' | 'course-catalog' | 'course-setup' | 'new-round' | 'scorecard' | 'settle-up' | 'round-history' | 'stats' | 'settings' | 'onboarding' | 'admin' | 'upgrade-account' | 'player-directory' | 'handicap-detail' | 'join-round' | 'tournament-list' | 'tournament-setup' | 'tournament-detail' | 'personal-dashboard' | 'event-setup' | 'event-leaderboard' | 'ledger' | 'spectate'
 
 const GAME_EMOJI: Record<GameType, string> = {
   skins: '🎰 Skins',
@@ -79,7 +79,7 @@ function StatChip({ label, value, accent, onClick }: { label: string; value: str
 }
 
 
-function CourseCard({ course, onEdit, onDelete }: { course: Course; onEdit: () => void; onDelete: () => void }) {
+function CourseCard({ course, onEdit, onDelete, stats }: { course: Course; onEdit: () => void; onDelete: () => void; stats?: { played: number; best: number | null; avg: number | null } }) {
   const par = totalPar(course)
   return (
     <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700 overflow-hidden">
@@ -93,6 +93,13 @@ function CourseCard({ course, onEdit, onDelete }: { course: Course; onEdit: () =
             <p className="text-sm text-gray-500 dark:text-gray-400 mt-0.5">
               Par {par} · {course.tees.length} tee{course.tees.length !== 1 ? 's' : ''} · {course.tees.map(t => t.name).join(', ')}
             </p>
+            {stats && stats.played > 0 && (
+              <p className="text-xs text-gray-400 dark:text-gray-500 mt-1">
+                {stats.played} round{stats.played !== 1 ? 's' : ''}
+                {stats.best != null && <span className="text-green-600 dark:text-green-400 font-semibold"> · Best {stats.best}</span>}
+                {stats.avg != null && <> · Avg {stats.avg}</>}
+              </p>
+            )}
           </div>
           <svg className="w-4 h-4 text-gray-300 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
@@ -131,8 +138,6 @@ function Home({
   onUpgrade,
   onEndRound,
   onViewRound,
-  onRoundsDetail,
-  onCoursesDetail,
   onHandicapDetail,
   onJoinRound,
   notificationCount,
@@ -161,8 +166,6 @@ function Home({
   onUpgrade?: () => void
   onEndRound?: (roundId: string) => void
   onViewRound?: (roundId: string) => void
-  onRoundsDetail: () => void
-  onCoursesDetail: () => void
   onHandicapDetail: () => void
   notificationCount?: number
   onJoinRound: (code?: string) => void
@@ -184,6 +187,7 @@ function Home({
     lastDate: string
     lastScore: number | null
   } | null>(null)
+  const [courseStats, setCourseStats] = useState<Map<string, { played: number; best: number | null; totalGross: number; scoredRounds: number }>>(new Map())
 
   useEffect(() => {
     setFetchError(null)
@@ -245,6 +249,35 @@ function Home({
           lastDate: lastRound.date.toLocaleDateString(undefined, { month: 'short', day: 'numeric' }),
           lastScore,
         })
+
+        // Compute per-course stats from completed rounds
+        const cMap = new Map<string, { played: number; best: number | null; totalGross: number; scoredRounds: number }>()
+        const myRoundIds = myRounds.map(r => r.id)
+        if (myRoundIds.length > 0) {
+          const { data: allScoreRows } = await supabase.from('hole_scores').select('round_id,player_id,gross_score').in('round_id', myRoundIds)
+          const scoresByRound = new Map<string, number[]>()
+          for (const s of (allScoreRows ?? [])) {
+            if (s.player_id !== userId) continue
+            const arr = scoresByRound.get(s.round_id) ?? []
+            arr.push(s.gross_score)
+            scoresByRound.set(s.round_id, arr)
+          }
+          for (const r of myRounds) {
+            const cId = r.courseSnapshot?.courseId ?? r.courseId
+            if (!cId) continue
+            const entry = cMap.get(cId) ?? { played: 0, best: null, totalGross: 0, scoredRounds: 0 }
+            entry.played++
+            const scores = scoresByRound.get(r.id)
+            if (scores && r.courseSnapshot && scores.length >= r.courseSnapshot.holes.length) {
+              const gross = scores.reduce((a, b) => a + b, 0)
+              entry.totalGross += gross
+              entry.scoredRounds++
+              if (entry.best === null || gross < entry.best) entry.best = gross
+            }
+            cMap.set(cId, entry)
+          }
+        }
+        setCourseStats(cMap)
       })
   }, [userId])
 
@@ -279,8 +312,8 @@ function Home({
             </div>
           </div>
           <div className="flex gap-2">
-            <StatChip label="Rounds" value={roundCount} onClick={onRoundsDetail} />
-            <StatChip label="Courses" value={courses.length} onClick={onCoursesDetail} />
+            <StatChip label="Rounds" value={roundCount} />
+            <StatChip label="Courses" value={courses.length} />
             {userProfile?.handicapIndex != null && (
               <StatChip label="Handicap" value={userProfile.handicapIndex} accent onClick={onHandicapDetail} />
             )}
@@ -571,31 +604,25 @@ function Home({
           )}
           {courses.length > 0 && (
             <div className="space-y-3">
-              {courses.map(course => (
-                <CourseCard
-                  key={course.id}
-                  course={course}
-                  onEdit={() => onEditCourse(course)}
-                  onDelete={() => onDeleteCourse(course.id)}
-                />
-              ))}
+              {courses.map(course => {
+                const cs = courseStats.get(course.id)
+                return (
+                  <CourseCard
+                    key={course.id}
+                    course={course}
+                    onEdit={() => onEditCourse(course)}
+                    onDelete={() => onDeleteCourse(course.id)}
+                    stats={cs ? { played: cs.played, best: cs.best, avg: cs.scoredRounds > 0 ? Math.round(cs.totalGross / cs.scoredRounds) : null } : undefined}
+                  />
+                )
+              })}
             </div>
           )}
         </section>
 
-        <p className="text-center text-xs text-gray-400 pb-28">Fore Skins Golf · Data synced to cloud</p>
+        <p className="text-center text-xs text-gray-400 pb-8">Fore Skins Golf · Data synced to cloud</p>
       </main>
 
-      <div className="fixed bottom-0 inset-x-0 bg-white/95 dark:bg-gray-800/95 backdrop-blur-sm border-t border-gray-200 dark:border-gray-700 safe-bottom z-20">
-        <div className="p-4 max-w-2xl mx-auto">
-          <button
-            onClick={onNewRound}
-            className="w-full h-14 bg-gray-800 dark:bg-white text-white dark:text-gray-800 text-lg font-bold rounded-2xl active:bg-gray-900 dark:active:bg-gray-100 transition-colors shadow-lg"
-          >
-            Start New Round
-          </button>
-        </div>
-      </div>
     </div>
   )
 }
@@ -931,12 +958,6 @@ export default function App() {
   if (screen === 'player-directory') {
     return <PlayerDirectory userId={userId} onBack={goHome} />
   }
-  if (screen === 'rounds-detail') {
-    return <RoundsDetail userId={userId} onBack={goHome} />
-  }
-  if (screen === 'courses-detail') {
-    return <CoursesDetail userId={userId} onBack={goHome} />
-  }
   if (screen === 'handicap-detail') {
     return <HandicapDetail userId={userId} userProfile={userProfile} onBack={goHome} />
   }
@@ -1127,8 +1148,6 @@ export default function App() {
       onUpgrade={() => setScreen('upgrade-account')}
       onEndRound={handleEndRound}
       onViewRound={roundId => { setScorecardReadOnly(false); setActiveRoundId(roundId); setScreen('scorecard') }}
-      onRoundsDetail={() => setScreen('rounds-detail')}
-      onCoursesDetail={() => setScreen('courses-detail')}
       onHandicapDetail={() => setScreen('handicap-detail')}
       onJoinRound={(code) => {
         if (code) setPendingJoinCode(code)

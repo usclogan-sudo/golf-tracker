@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { ScoringDistribution } from '../ScoringDistribution'
 import { supabase, rowToRound, rowToHoleScore, rowToRoundPlayer, rowToJunkRecord, rowToBBBPoint, rowToSideBet } from '../../lib/supabase'
 import {
   buildCourseHandicaps,
@@ -354,21 +355,7 @@ export function PersonalDashboard({ userId, onBack }: { userId: string; onBack: 
         {distTotal > 0 && (
           <section className="bg-white dark:bg-gray-800 rounded-2xl shadow-sm p-4">
             <h2 className="font-display font-semibold text-gray-800 dark:text-gray-100 text-base mb-3">Scoring Distribution</h2>
-            <div className="grid grid-cols-3 gap-2 text-center">
-              {[
-                { label: 'Eagles+', count: data.scoreDist.eagles, color: 'bg-yellow-50 dark:bg-yellow-900/20 text-yellow-700 dark:text-yellow-400' },
-                { label: 'Birdies', count: data.scoreDist.birdies, color: 'bg-green-50 dark:bg-green-900/20 text-green-700 dark:text-green-400' },
-                { label: 'Pars', count: data.scoreDist.pars, color: 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300' },
-                { label: 'Bogeys', count: data.scoreDist.bogeys, color: 'bg-orange-50 dark:bg-orange-900/20 text-orange-700 dark:text-orange-400' },
-                { label: 'Doubles', count: data.scoreDist.doubles, color: 'bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400' },
-                { label: 'Worse', count: data.scoreDist.worse, color: 'bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400' },
-              ].map(({ label, count, color }) => (
-                <div key={label} className={`rounded-xl p-2 ${color}`}>
-                  <p className="text-lg font-bold font-display">{count}</p>
-                  <p className="text-xs">{label}</p>
-                </div>
-              ))}
-            </div>
+            <ScoringDistribution {...data.scoreDist} />
           </section>
         )}
 
