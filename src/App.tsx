@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import type { Session } from '@supabase/supabase-js'
 import { supabase, rowToCourse, rowToRound, rowToHoleScore, fetchOrCreateProfile } from './lib/supabase'
 import { useNotifications } from './hooks/useNotifications'
@@ -212,16 +212,16 @@ function Home({
       setRoundCount(count ?? 0)
     })
 
-    // Unsettled rounds count
-    supabase.from('settlements').select('round_id').eq('status', 'owed').then(({ data }) => {
+    // Unsettled rounds count (limit to prevent unbounded fetch)
+    supabase.from('settlements').select('round_id').eq('status', 'owed').limit(200).then(({ data }) => {
       if (data) {
         const uniqueRounds = new Set(data.map((d: any) => d.round_id))
         setUnsettledCount(uniqueRounds.size)
       }
     })
 
-    // Personal summary — fetch rounds first, then only scores for the last round
-    supabase.from('rounds').select('*').eq('status', 'complete').order('date', { ascending: false })
+    // Personal summary — only fetch recent completed rounds, not all
+    supabase.from('rounds').select('*').eq('status', 'complete').order('date', { ascending: false }).limit(50)
       .then(async (roundsRes) => {
         if (roundsRes.error || !roundsRes.data) return
         const completedRounds = roundsRes.data.map(rowToRound)
@@ -761,6 +761,8 @@ export default function App() {
   }, [pendingJoinCode, userProfile?.onboardingComplete])
 
   // Browser back button support: push state on screen change, listen for popstate
+  const userProfileRef = useRef(userProfile)
+  userProfileRef.current = userProfile
   useEffect(() => {
     const handlePopState = (e: PopStateEvent) => {
       const s = e.state?.screen as Screen | undefined
@@ -768,7 +770,7 @@ export default function App() {
         setScreen(s)
       } else {
         setHomeKey(k => k + 1)
-        setScreen(userProfile?.adminOnly ? 'admin' : 'home')
+        setScreen(userProfileRef.current?.adminOnly ? 'admin' : 'home')
       }
     }
     window.addEventListener('popstate', handlePopState)

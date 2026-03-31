@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { v4 as uuidv4 } from 'uuid'
 import { supabase, rowToCourse, rowToPlayer, rowToSharedCourse, roundToRow, roundPlayerToRow, buyInToRow, eventToRow, generateInviteCode, rowToUserProfile } from '../../lib/supabase'
 import { fmtMoney } from '../../lib/gameLogic'
@@ -37,6 +37,7 @@ type Step = 'name' | 'course' | 'players' | 'groups' | 'game' | 'review' | 'shar
 export function EventSetup({ userId, onStart, onCancel, onAddCourse }: Props) {
   const [step, setStep] = useState<Step>('name')
   const [saving, setSaving] = useState(false)
+  const savingRef = useRef(false)
   const [createError, setCreateError] = useState<string | null>(null)
   const [createdRoundId, setCreatedRoundId] = useState<string | null>(null)
   const [createdEventId, setCreatedEventId] = useState<string | null>(null)
@@ -130,10 +131,11 @@ export function EventSetup({ userId, onStart, onCancel, onAddCourse }: Props) {
     })
   }, [userId])
 
-  // Auto-assign groups when players change
+  // Auto-assign groups when players change (keyed on player IDs, not just count)
+  const playerIdKey = useMemo(() => selectedPlayers.map(p => p.id).join(','), [selectedPlayers])
   useEffect(() => {
     setGroups(autoAssignGroups(selectedPlayers.map(p => p.id)))
-  }, [selectedPlayers.length])
+  }, [playerIdKey])
 
   const togglePlayer = (player: Player) => {
     setSelectedPlayers(prev =>
@@ -178,6 +180,8 @@ export function EventSetup({ userId, onStart, onCancel, onAddCourse }: Props) {
 
   const createEvent = async () => {
     if (!selectedCourse || !treasurerId) return
+    if (savingRef.current) return
+    savingRef.current = true
     setSaving(true)
     setCreateError(null)
     try {
@@ -279,6 +283,7 @@ export function EventSetup({ userId, onStart, onCancel, onAddCourse }: Props) {
       setCreateError('Failed to create event. Please try again.')
     } finally {
       setSaving(false)
+      savingRef.current = false
     }
   }
 

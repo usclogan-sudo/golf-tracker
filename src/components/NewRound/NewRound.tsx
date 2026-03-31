@@ -344,7 +344,7 @@ function PlayerPicker({
     // Fetch registered users from user_profiles (display_name IS NOT NULL = completed onboarding)
     const loadPlayers = async () => {
       const [profilesRes, guestsRes] = await Promise.all([
-        supabase.from('user_profiles').select('*').not('display_name', 'is', null),
+        supabase.from('user_profiles').select('*').not('display_name', 'is', null).limit(200),
         supabase.from('players').select('*').eq('user_id', userId).order('name'),
       ])
 

@@ -83,7 +83,7 @@ export function Settings({ userId, email, onBack, onSignOut, isAdmin, onAdmin, i
     }).eq('user_id', userId)
     setProfileSaving(false)
     if (error) {
-      setProfileMessage({ type: 'error', text: error.message })
+      setProfileMessage({ type: 'error', text: 'Failed to update profile. Please try again.' })
     } else {
       setProfileMessage({ type: 'success', text: 'Profile updated' })
     }
@@ -91,8 +91,8 @@ export function Settings({ userId, email, onBack, onSignOut, isAdmin, onAdmin, i
 
   const handleChangePassword = async () => {
     setPwMessage(null)
-    if (newPassword.length < 6) {
-      setPwMessage({ type: 'error', text: 'Password must be at least 6 characters' })
+    if (newPassword.length < 8) {
+      setPwMessage({ type: 'error', text: 'Password must be at least 8 characters' })
       return
     }
     if (newPassword !== confirmPassword) {

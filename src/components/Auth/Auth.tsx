@@ -52,7 +52,7 @@ export function Auth({ inviteCode }: AuthProps = {}) {
   const handleSignUp = async () => {
     if (!email.trim()) { setError('Enter your email address'); return }
     if (!isValidEmail(email.trim())) { setError('Enter a valid email address'); return }
-    if (password.length < 6) { setError('Password must be at least 6 characters'); return }
+    if (password.length < 8) { setError('Password must be at least 8 characters'); return }
     setLoading(true)
     setError(null)
     const { error: err } = await supabase.auth.signUp({

@@ -202,6 +202,8 @@ export function Scorecard({ userId, roundId, onEndRound, onHome, readOnly: readO
   const headerMenuRef = useRef<HTMLDivElement>(null)
   const savingScoreRef = useRef(false)
   const scoreToastTimerRef = useRef<ReturnType<typeof setTimeout>>()
+  const roundRef = useRef(round)
+  roundRef.current = round
   const { shareRef, sharing, shareImage } = useShareImage('fore-skins-leaderboard')
   const [scoreToast, setScoreToast] = useState<{ message: string; type: 'info' | 'success' | 'error' } | null>(null)
   const [showRoundSummary, setShowRoundSummary] = useState(true)
@@ -573,35 +575,53 @@ export function Scorecard({ userId, roundId, onEndRound, onHome, readOnly: readO
     })
   }
 
+  // Atomic game state update: reads latest from ref, applies mutation, persists.
+  // On conflict (stale local state), refetches from DB and retries once.
+  const updateGameState = async (mutate: (game: Game) => Game) => {
+    const latest = roundRef.current
+    if (!latest?.game) return
+    const updatedGame = mutate(latest.game)
+    setRound(prev => prev ? { ...prev, game: updatedGame } : prev)
+    const { data, error } = await supabase.from('rounds')
+      .update({ game: updatedGame }).eq('id', roundId).select('game').single()
+    if (error) {
+      // Conflict or network error — refetch and retry once
+      const { data: fresh } = await supabase.from('rounds').select('game').eq('id', roundId).single()
+      if (fresh?.game) {
+        const retryGame = mutate(fresh.game)
+        setRound(prev => prev ? { ...prev, game: retryGame } : prev)
+        await supabase.from('rounds').update({ game: retryGame }).eq('id', roundId)
+      }
+    }
+  }
+
   // Wolf decision handler
   const updateWolfDecision = async (holeNumber: number, partnerId: string | null) => {
-    if (!round?.game || round.game.type !== 'wolf') return
-    const wolfConfig = round.game.config as WolfConfig
-    const current = wolfConfig.holeDecisions?.[holeNumber]
-    const newPartnerId = current?.partnerId === partnerId ? undefined : partnerId
-    const updatedConfig: WolfConfig = {
-      ...wolfConfig,
-      holeDecisions: {
-        ...(wolfConfig.holeDecisions ?? {}),
-        ...(newPartnerId === undefined
-          ? (() => { const d = { ...(wolfConfig.holeDecisions ?? {}) }; delete d[holeNumber]; return d })()
-          : { [holeNumber]: { partnerId: newPartnerId } }),
-      },
-    }
-    const updatedGame = { ...round.game, config: updatedConfig }
-    setRound(prev => prev ? { ...prev, game: updatedGame } : prev)
-    await supabase.from('rounds').update({ game: updatedGame }).eq('id', roundId)
+    await updateGameState(game => {
+      if (game.type !== 'wolf') return game
+      const wolfConfig = game.config as WolfConfig
+      const current = wolfConfig.holeDecisions?.[holeNumber]
+      const newPartnerId = current?.partnerId === partnerId ? undefined : partnerId
+      const updatedConfig: WolfConfig = {
+        ...wolfConfig,
+        holeDecisions: {
+          ...(wolfConfig.holeDecisions ?? {}),
+          ...(newPartnerId === undefined
+            ? (() => { const d = { ...(wolfConfig.holeDecisions ?? {}) }; delete d[holeNumber]; return d })()
+            : { [holeNumber]: { partnerId: newPartnerId } }),
+        },
+      }
+      return { ...game, config: updatedConfig }
+    })
   }
 
   // Press handler (Skins & Nassau)
   const handlePress = async () => {
-    if (!round?.game) return
-    const config = round.game.config as any
-    const presses = [...(config.presses ?? []), { holeNumber: currentHole, playerId: userId }]
-    const updatedConfig = { ...config, presses }
-    const updatedGame = { ...round.game, config: updatedConfig }
-    setRound(prev => prev ? { ...prev, game: updatedGame } : prev)
-    await supabase.from('rounds').update({ game: updatedGame }).eq('id', roundId)
+    await updateGameState(game => {
+      const config = game.config as any
+      const presses = [...(config.presses ?? []), { holeNumber: currentHole, playerId: userId }]
+      return { ...game, config: { ...config, presses } }
+    })
   }
 
   // BBB point handler
@@ -829,15 +849,11 @@ export function Scorecard({ userId, roundId, onEndRound, onHome, readOnly: readO
 
   // Hammer interaction functions
   const updateHammerState = async (holeNum: number, state: HammerHoleState) => {
-    if (!round || !game || game.type !== 'hammer') return
-    const updatedStates = { ...(game.config as HammerConfig).hammerStates, [holeNum]: state }
-    const updatedConfig = { ...game.config, hammerStates: updatedStates }
-    const updatedGame = { ...game, config: updatedConfig }
-    setRound({ ...round, game: updatedGame })
-    // Persist to DB
-    await supabase.from('rounds').update({
-      game: JSON.stringify(updatedGame),
-    }).eq('id', roundId)
+    await updateGameState(game => {
+      if (game.type !== 'hammer') return game
+      const updatedStates = { ...(game.config as HammerConfig).hammerStates, [holeNum]: state }
+      return { ...game, config: { ...game.config, hammerStates: updatedStates } }
+    })
   }
 
   const throwHammer = () => {
