@@ -412,7 +412,10 @@ export function SettleUp({ roundId, userId, eventId, onDone, onContinue }: Props
     }))
 
     setSettlementRecords(records)
-    const { error } = await supabase.from('settlements').insert(records.map(r => settlementRecordToRow(r, userId)))
+    const { error } = await supabase.from('settlements').upsert(
+      records.map(r => settlementRecordToRow(r, userId)),
+      { onConflict: 'round_id,from_player_id,to_player_id,source' }
+    )
     if (error) console.error('Failed to persist settlements:', error)
 
     // Auto-notify all debtors
@@ -446,6 +449,13 @@ export function SettleUp({ roundId, userId, eventId, onDone, onContinue }: Props
       persistSettlements()
     }
   }, [loading, round, game, snapshot, persistSettlements])
+
+  // H6: Clean up undo timer on unmount to prevent ghost DB writes
+  useEffect(() => {
+    return () => {
+      if (pendingAction) clearTimeout(pendingAction.timer)
+    }
+  }, [pendingAction])
 
   const potCents = game ? game.buyInCents * players.length : 0
   const unpaidBuyIns = buyIns.filter(b => b.status === 'unpaid')

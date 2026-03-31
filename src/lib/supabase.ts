@@ -283,9 +283,13 @@ export async function fetchOrCreateProfile(userId: string): Promise<UserProfile>
   if (error) throw new Error(`Failed to fetch profile: ${error.message}`)
   if (data) return rowToUserProfile(data)
   const newProfile: UserProfile = { userId, isAdmin: false, adminOnly: false, onboardingComplete: false, tee: 'White' }
-  const { error: insertError } = await supabase.from('user_profiles').insert(userProfileToRow(newProfile))
-  if (insertError) throw new Error(`Failed to create profile: ${insertError.message}`)
-  return newProfile
+  const { data: upsertData, error: upsertError } = await supabase
+    .from('user_profiles')
+    .upsert(userProfileToRow(newProfile), { onConflict: 'user_id' })
+    .select()
+    .single()
+  if (upsertError) throw new Error(`Failed to create profile: ${upsertError.message}`)
+  return upsertData ? rowToUserProfile(upsertData) : newProfile
 }
 
 // ─── Game Preset mappers ────────────────────────────────────────────────────

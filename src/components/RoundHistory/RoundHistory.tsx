@@ -95,20 +95,7 @@ export function RoundHistory({ userId, onBack, onViewSettlements, onPlayAgain }:
     setDeleting(roundId)
     setDeleteError(null)
     try {
-      const results = await Promise.all([
-        supabase.from('hole_scores').delete().eq('round_id', roundId),
-        supabase.from('round_players').delete().eq('round_id', roundId),
-        supabase.from('buy_ins').delete().eq('round_id', roundId),
-        supabase.from('bbb_points').delete().eq('round_id', roundId),
-        supabase.from('settlements').delete().eq('round_id', roundId),
-        supabase.from('junk_records').delete().eq('round_id', roundId),
-        supabase.from('side_bets').delete().eq('round_id', roundId),
-        supabase.from('round_participants').delete().eq('round_id', roundId),
-        supabase.from('notifications').delete().eq('round_id', roundId),
-      ])
-      const failed = results.find(r => r.error)
-      if (failed?.error) throw failed.error
-      const { error } = await supabase.from('rounds').delete().eq('id', roundId)
+      const { error } = await supabase.rpc('delete_own_round', { p_round_id: roundId })
       if (error) throw error
       setRounds(prev => prev.filter(r => r.id !== roundId))
       if (expandedId === roundId) setExpandedId(null)

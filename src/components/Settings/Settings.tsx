@@ -114,7 +114,7 @@ export function Settings({ userId, email, onBack, onSignOut, isAdmin, onAdmin, i
   const handleResetStats = async () => {
     setManageRunning(true)
     try {
-      const { data: roundRows } = await supabase.from('rounds').select('id').eq('status', 'complete')
+      const { data: roundRows } = await supabase.from('rounds').select('id').eq('status', 'complete').eq('user_id', userId)
       const roundIds = (roundRows ?? []).map((r: any) => r.id)
       if (roundIds.length > 0) {
         await Promise.all([
@@ -154,7 +154,7 @@ export function Settings({ userId, email, onBack, onSignOut, isAdmin, onAdmin, i
     setManageRunning(true)
     try {
       // Delete all rounds and related data
-      const { data: roundRows } = await supabase.from('rounds').select('id')
+      const { data: roundRows } = await supabase.from('rounds').select('id').eq('user_id', userId)
       const roundIds = (roundRows ?? []).map((r: any) => r.id)
       if (roundIds.length > 0) {
         await Promise.all([
@@ -188,11 +188,20 @@ export function Settings({ userId, email, onBack, onSignOut, isAdmin, onAdmin, i
     setDeleting(true)
     setDeleteError('')
     try {
-      // Delete all user data from all tables — explicitly scoped to current user
-      const tables = ['hole_scores', 'bbb_points', 'buy_ins', 'round_players', 'rounds', 'players', 'courses', 'user_profiles']
-      for (const table of tables) {
-        const { error } = await supabase.from(table).delete().eq('user_id', userId)
-        if (error) console.error(`Failed to delete from ${table}:`, error)
+      // Delete all user data: round-linked data first, then standalone tables
+      const { data: roundRows } = await supabase.from('rounds').select('id').eq('user_id', userId)
+      const roundIds = (roundRows ?? []).map((r: any) => r.id)
+      if (roundIds.length > 0) {
+        const roundTables = ['hole_scores', 'round_players', 'buy_ins', 'bbb_points', 'settlements', 'side_bets', 'junk_records', 'round_participants', 'notifications']
+        for (const table of roundTables) {
+          await supabase.from(table).delete().in('round_id', roundIds).catch(() => {})
+        }
+        await supabase.from('rounds').delete().in('id', roundIds)
+      }
+      // Delete standalone user data
+      const userTables = ['notifications', 'pinned_friends', 'game_presets', 'event_participants', 'players', 'courses', 'user_profiles']
+      for (const table of userTables) {
+        await supabase.from(table).delete().eq('user_id', userId).catch(() => {})
       }
       await supabase.auth.signOut()
       onSignOut()

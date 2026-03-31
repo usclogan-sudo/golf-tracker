@@ -200,6 +200,8 @@ export function Scorecard({ userId, roundId, onEndRound, onHome, readOnly: readO
   const [pendingPopover, setPendingPopover] = useState(false)
   const [showHeaderMenu, setShowHeaderMenu] = useState(false)
   const headerMenuRef = useRef<HTMLDivElement>(null)
+  const savingScoreRef = useRef(false)
+  const scoreToastTimerRef = useRef<ReturnType<typeof setTimeout>>()
   const { shareRef, sharing, shareImage } = useShareImage('fore-skins-leaderboard')
   const [scoreToast, setScoreToast] = useState<{ message: string; type: 'info' | 'success' | 'error' } | null>(null)
   const [showRoundSummary, setShowRoundSummary] = useState(true)
@@ -398,7 +400,15 @@ export function Scorecard({ userId, roundId, onEndRound, onHome, readOnly: readO
     return hs?.grossScore ?? par
   }
 
+  const showScoreToast = (message: string, type: 'success' | 'error' | 'info') => {
+    if (scoreToastTimerRef.current) clearTimeout(scoreToastTimerRef.current)
+    setScoreToast({ message, type })
+    scoreToastTimerRef.current = setTimeout(() => setScoreToast(null), type === 'error' ? 3000 : 2000)
+  }
+
   const setScore = async (playerId: string, grossScore: number) => {
+    if (savingScoreRef.current) return
+    savingScoreRef.current = true
     setSaveError(null)
     const existing = holeScores.find(s => s.playerId === playerId && s.holeNumber === currentHole)
     const previousScore = existing?.grossScore ?? par
@@ -438,8 +448,7 @@ export function Scorecard({ userId, roundId, onEndRound, onHome, readOnly: readO
           ))
           // Show toast for pending submissions (not auto-approved)
           if (actualStatus === 'pending') {
-            setScoreToast({ message: 'Score submitted · Pending approval', type: 'info' })
-            setTimeout(() => setScoreToast(null), 3000)
+            showScoreToast('Score submitted · Pending approval', 'info')
           }
         }
       // Participant self-entry: use RPC so scores are stored with creator's user_id
@@ -457,8 +466,7 @@ export function Scorecard({ userId, roundId, onEndRound, onHome, readOnly: readO
           p_gross_score: grossScore,
         })
         if (error) throw error
-        setScoreToast({ message: 'Score saved', type: 'success' })
-        setTimeout(() => setScoreToast(null), 2000)
+        showScoreToast('Score saved', 'success')
       } else if (existing) {
         setHoleScores(prev => prev.map(s => s.id === existing.id ? { ...s, grossScore } : s))
         const query = supabase.from('hole_scores').update({ gross_score: grossScore }).eq('id', existing.id)
@@ -468,24 +476,23 @@ export function Scorecard({ userId, roundId, onEndRound, onHome, readOnly: readO
         if (error) throw error
         if (!data || data.length === 0) {
           // Someone else updated this score — revert optimistic update from realtime state
-          const current = holeScores.find(s => s.playerId === playerId && s.holeNumber === currentHole)
-          if (current) setHoleScores(prev => prev.map(s => s.id === existing.id ? current : s))
-          setScoreToast({ message: 'Score was updated by someone else', type: 'error' })
-          setTimeout(() => setScoreToast(null), 3000)
+          setHoleScores(prev => {
+            const current = prev.find(s => s.playerId === playerId && s.holeNumber === currentHole)
+            return current ? prev.map(s => s.id === existing.id ? current : s) : prev
+          })
+          showScoreToast('Score was updated by someone else', 'error')
           return
         }
         // Update local state with fresh updated_at for subsequent saves
         const updated = rowToHoleScore(data[0])
         setHoleScores(prev => prev.map(s => s.id === existing.id ? { ...s, grossScore, updatedAt: updated.updatedAt } : s))
-        setScoreToast({ message: 'Score saved', type: 'success' })
-        setTimeout(() => setScoreToast(null), 2000)
+        showScoreToast('Score saved', 'success')
       } else {
         const newScore: HoleScore = { id: uuidv4(), roundId, playerId, holeNumber: currentHole, grossScore }
         setHoleScores(prev => [...prev, newScore])
         const { error } = await supabase.from('hole_scores').insert(holeScoreToRow(newScore, userId))
         if (error) throw error
-        setScoreToast({ message: 'Score saved', type: 'success' })
-        setTimeout(() => setScoreToast(null), 2000)
+        showScoreToast('Score saved', 'success')
       }
     } catch {
       if (!isOnline) {
@@ -513,6 +520,8 @@ export function Scorecard({ userId, roundId, onEndRound, onHome, readOnly: readO
         setSaveError('Score failed to save — check your connection')
         setLastFailedSave({ playerId, grossScore })
       }
+    } finally {
+      savingScoreRef.current = false
     }
   }
 

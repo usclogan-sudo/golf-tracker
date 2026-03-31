@@ -30,11 +30,20 @@ function saveQueue(queue: QueuedOperation[]) {
 
 export function enqueue(op: Omit<QueuedOperation, 'id' | 'timestamp'>) {
   const queue = getQueue()
-  queue.push({
+  // Deduplicate: replace existing entry for same table+key (last write wins)
+  const existingIdx = op.matchColumn && op.matchValue
+    ? queue.findIndex(q => q.table === op.table && q.matchColumn === op.matchColumn && q.matchValue === op.matchValue)
+    : -1
+  const entry = {
     ...op,
     id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
     timestamp: Date.now(),
-  } as QueuedOperation)
+  } as QueuedOperation
+  if (existingIdx >= 0) {
+    queue[existingIdx] = entry
+  } else {
+    queue.push(entry)
+  }
   saveQueue(queue)
 }
 
@@ -42,9 +51,14 @@ export function getPending(): number {
   return getQueue().length
 }
 
+let flushing = false
+
 export async function flush(): Promise<{ synced: number; failed: number }> {
+  if (flushing) return { synced: 0, failed: 0 }
+  flushing = true
+  try {
   const queue = getQueue()
-  if (queue.length === 0) return { synced: 0, failed: 0 }
+  if (queue.length === 0) { flushing = false; return { synced: 0, failed: 0 } }
 
   let synced = 0
   let failed = 0
@@ -83,6 +97,9 @@ export async function flush(): Promise<{ synced: number; failed: number }> {
 
   saveQueue(remaining)
   return { synced, failed }
+  } finally {
+    flushing = false
+  }
 }
 
 export function clearQueue() {
