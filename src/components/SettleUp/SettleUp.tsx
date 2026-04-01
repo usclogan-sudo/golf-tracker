@@ -4,6 +4,7 @@ import { supabase, rowToRound, rowToRoundPlayer, rowToHoleScore, rowToBuyIn, row
 import type { AppNotification } from '../../types'
 import { PaymentButtons, getPreferredPayment } from '../PaymentButtons'
 import { Tooltip } from '../ui/Tooltip'
+import { safeWrite } from '../../lib/safeWrite'
 import {
   buildCourseHandicaps,
   strokesOnHole,
@@ -134,7 +135,7 @@ function NudgeButton({ playerName, amountCents, toPlayer, fromPlayerId, roundId,
       read: false,
       createdAt: new Date(),
     }
-    await supabase.from('notifications').insert(notificationToRow(notification, targetUserId))
+    safeWrite(supabase.from('notifications').insert(notificationToRow(notification, targetUserId)), 'send nudge notification')
     setSending(false)
     onNudged(fromPlayerId)
   }
@@ -436,9 +437,9 @@ export function SettleUp({ roundId, userId, eventId, onDone, onContinue }: Props
       })
     }
     if (debtorNotifications.length > 0) {
-      await supabase.from('notifications').insert(
+      safeWrite(supabase.from('notifications').insert(
         debtorNotifications.map(n => notificationToRow(n, n.userId))
-      )
+      ), 'send settlement notifications')
     }
 
     setCalculatingSettlements(false)
@@ -1300,7 +1301,7 @@ export function SettleUp({ roundId, userId, eventId, onDone, onContinue }: Props
               {isTreasurer && (
                 <button
                   onClick={async () => {
-                    await supabase.from('settlements').delete().eq('round_id', roundId)
+                    await safeWrite(supabase.from('settlements').delete().eq('round_id', roundId), 'recalculate settlements')
                     setSettlementRecords([])
                     setSettlementsInitialized(false)
                   }}

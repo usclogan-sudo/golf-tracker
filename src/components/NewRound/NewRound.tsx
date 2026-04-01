@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { v4 as uuidv4 } from 'uuid'
 import { supabase, courseToRow, playerToRow, roundToRow, roundPlayerToRow, buyInToRow, rowToCourse, rowToPlayer, rowToSharedCourse, rowToGamePreset, rowToUserProfile, generateInviteCode } from '../../lib/supabase'
+import { safeWrite } from '../../lib/safeWrite'
 import { fmtMoney, JUNK_LABELS } from '../../lib/gameLogic'
 import { venturaCourses } from '../../data/venturaCourses'
 import { NearMeCourses } from '../NearMeCourses/NearMeCourses'
@@ -203,7 +204,7 @@ function CoursePicker({
         holes: item.dbCourse.holes,
         createdAt: new Date(),
       }
-      await supabase.from('courses').insert(courseToRow(course, userId))
+      safeWrite(supabase.from('courses').insert(courseToRow(course, userId)), 'insert shared course')
       onSelect(course)
       return
     }
@@ -215,7 +216,7 @@ function CoursePicker({
       holes: template.holes,
       createdAt: new Date(),
     }
-    await supabase.from('courses').insert(courseToRow(course, userId))
+    safeWrite(supabase.from('courses').insert(courseToRow(course, userId)), 'insert template course')
     onSelect(course)
   }
 

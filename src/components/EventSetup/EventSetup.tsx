@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { v4 as uuidv4 } from 'uuid'
 import { supabase, rowToCourse, rowToPlayer, rowToSharedCourse, roundToRow, roundPlayerToRow, buyInToRow, eventToRow, generateInviteCode, rowToUserProfile } from '../../lib/supabase'
+import { safeWrite } from '../../lib/safeWrite'
 import { fmtMoney } from '../../lib/gameLogic'
 import { autoAssignGroups, MAX_PER_GROUP } from '../../lib/eventUtils'
 import { venturaCourses } from '../../data/venturaCourses'
@@ -241,7 +242,7 @@ export function EventSetup({ userId, onStart, onCancel, onAddCourse }: Props) {
       }))
 
       // Insert event first (round references it), then round + related data
-      await supabase.from('events').insert(eventToRow(golfEvent, userId))
+      await safeWrite(supabase.from('events').insert(eventToRow(golfEvent, userId)), 'insert event')
       await Promise.all([
         supabase.from('rounds').insert(roundToRow(round, userId)),
         supabase.from('round_players').insert(roundPlayers.map(rp => roundPlayerToRow(rp, userId))),
@@ -249,28 +250,28 @@ export function EventSetup({ userId, onStart, onCancel, onAddCourse }: Props) {
       ])
 
       // Insert the event manager participant (the creator)
-      await supabase.from('event_participants').insert({
+      await safeWrite(supabase.from('event_participants').insert({
         id: uuidv4(),
         event_id: eventId,
         user_id: userId,
         player_id: selectedPlayers[0]?.id ?? userId,
         role: 'manager',
         group_number: groups[selectedPlayers[0]?.id] ?? 1,
-      })
+      }), 'insert event manager participant')
 
       // Insert scorekeeper participants
       for (const [gn, playerId] of Object.entries(groupScorekeepers)) {
         // Find if this scorekeeper has a user profile match
         const player = selectedPlayers.find(p => p.id === playerId)
         if (player) {
-          await supabase.from('event_participants').insert({
+          safeWrite(supabase.from('event_participants').upsert({
             id: uuidv4(),
             event_id: eventId,
             user_id: userId, // Placeholder - they'll claim via join flow
             player_id: playerId,
             role: 'scorekeeper',
             group_number: parseInt(gn),
-          }).onConflict('event_id,user_id').ignoreDuplicates()
+          }, { onConflict: 'event_id,user_id', ignoreDuplicates: true }), 'insert scorekeeper participant')
         }
       }
 

@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { supabase, rowToUserProfile } from '../../lib/supabase'
+import { safeWrite } from '../../lib/safeWrite'
 import { AvatarPicker, UserAvatar } from '../AvatarPicker'
 import { ConfirmModal } from '../ConfirmModal'
 import { useDarkMode } from '../../hooks/useDarkMode'
@@ -488,12 +489,12 @@ export function Settings({ userId, email, onBack, onSignOut, isAdmin, onAdmin, i
           onSelect={(preset) => {
             setAvatarPreset(preset)
             setAvatarUrl('')  // Clear photo when selecting preset
-            supabase.from('user_profiles').update({ avatar_preset: preset, avatar_url: null }).eq('user_id', userId)
+            safeWrite(supabase.from('user_profiles').update({ avatar_preset: preset, avatar_url: null }).eq('user_id', userId), 'update avatar preset')
           }}
           onUpload={(url) => {
             setAvatarUrl(url)
             setAvatarPreset('')  // Clear preset when uploading photo
-            supabase.from('user_profiles').update({ avatar_url: url, avatar_preset: null }).eq('user_id', userId)
+            safeWrite(supabase.from('user_profiles').update({ avatar_url: url, avatar_preset: null }).eq('user_id', userId), 'update avatar url')
           }}
           onClose={() => setShowAvatarPicker(false)}
         />

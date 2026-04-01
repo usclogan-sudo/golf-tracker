@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { v4 as uuidv4 } from 'uuid'
 import { supabase, rowToCourse, tournamentToRow, tournamentMatchupToRow } from '../../lib/supabase'
+import { safeWrite } from '../../lib/safeWrite'
 import { generateBracket } from '../../lib/tournamentLogic'
 import type { Course, Tournament, TournamentFormat, Player } from '../../types'
 
@@ -81,15 +82,15 @@ export function TournamentSetup({ userId, onCreated, onCancel }: Props) {
       createdAt: new Date(),
     }
 
-    await supabase.from('tournaments').insert(tournamentToRow(tournament, userId))
+    await safeWrite(supabase.from('tournaments').insert(tournamentToRow(tournament, userId)), 'insert tournament')
 
     // For match play, generate bracket
     if (format !== 'stroke_play') {
       const matchups = generateBracket(selectedPlayerIds, tournament.id, format)
       if (matchups.length > 0) {
-        await supabase.from('tournament_matchups').insert(
+        await safeWrite(supabase.from('tournament_matchups').insert(
           matchups.map(m => tournamentMatchupToRow(m, userId))
-        )
+        ), 'insert tournament matchups')
       }
     }
 

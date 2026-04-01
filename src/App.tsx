@@ -1,40 +1,41 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { lazy, Suspense, useCallback, useEffect, useRef, useState } from 'react'
 import type { Session } from '@supabase/supabase-js'
 import { supabase, rowToCourse, rowToRound, rowToHoleScore, fetchOrCreateProfile } from './lib/supabase'
 import { useNotifications } from './hooks/useNotifications'
 import { flush as flushOfflineQueue, getPending as getOfflinePending } from './lib/offlineQueue'
+import { safeWrite } from './lib/safeWrite'
 import { NotificationToast } from './components/NotificationToast'
 import { NotificationBadge } from './components/NotificationBadge'
 import { Auth } from './components/Auth/Auth'
 import { ResetPassword } from './components/Auth/ResetPassword'
-import { JoinRound } from './components/JoinRound/JoinRound'
-import { UpgradeAccount } from './components/Auth/UpgradeAccount'
 import { GuestBanner } from './components/GuestBanner/GuestBanner'
-import { CourseCatalog } from './components/CourseCatalog/CourseCatalog'
-import { CourseSetup } from './components/CourseSetup/CourseSetup'
-import { NewRound } from './components/NewRound/NewRound'
-import { Scorecard } from './components/Scorecard/Scorecard'
-import { SettleUp } from './components/SettleUp/SettleUp'
-import { RoundHistory } from './components/RoundHistory/RoundHistory'
-import { Settings } from './components/Settings/Settings'
-import { Onboarding } from './components/Onboarding/Onboarding'
-import { AdminDashboard } from './components/Admin/AdminDashboard'
-import { Stats } from './components/Stats/Stats'
 import { ConfirmModal } from './components/ConfirmModal'
 import { UserAvatar } from './components/AvatarPicker'
 import { InstallBanner } from './components/InstallBanner'
-import { PlayerDirectory } from './components/PlayerDirectory/PlayerDirectory'
 
-
-import { HandicapDetail } from './components/HandicapDetail/HandicapDetail'
-import { PersonalDashboard } from './components/PersonalDashboard/PersonalDashboard'
-import { TournamentList } from './components/TournamentList/TournamentList'
-import { TournamentSetup } from './components/TournamentSetup/TournamentSetup'
-import { TournamentDetail } from './components/TournamentDetail/TournamentDetail'
-import { EventSetup } from './components/EventSetup/EventSetup'
-import { EventLeaderboard } from './components/EventLeaderboard/EventLeaderboard'
-import { Ledger } from './components/Ledger/Ledger'
-import { LiveLeaderboard } from './components/LiveLeaderboard/LiveLeaderboard'
+// Lazy-loaded screens (not needed for initial Home render)
+const JoinRound = lazy(() => import('./components/JoinRound/JoinRound').then(m => ({ default: m.JoinRound })))
+const UpgradeAccount = lazy(() => import('./components/Auth/UpgradeAccount').then(m => ({ default: m.UpgradeAccount })))
+const CourseCatalog = lazy(() => import('./components/CourseCatalog/CourseCatalog').then(m => ({ default: m.CourseCatalog })))
+const CourseSetup = lazy(() => import('./components/CourseSetup/CourseSetup').then(m => ({ default: m.CourseSetup })))
+const NewRound = lazy(() => import('./components/NewRound/NewRound').then(m => ({ default: m.NewRound })))
+const Scorecard = lazy(() => import('./components/Scorecard/Scorecard').then(m => ({ default: m.Scorecard })))
+const SettleUp = lazy(() => import('./components/SettleUp/SettleUp').then(m => ({ default: m.SettleUp })))
+const RoundHistory = lazy(() => import('./components/RoundHistory/RoundHistory').then(m => ({ default: m.RoundHistory })))
+const Settings = lazy(() => import('./components/Settings/Settings').then(m => ({ default: m.Settings })))
+const Onboarding = lazy(() => import('./components/Onboarding/Onboarding').then(m => ({ default: m.Onboarding })))
+const AdminDashboard = lazy(() => import('./components/Admin/AdminDashboard').then(m => ({ default: m.AdminDashboard })))
+const Stats = lazy(() => import('./components/Stats/Stats').then(m => ({ default: m.Stats })))
+const PlayerDirectory = lazy(() => import('./components/PlayerDirectory/PlayerDirectory').then(m => ({ default: m.PlayerDirectory })))
+const HandicapDetail = lazy(() => import('./components/HandicapDetail/HandicapDetail').then(m => ({ default: m.HandicapDetail })))
+const PersonalDashboard = lazy(() => import('./components/PersonalDashboard/PersonalDashboard').then(m => ({ default: m.PersonalDashboard })))
+const TournamentList = lazy(() => import('./components/TournamentList/TournamentList').then(m => ({ default: m.TournamentList })))
+const TournamentSetup = lazy(() => import('./components/TournamentSetup/TournamentSetup').then(m => ({ default: m.TournamentSetup })))
+const TournamentDetail = lazy(() => import('./components/TournamentDetail/TournamentDetail').then(m => ({ default: m.TournamentDetail })))
+const EventSetup = lazy(() => import('./components/EventSetup/EventSetup').then(m => ({ default: m.EventSetup })))
+const EventLeaderboard = lazy(() => import('./components/EventLeaderboard/EventLeaderboard').then(m => ({ default: m.EventLeaderboard })))
+const Ledger = lazy(() => import('./components/Ledger/Ledger').then(m => ({ default: m.Ledger })))
+const LiveLeaderboard = lazy(() => import('./components/LiveLeaderboard/LiveLeaderboard').then(m => ({ default: m.LiveLeaderboard })))
 import type { AppNotification, Course, Round, HoleScore, UserProfile, GameType, StakesMode } from './types'
 
 type Screen = 'home' | 'course-catalog' | 'course-setup' | 'new-round' | 'scorecard' | 'settle-up' | 'round-history' | 'stats' | 'settings' | 'onboarding' | 'admin' | 'upgrade-account' | 'player-directory' | 'handicap-detail' | 'join-round' | 'tournament-list' | 'tournament-setup' | 'tournament-detail' | 'personal-dashboard' | 'event-setup' | 'event-leaderboard' | 'ledger' | 'spectate'
@@ -181,6 +182,12 @@ function Home({
   const [joinCode, setJoinCode] = useState('')
   const [unsettledCount, setUnsettledCount] = useState(0)
   const [fetchError, setFetchError] = useState<string | null>(null)
+  const [showAnonBlock, setShowAnonBlock] = useState(false)
+
+  const guardAnon = (action: () => void) => {
+    if (isAnonymous) { setShowAnonBlock(true); return }
+    action()
+  }
   const [personalSummary, setPersonalSummary] = useState<{
     totalRounds: number
     lastCourse: string
@@ -342,7 +349,7 @@ function Home({
                   <span className="text-lg">🏌️</span>
                   <span className="text-xs font-medium mt-0.5">Players</span>
                 </button>
-                <button onClick={onTournaments} className="flex flex-col items-center justify-center min-h-[60px] rounded-xl bg-gray-700/50 text-gray-200 active:bg-gray-600 transition-colors">
+                <button onClick={() => guardAnon(onTournaments)} className="flex flex-col items-center justify-center min-h-[60px] rounded-xl bg-gray-700/50 text-gray-200 active:bg-gray-600 transition-colors">
                   <span className="text-lg">🏆</span>
                   <span className="text-xs font-medium mt-0.5">Tournaments</span>
                 </button>
@@ -505,7 +512,7 @@ function Home({
           </section>
         )}
 
-        <button onClick={onNewRound}
+        <button onClick={() => guardAnon(onNewRound)}
           className="w-full rounded-2xl shadow-lg overflow-hidden active:scale-[0.98] transition-transform"
           style={{ background: 'linear-gradient(135deg, #1f2937 0%, #374151 100%)' }}>
           <div className="px-6 py-5 flex items-center justify-between">
@@ -517,7 +524,7 @@ function Home({
           </div>
         </button>
 
-        <button onClick={onNewHighRollerRound}
+        <button onClick={() => guardAnon(onNewHighRollerRound)}
           className="w-full rounded-2xl shadow-lg overflow-hidden active:scale-[0.98] transition-transform"
           style={{ background: 'linear-gradient(135deg, #1a0e00 0%, #5c3d00 100%)' }}>
           <div className="px-6 py-5 flex items-center justify-between">
@@ -533,7 +540,7 @@ function Home({
         </button>
 
 
-        <button onClick={onCreateEvent}
+        <button onClick={() => guardAnon(onCreateEvent)}
           className="w-full rounded-2xl shadow-lg overflow-hidden active:scale-[0.98] transition-transform"
           style={{ background: 'linear-gradient(135deg, #0f172a 0%, #1e40af 100%)' }}>
           <div className="px-6 py-5 flex items-center justify-between">
@@ -623,6 +630,25 @@ function Home({
         <p className="text-center text-xs text-gray-400 pb-8">Fore Skins Golf · Data synced to cloud</p>
       </main>
 
+      {showAnonBlock && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 px-6">
+          <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-xl p-6 max-w-sm w-full space-y-4 text-center">
+            <p className="text-3xl">🔒</p>
+            <h3 className="font-display font-bold text-lg text-gray-900 dark:text-gray-100">Account Required</h3>
+            <p className="text-gray-600 dark:text-gray-400 text-sm">Create a free account to start rounds, events, and tournaments. Your guest data will be preserved.</p>
+            <div className="space-y-2">
+              {onUpgrade && (
+                <button onClick={() => { setShowAnonBlock(false); onUpgrade() }} className="w-full h-12 bg-gray-800 dark:bg-white text-white dark:text-gray-800 font-bold rounded-xl">
+                  Create Account
+                </button>
+              )}
+              <button onClick={() => setShowAnonBlock(false)} className="w-full h-10 text-gray-500 text-sm font-medium">
+                Maybe Later
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
@@ -818,7 +844,7 @@ export default function App() {
 
   // Spectate mode — no auth required (read-only leaderboard)
   if (spectateCode) {
-    return <LiveLeaderboard inviteCode={spectateCode} onBack={() => { setSpectateCode(null); window.location.reload() }} />
+    return <Suspense fallback={<div className="min-h-screen flex items-center justify-center"><div className="animate-spin h-8 w-8 border-2 border-emerald-500 border-t-transparent rounded-full" /></div>}><LiveLeaderboard inviteCode={spectateCode} onBack={() => { setSpectateCode(null); window.location.reload() }} /></Suspense>
   }
 
   // Still checking auth state
@@ -866,14 +892,16 @@ export default function App() {
   if (userProfile && !userProfile.onboardingComplete && !userProfile.adminOnly) {
     // If user has a pending invite, skip onboarding — let them join the round first
     if (pendingJoinCode) {
-      supabase.from('user_profiles').update({ onboarding_complete: true }).eq('user_id', userId)
+      safeWrite(supabase.from('user_profiles').update({ onboarding_complete: true }).eq('user_id', userId), 'skip onboarding')
       setUserProfile(prev => prev ? { ...prev, onboardingComplete: true } : prev)
     } else {
       return (
-        <Onboarding
-          userId={userId}
-          onComplete={() => setUserProfile(prev => prev ? { ...prev, onboardingComplete: true } : prev)}
-        />
+        <Suspense fallback={<div className="min-h-screen flex items-center justify-center"><div className="animate-spin h-8 w-8 border-2 border-emerald-500 border-t-transparent rounded-full" /></div>}>
+          <Onboarding
+            userId={userId}
+            onComplete={() => setUserProfile(prev => prev ? { ...prev, onboardingComplete: true } : prev)}
+          />
+        </Suspense>
       )
     }
   }
@@ -883,18 +911,23 @@ export default function App() {
     setScreen(userProfile?.adminOnly ? 'admin' : 'home')
   }
 
-  if (screen === 'course-catalog') {
-    return (
+  // Loading fallback for lazy-loaded screens
+  const screenFallback = (
+    <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-900">
+      <div className="animate-spin h-8 w-8 border-2 border-emerald-500 border-t-transparent rounded-full" />
+    </div>
+  )
+
+  // Screen routing — each lazy-loaded screen wrapped in Suspense
+  const screenContent =
+    screen === 'course-catalog' ? (
       <CourseCatalog
         userId={userId}
         onDone={goHome}
         onAddCustom={() => setScreen('course-setup')}
         onPrefillCourse={(course) => { setEditingCourse(course); setScreen('course-setup') }}
       />
-    )
-  }
-  if (screen === 'course-setup') {
-    return (
+    ) : screen === 'course-setup' ? (
       <CourseSetup
         userId={userId}
         course={editingCourse}
@@ -902,10 +935,7 @@ export default function App() {
         onSave={() => { setEditingCourse(undefined); setNewCourseName(''); if (afterCourseSetup === 'new-round') { setScreen('new-round') } else { goHome() } }}
         onCancel={() => { setEditingCourse(undefined); setNewCourseName(''); setScreen(afterCourseSetup === 'new-round' ? 'new-round' : 'course-catalog') }}
       />
-    )
-  }
-  if (screen === 'new-round') {
-    return (
+    ) : screen === 'new-round' ? (
       <NewRound
         userId={userId}
         onStart={roundId => { setActiveRoundId(roundId); setPlayAgainRound(null); setScreen('scorecard') }}
@@ -914,10 +944,7 @@ export default function App() {
         initialStakesMode={newRoundStakesMode}
         templateRound={playAgainRound}
       />
-    )
-  }
-  if (screen === 'join-round') {
-    return (
+    ) : screen === 'join-round' ? (
       <JoinRound
         userId={userId}
         initialCode={pendingJoinCode ?? undefined}
@@ -934,51 +961,35 @@ export default function App() {
           goHome()
         }}
       />
-    )
-  }
-  if (screen === 'scorecard' && activeRoundId) {
-    return <Scorecard userId={userId} roundId={activeRoundId} onEndRound={() => setScreen('settle-up')} onHome={() => { setScorecardReadOnly(false); goHome() }} readOnly={scorecardReadOnly} />
-  }
-  if (screen === 'settle-up' && activeRoundId) {
-    return (
+    ) : screen === 'scorecard' && activeRoundId ? (
+      <Scorecard userId={userId} roundId={activeRoundId} onEndRound={() => setScreen('settle-up')} onHome={() => { setScorecardReadOnly(false); goHome() }} readOnly={scorecardReadOnly} />
+    ) : screen === 'settle-up' && activeRoundId ? (
       <SettleUp
         roundId={activeRoundId}
         userId={userId}
         onDone={() => { setActiveRoundId(null); goHome() }}
         onContinue={() => setScreen('scorecard')}
       />
-    )
-  }
-  if (screen === 'round-history') {
-    return <RoundHistory userId={userId} onBack={goHome} onViewSettlements={(id) => { setActiveRoundId(id); setScreen('settle-up') }} onPlayAgain={(round) => { setPlayAgainRound(round); setScreen('new-round') }} />
-  }
-  if (screen === 'stats') {
-    return <Stats userId={userId} onBack={goHome} />
-  }
-  if (screen === 'player-directory') {
-    return <PlayerDirectory userId={userId} onBack={goHome} />
-  }
-  if (screen === 'handicap-detail') {
-    return <HandicapDetail userId={userId} userProfile={userProfile} onBack={goHome} />
-  }
-  if (screen === 'personal-dashboard') {
-    return <PersonalDashboard userId={userId} onBack={goHome} />
-  }
-  if (screen === 'upgrade-account') {
-    return (
+    ) : screen === 'round-history' ? (
+      <RoundHistory userId={userId} onBack={goHome} onViewSettlements={(id) => { setActiveRoundId(id); setScreen('settle-up') }} onPlayAgain={(round) => { setPlayAgainRound(round); setScreen('new-round') }} />
+    ) : screen === 'stats' ? (
+      <Stats userId={userId} onBack={goHome} />
+    ) : screen === 'player-directory' ? (
+      <PlayerDirectory userId={userId} onBack={goHome} />
+    ) : screen === 'handicap-detail' ? (
+      <HandicapDetail userId={userId} userProfile={userProfile} onBack={goHome} />
+    ) : screen === 'personal-dashboard' ? (
+      <PersonalDashboard userId={userId} onBack={goHome} />
+    ) : screen === 'upgrade-account' ? (
       <UpgradeAccount
         onComplete={goHome}
         onCancel={goHome}
       />
-    )
-  }
-  if (screen === 'settings') {
-    return (
+    ) : screen === 'settings' ? (
       <Settings
         userId={userId}
         email={session.user.email ?? ''}
         onBack={() => {
-          // Refresh profile in case user edited it
           fetchOrCreateProfile(userId).then(p => setUserProfile(p))
           goHome()
         }}
@@ -989,10 +1000,7 @@ export default function App() {
         onUpgrade={() => setScreen('upgrade-account')}
         adminOnly={userProfile?.adminOnly}
       />
-    )
-  }
-  if (screen === 'admin' && userProfile?.isAdmin) {
-    return (
+    ) : screen === 'admin' && userProfile?.isAdmin ? (
       <AdminDashboard
         userId={userId}
         onBack={goHome}
@@ -1000,42 +1008,29 @@ export default function App() {
         onSettings={userProfile.adminOnly ? () => setScreen('settings') : undefined}
         onLogout={userProfile.adminOnly ? () => supabase.auth.signOut() : undefined}
       />
-    )
-  }
-  if (screen === 'tournament-list') {
-    return (
+    ) : screen === 'tournament-list' ? (
       <TournamentList
         userId={userId}
         onBack={goHome}
         onViewTournament={(id) => { setActiveTournamentId(id); setScreen('tournament-detail') }}
         onNewTournament={() => setScreen('tournament-setup')}
       />
-    )
-  }
-  if (screen === 'tournament-setup') {
-    return (
+    ) : screen === 'tournament-setup' ? (
       <TournamentSetup
         userId={userId}
         onCreated={(id) => { setActiveTournamentId(id); setScreen('tournament-detail') }}
         onCancel={() => setScreen('tournament-list')}
       />
-    )
-  }
-  if (screen === 'tournament-detail' && activeTournamentId) {
-    return (
+    ) : screen === 'tournament-detail' && activeTournamentId ? (
       <TournamentDetail
         userId={userId}
         tournamentId={activeTournamentId}
         onBack={() => setScreen('tournament-list')}
         onStartRound={() => {
-          // TODO: Could auto-create a linked round in the future
           setScreen('tournament-list')
         }}
       />
-    )
-  }
-  if (screen === 'event-setup') {
-    return (
+    ) : screen === 'event-setup' ? (
       <EventSetup
         userId={userId}
         onStart={(roundId, eventId) => {
@@ -1047,10 +1042,7 @@ export default function App() {
         onCancel={goHome}
         onAddCourse={() => { setAfterCourseSetup('home'); setScreen('course-catalog') }}
       />
-    )
-  }
-  if (screen === 'event-leaderboard' && activeEventId) {
-    return (
+    ) : screen === 'event-leaderboard' && activeEventId ? (
       <EventLeaderboard
         userId={userId}
         eventId={activeEventId}
@@ -1059,10 +1051,12 @@ export default function App() {
           else goHome()
         }}
       />
-    )
-  }
-  if (screen === 'ledger') {
-    return <Ledger userId={userId} onBack={goHome} />
+    ) : screen === 'ledger' ? (
+      <Ledger userId={userId} onBack={goHome} />
+    ) : null
+
+  if (screenContent) {
+    return <Suspense fallback={screenFallback}>{screenContent}</Suspense>
   }
   const handleDeleteCourse = (courseId: string) => {
     setAppConfirmModal({
@@ -1071,7 +1065,7 @@ export default function App() {
       destructive: true,
       onConfirm: async () => {
         setAppConfirmModal(null)
-        await supabase.from('courses').update({ hidden: true }).eq('id', courseId)
+        await safeWrite(supabase.from('courses').update({ hidden: true }).eq('id', courseId), 'hide course')
         setHomeKey(k => k + 1)
       },
     })

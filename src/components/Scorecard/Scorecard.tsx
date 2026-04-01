@@ -3,6 +3,7 @@ import { v4 as uuidv4 } from 'uuid'
 import { useOnlineStatus } from '../../hooks/useOnlineStatus'
 import { enqueue, flush, getPending } from '../../lib/offlineQueue'
 import { supabase, rowToRound, rowToRoundPlayer, rowToHoleScore, rowToBuyIn, rowToBBBPoint, rowToJunkRecord, rowToSideBet, rowToRoundParticipant, rowToEvent, rowToEventParticipant, rowToUserProfile, holeScoreToRow, bbbPointToRow, junkRecordToRow, sideBetToRow, generateInviteCode } from '../../lib/supabase'
+import { safeWrite } from '../../lib/safeWrite'
 import { computeScorecardPermissions } from '../../lib/permissions'
 import { applyHoleScorePayload, applyBBBPointPayload, applyJunkRecordPayload, applySideBetPayload, applyRoundParticipantPayload, applyBuyInPayload } from '../../lib/realtimeReducers'
 import { getCelebration, CelebrationToast, CelebrationFullscreen } from '../Celebrations'
@@ -11,6 +12,8 @@ import { ConfirmModal } from '../ConfirmModal'
 import { GameRulesModal } from '../GameRulesModal'
 import { NumberPad } from './NumberPad'
 import { BuyInBanner } from './BuyInBanner'
+import { LeaderboardTab } from './LeaderboardTab'
+import { HoleBetsPanel } from './HoleBetsPanel'
 import {
   buildCourseHandicaps,
   calculateSkins,
@@ -560,7 +563,7 @@ export function Scorecard({ userId, roundId, onEndRound, onHome, readOnly: readO
       onConfirm: async () => {
         setConfirmModal(null)
         setRound(prev => prev ? { ...prev, status: 'complete' } : prev)
-        await supabase.from('rounds').update({ status: 'complete' }).eq('id', roundId)
+        safeWrite(supabase.from('rounds').update({ status: 'complete' }).eq('id', roundId), 'end round')
         onEndRound()
       },
     })
@@ -590,7 +593,7 @@ export function Scorecard({ userId, roundId, onEndRound, onHome, readOnly: readO
       if (fresh?.game) {
         const retryGame = mutate(fresh.game)
         setRound(prev => prev ? { ...prev, game: retryGame } : prev)
-        await supabase.from('rounds').update({ game: retryGame }).eq('id', roundId)
+        safeWrite(supabase.from('rounds').update({ game: retryGame }).eq('id', roundId), 'retry game update')
       }
     }
   }
@@ -633,7 +636,7 @@ export function Scorecard({ userId, roundId, onEndRound, onHome, readOnly: readO
     if (existing) {
       const updated = { ...existing, [category]: newVal }
       setBbbPoints(prev => prev.map(p => p.id === existing.id ? updated : p))
-      await supabase.from('bbb_points').update({ [category]: newVal }).eq('id', existing.id)
+      safeWrite(supabase.from('bbb_points').update({ [category]: newVal }).eq('id', existing.id), 'update bbb point')
     } else {
       const newPoint: BBBPoint = {
         id: uuidv4(),
@@ -644,7 +647,7 @@ export function Scorecard({ userId, roundId, onEndRound, onHome, readOnly: readO
         bongo: category === 'bongo' ? newVal : null,
       }
       setBbbPoints(prev => [...prev, newPoint])
-      await supabase.from('bbb_points').insert(bbbPointToRow(newPoint, userId))
+      safeWrite(supabase.from('bbb_points').insert(bbbPointToRow(newPoint, userId)), 'insert bbb point')
     }
   }
 
@@ -653,11 +656,11 @@ export function Scorecard({ userId, roundId, onEndRound, onHome, readOnly: readO
     const existing = junkRecords.find(jr => jr.holeNumber === currentHole && jr.playerId === playerId && jr.junkType === junkType)
     if (existing) {
       setJunkRecords(prev => prev.filter(jr => jr.id !== existing.id))
-      await supabase.from('junk_records').delete().eq('id', existing.id)
+      safeWrite(supabase.from('junk_records').delete().eq('id', existing.id), 'delete junk record')
     } else {
       const newRecord: JunkRecord = { id: uuidv4(), roundId, holeNumber: currentHole, playerId, junkType }
       setJunkRecords(prev => [...prev, newRecord])
-      await supabase.from('junk_records').insert(junkRecordToRow(newRecord, userId))
+      safeWrite(supabase.from('junk_records').insert(junkRecordToRow(newRecord, userId)), 'insert junk record')
     }
   }
 
@@ -676,7 +679,7 @@ export function Scorecard({ userId, roundId, onEndRound, onHome, readOnly: readO
       createdAt: new Date(),
     }
     setSideBets(prev => [...prev, newBet])
-    await supabase.from('side_bets').insert(sideBetToRow(newBet, userId))
+    safeWrite(supabase.from('side_bets').insert(sideBetToRow(newBet, userId)), 'insert side bet')
     setSideBetDesc('')
     setSideBetAmount('5')
     setSideBetParticipants([])
@@ -685,12 +688,12 @@ export function Scorecard({ userId, roundId, onEndRound, onHome, readOnly: readO
 
   const resolveSideBet = async (betId: string, winnerId: string) => {
     setSideBets(prev => prev.map(sb => sb.id === betId ? { ...sb, winnerPlayerId: winnerId, status: 'resolved' as const } : sb))
-    await supabase.from('side_bets').update({ winner_player_id: winnerId, status: 'resolved' }).eq('id', betId)
+    safeWrite(supabase.from('side_bets').update({ winner_player_id: winnerId, status: 'resolved' }).eq('id', betId), 'resolve side bet')
   }
 
   const cancelSideBet = async (betId: string) => {
     setSideBets(prev => prev.map(sb => sb.id === betId ? { ...sb, status: 'cancelled' as const } : sb))
-    await supabase.from('side_bets').update({ status: 'cancelled' }).eq('id', betId)
+    safeWrite(supabase.from('side_bets').update({ status: 'cancelled' }).eq('id', betId), 'cancel side bet')
   }
 
   const saveHandicapEdit = async () => {
@@ -705,9 +708,9 @@ export function Scorecard({ userId, roundId, onEndRound, onHome, readOnly: readO
     setEditingHcpPlayerId(null)
     setEditingHcpValue('')
     // Persist: update round's player snapshot
-    await supabase.from('rounds').update({ players: updatedPlayers }).eq('id', roundId)
+    safeWrite(supabase.from('rounds').update({ players: updatedPlayers }).eq('id', roundId), 'update round players')
     // Also update the player in the players table
-    await supabase.from('players').update({ handicap_index: newHcp }).eq('id', editingHcpPlayerId)
+    safeWrite(supabase.from('players').update({ handicap_index: newHcp }).eq('id', editingHcpPlayerId), 'update player handicap')
   }
 
   // Role-based access (must be before approvedScores which depends on isEventRound)
@@ -1335,270 +1338,27 @@ export function Scorecard({ userId, roundId, onEndRound, onHome, readOnly: readO
 
       {/* Leaderboard tab */}
       {scoreTab === 'leaderboard' && snapshot && (
-        <div className="px-4 py-4 max-w-2xl mx-auto">
-          <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-sm p-4">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="text-xs text-gray-400 uppercase border-b border-gray-200">
-                  <th className="text-left py-2 px-1 font-medium w-8">Pos</th>
-                  <th className="text-left py-2 px-1 font-medium">Player</th>
-                  <th className="text-center py-2 px-1 font-medium">Thru</th>
-                  <th className="text-center py-2 px-1 font-medium"><Tooltip term="Gross">Gross</Tooltip></th>
-                  <th className="text-center py-2 px-1 font-medium"><Tooltip term="Net">Net</Tooltip></th>
-                  <th className="text-center py-2 px-1 font-medium">vs Par</th>
-                </tr>
-              </thead>
-              <tbody>
-                {(() => {
-                  const totalPar = snapshot.holes.reduce((s, h) => s + h.par, 0)
-                  const board = players.map(p => {
-                    const pScores = holeScores.filter(s => s.playerId === p.id)
-                    const gross = pScores.reduce((s, hs) => s + hs.grossScore, 0)
-                    const courseHcp = courseHcps[p.id] ?? 0
-                    const netStrokes = pScores.reduce((s, hs) => {
-                      const hole = snapshot.holes.find(h => h.number === hs.holeNumber)
-                      return s + (hole ? strokesOnHole(courseHcp, hole.strokeIndex, snapshot.holes.length) : 0)
-                    }, 0)
-                    const net = gross - netStrokes
-                    const scoredPar = pScores.reduce((s, hs) => {
-                      const hole = snapshot.holes.find(h => h.number === hs.holeNumber)
-                      return s + (hole?.par ?? 0)
-                    }, 0)
-                    const vsPar = gross - scoredPar
-                    return { player: p, gross, net, vsPar, thru: pScores.length }
-                  }).sort((a, b) => a.net - b.net)
-
-                  const positions: number[] = []
-                  board.forEach((entry, idx) => {
-                    if (idx === 0) positions.push(1)
-                    else positions.push(entry.net === board[idx - 1].net ? positions[idx - 1] : idx + 1)
-                  })
-
-                  return board.map((entry, idx) => (
-                    <tr key={entry.player.id} className={`border-b border-gray-50 ${positions[idx] === 1 ? 'bg-amber-50' : ''}`}>
-                      <td className={`py-2.5 px-1 font-bold ${positions[idx] === 1 ? 'text-amber-600' : 'text-gray-500'}`}>{positions[idx]}</td>
-                      <td className="py-2.5 px-1 font-semibold text-gray-800">{entry.player.name}</td>
-                      <td className="py-2.5 px-1 text-center text-gray-500">{entry.thru}</td>
-                      <td className="py-2.5 px-1 text-center font-semibold text-gray-700">{entry.gross || '—'}</td>
-                      <td className="py-2.5 px-1 text-center font-semibold text-gray-700">{entry.net || '—'}</td>
-                      <td className={`py-2.5 px-1 text-center font-semibold ${entry.vsPar > 0 ? 'text-red-600' : entry.vsPar < 0 ? 'text-green-600' : 'text-gray-400'}`}>
-                        {entry.thru > 0 ? `${entry.vsPar > 0 ? '+' : ''}${entry.vsPar}` : '—'}
-                      </td>
-                    </tr>
-                  ))
-                })()}
-              </tbody>
-            </table>
-
-            {/* Game-specific running totals */}
-            {skinsResult && (
-              <div className="mt-3 pt-3 border-t border-gray-100">
-                <p className="text-xs font-semibold text-gray-500 uppercase mb-2">
-                  Skins — {skinsResult.totalSkins} won{skinsResult.pendingCarry > 0 ? ` · ${skinsResult.pendingCarry} carry` : ''}
-                </p>
-                <div className="flex flex-wrap gap-2">
-                  {players.filter(p => (skinsResult.skinsWon[p.id] ?? 0) > 0).map(p => (
-                    <span key={p.id} className="text-xs bg-amber-50 text-amber-700 font-semibold px-2 py-1 rounded-lg">
-                      {p.name}: {skinsResult.skinsWon[p.id]}
-                    </span>
-                  ))}
-                  {skinsResult.totalSkins === 0 && (
-                    <span className="text-xs text-gray-400">No skins won yet</span>
-                  )}
-                </div>
-              </div>
-            )}
-
-            {bestBallResult && (
-              <div className="mt-3 pt-3 border-t border-gray-100">
-                <p className="text-xs font-semibold text-gray-500 uppercase mb-1">Best Ball</p>
-                <p className="text-sm font-semibold text-gray-700">
-                  Team A: {bestBallResult.holesWon.A}W · Team B: {bestBallResult.holesWon.B}W · Tied: {bestBallResult.holesWon.tied}
-                </p>
-              </div>
-            )}
-
-            {nassauResult && (
-              <div className="mt-3 pt-3 border-t border-gray-100">
-                <p className="text-xs font-semibold text-gray-500 uppercase mb-2">Nassau</p>
-                <div className="space-y-1">
-                  {[
-                    { label: 'Front', seg: nassauResult.front },
-                    { label: 'Back', seg: nassauResult.back },
-                    { label: 'Total', seg: nassauResult.total },
-                  ].map(({ label, seg }) => {
-                    const leader = seg.winner ? players.find(p => p.id === seg.winner)?.name : null
-                    const tiedNames = seg.tiedPlayers.map(id => players.find(p => p.id === id)?.name).filter(Boolean).join(', ')
-                    return (
-                      <p key={label} className="text-sm text-gray-700">
-                        <span className="font-semibold">{label}:</span>{' '}
-                        {seg.incomplete ? <span className="text-gray-400">In progress</span> : leader ? <span className="text-teal-700 font-semibold">{leader}</span> : tiedNames ? <span className="text-gray-500">Tied ({tiedNames})</span> : '—'}
-                      </p>
-                    )
-                  })}
-                </div>
-              </div>
-            )}
-
-            {wolfResult && (
-              <div className="mt-3 pt-3 border-t border-gray-100">
-                <p className="text-xs font-semibold text-gray-500 uppercase mb-2">Wolf — Net Units</p>
-                <div className="flex flex-wrap gap-2">
-                  {players.slice().sort((a, b) => (wolfResult.netUnits[b.id] ?? 0) - (wolfResult.netUnits[a.id] ?? 0)).map(p => {
-                    const u = wolfResult.netUnits[p.id] ?? 0
-                    return (
-                      <span key={p.id} className={`text-xs font-semibold px-2 py-1 rounded-lg ${u > 0 ? 'bg-purple-50 text-purple-700' : u < 0 ? 'bg-red-50 text-red-600' : 'bg-gray-50 text-gray-500'}`}>
-                        {p.name}: {u > 0 ? '+' : ''}{u}
-                      </span>
-                    )
-                  })}
-                </div>
-              </div>
-            )}
-
-            {bbbResult && (
-              <div className="mt-3 pt-3 border-t border-gray-100">
-                <p className="text-xs font-semibold text-gray-500 uppercase mb-2">Bingo Bango Bongo</p>
-                <div className="flex flex-wrap gap-2">
-                  {players.slice().sort((a, b) => (bbbResult.pointsWon[b.id] ?? 0) - (bbbResult.pointsWon[a.id] ?? 0)).map(p => {
-                    const pts = bbbResult.pointsWon[p.id] ?? 0
-                    return (
-                      <span key={p.id} className={`text-xs font-semibold px-2 py-1 rounded-lg ${pts > 0 ? 'bg-amber-50 text-amber-700' : 'bg-gray-50 text-gray-500'}`}>
-                        {p.name}: {pts}pt{pts !== 1 ? 's' : ''}
-                      </span>
-                    )
-                  })}
-                </div>
-              </div>
-            )}
-          </div>
-
-          {/* ── Share Leaderboard ── */}
-          {(() => {
-            const GAME_LABELS: Record<string, string> = {
-              skins: 'Skins', best_ball: 'Best Ball', nassau: 'Nassau', wolf: 'Wolf',
-              bingo_bango_bongo: 'Bingo Bango Bongo', hammer: 'Hammer', vegas: 'Vegas',
-              stableford: 'Stableford', dots: 'Dots', banker: 'Banker', quota: 'Quota',
-            }
-            const totalPar = snapshot.holes.reduce((s, h) => s + h.par, 0)
-            const shareBoard = players.map(p => {
-              const pScores = holeScores.filter(s => s.playerId === p.id)
-              const gross = pScores.reduce((s, hs) => s + hs.grossScore, 0)
-              const courseHcp = courseHcps[p.id] ?? 0
-              const netStrokes = pScores.reduce((s, hs) => {
-                const hole = snapshot.holes.find(h => h.number === hs.holeNumber)
-                return s + (hole ? strokesOnHole(courseHcp, hole.strokeIndex, snapshot.holes.length) : 0)
-              }, 0)
-              const scoredPar = pScores.reduce((s, hs) => {
-                const hole = snapshot.holes.find(h => h.number === hs.holeNumber)
-                return s + (hole?.par ?? 0)
-              }, 0)
-              return { player: p, gross, net: gross - netStrokes, vsPar: gross - scoredPar }
-            }).sort((a, b) => a.net - b.net)
-
-            const positions: number[] = []
-            shareBoard.forEach((entry, idx) => {
-              positions.push(idx === 0 ? 1 : entry.net === shareBoard[idx - 1].net ? positions[idx - 1] : idx + 1)
-            })
-            const leaderboard: ShareCardLeaderboardEntry[] = shareBoard.map((entry, idx) => ({
-              pos: positions[idx], name: entry.player.name, gross: entry.gross, net: entry.net, vsPar: entry.vsPar,
-            }))
-
-            const gameResults: string[] = []
-            if (skinsResult) {
-              if (skinsResult.totalSkins === 0) {
-                gameResults.push('Skins: No skins won yet')
-              } else {
-                players.forEach(p => {
-                  const skins = skinsResult.skinsWon[p.id] ?? 0
-                  if (skins > 0) gameResults.push(`${p.name}: ${skins} skin${skins !== 1 ? 's' : ''}`)
-                })
-              }
-            }
-            if (bestBallResult) {
-              gameResults.push(`Team A: ${bestBallResult.holesWon.A}W · Team B: ${bestBallResult.holesWon.B}W · Tied: ${bestBallResult.holesWon.tied}`)
-            }
-            if (nassauResult) {
-              [{ l: 'Front', s: nassauResult.front }, { l: 'Back', s: nassauResult.back }, { l: 'Total', s: nassauResult.total }].forEach(({ l, s }) => {
-                const winner = s.winner ? players.find(p => p.id === s.winner)?.name : null
-                gameResults.push(`${l}: ${s.incomplete ? 'In progress' : winner ? winner : 'Tied'}`)
-              })
-            }
-            if (wolfResult) {
-              players.slice().sort((a, b) => (wolfResult.netUnits[b.id] ?? 0) - (wolfResult.netUnits[a.id] ?? 0)).forEach(p => {
-                const u = wolfResult.netUnits[p.id] ?? 0
-                gameResults.push(`${p.name}: ${u > 0 ? '+' : ''}${u} unit${Math.abs(u) !== 1 ? 's' : ''}`)
-              })
-            }
-            if (bbbResult) {
-              players.slice().sort((a, b) => (bbbResult.pointsWon[b.id] ?? 0) - (bbbResult.pointsWon[a.id] ?? 0)).forEach(p => {
-                const pts = bbbResult.pointsWon[p.id] ?? 0
-                gameResults.push(`${p.name}: ${pts} pt${pts !== 1 ? 's' : ''}`)
-              })
-            }
-            if (hammerResult) {
-              players.slice().sort((a, b) => (hammerResult.netCents[b.id] ?? 0) - (hammerResult.netCents[a.id] ?? 0)).forEach(p => {
-                const net = hammerResult.netCents[p.id] ?? 0
-                gameResults.push(`${p.name}: ${net > 0 ? '+' : ''}${fmtMoney(Math.abs(net))}`)
-              })
-            }
-            if (vegasResult) {
-              gameResults.push(`Team A: ${vegasResult.netPoints.A} pts · Team B: ${vegasResult.netPoints.B} pts`)
-              gameResults.push(vegasResult.winner === 'tie' ? 'Result: Tied' : `Winner: Team ${vegasResult.winner}`)
-            }
-            if (stablefordResult) {
-              players.slice().sort((a, b) => (stablefordResult.points[b.id] ?? 0) - (stablefordResult.points[a.id] ?? 0)).forEach(p => {
-                gameResults.push(`${p.name}: ${stablefordResult.points[p.id] ?? 0} pts`)
-              })
-            }
-            if (bankerResult) {
-              players.slice().sort((a, b) => (bankerResult.netCents[b.id] ?? 0) - (bankerResult.netCents[a.id] ?? 0)).forEach(p => {
-                const net = bankerResult.netCents[p.id] ?? 0
-                gameResults.push(`${p.name}: ${net > 0 ? '+' : ''}${fmtMoney(Math.abs(net))}`)
-              })
-            }
-            if (quotaResult) {
-              players.slice().sort((a, b) => (quotaResult.netPoints[b.id] ?? 0) - (quotaResult.netPoints[a.id] ?? 0)).forEach(p => {
-                const net = quotaResult.netPoints[p.id] ?? 0
-                gameResults.push(`${p.name}: ${net > 0 ? '+' : ''}${net} (quota ${quotaResult.quotas[p.id] ?? 0})`)
-              })
-            }
-
-            const gameLabel = game ? (GAME_LABELS[game.type] ?? game.type) : null
-
-            return (
-              <>
-                <button
-                  onClick={shareImage}
-                  disabled={sharing}
-                  className="mt-4 w-full h-12 bg-emerald-600 text-white font-bold rounded-2xl active:bg-emerald-700 transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
-                >
-                  {sharing ? (
-                    <span className="inline-block w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                  ) : (
-                    <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
-                    </svg>
-                  )}
-                  {sharing ? 'Creating image…' : 'Share Leaderboard'}
-                </button>
-                <div style={{ position: 'absolute', left: -9999, top: 0 }}>
-                  <ShareCard
-                    ref={shareRef}
-                    courseName={snapshot.courseName}
-                    date={round!.date}
-                    gameLabel={gameLabel}
-                    stakesMode={game?.stakesMode}
-                    leaderboard={leaderboard}
-                    gameResults={gameResults}
-                    payouts={[]}
-                    totalPot={null}
-                  />
-                </div>
-              </>
-            )
-          })()}
-        </div>
+        <LeaderboardTab
+          snapshot={snapshot}
+          players={players}
+          holeScores={holeScores}
+          courseHcps={courseHcps}
+          game={game}
+          round={round}
+          skinsResult={skinsResult}
+          bestBallResult={bestBallResult}
+          nassauResult={nassauResult}
+          wolfResult={wolfResult}
+          bbbResult={bbbResult}
+          hammerResult={hammerResult}
+          vegasResult={vegasResult}
+          stablefordResult={stablefordResult}
+          bankerResult={bankerResult}
+          quotaResult={quotaResult}
+          shareRef={shareRef}
+          sharing={sharing}
+          shareImage={shareImage}
+        />
       )}
 
       {scoreTab === 'scores' && (
@@ -1687,11 +1447,11 @@ export function Scorecard({ userId, roundId, onEndRound, onHome, readOnly: readO
                 if (existing && existing.grossScore === val) continue
                 if (existing) {
                   setHoleScores(prev => prev.map(s => s.id === existing.id ? { ...s, grossScore: val } : s))
-                  await supabase.from('hole_scores').update({ gross_score: val }).eq('id', existing.id)
+                  safeWrite(supabase.from('hole_scores').update({ gross_score: val }).eq('id', existing.id), 'update batch score')
                 } else {
                   const newScore: HoleScore = { id: uuidv4(), roundId, playerId, holeNumber: holeNum, grossScore: val }
                   setHoleScores(prev => [...prev, newScore])
-                  await supabase.from('hole_scores').insert(holeScoreToRow(newScore, userId))
+                  safeWrite(supabase.from('hole_scores').insert(holeScoreToRow(newScore, userId)), 'insert batch score')
                 }
               }
             }
@@ -2286,186 +2046,28 @@ export function Scorecard({ userId, roundId, onEndRound, onHome, readOnly: readO
           )
         })()}
 
-        {/* Merged Hole Bets panel (junks + side bets) */}
-        {showGameStatus && !readOnly && (() => {
-          const hasJunks = junkConfig && junkConfig.types.length > 0
-          const holeJunks = hasJunks ? junkRecords.filter(jr => jr.holeNumber === currentHole) : []
-          const holeBets = sideBets.filter(sb => sb.holeNumber === currentHole && sb.status !== 'cancelled')
-          if (!hasJunks && holeBets.length === 0 && !showSideBetForm) {
-            return (
-              <div className="bg-amber-50 dark:bg-amber-900/30 border border-amber-200 dark:border-amber-700 rounded-xl p-3">
-                <div className="flex items-center justify-between">
-                  <p className="font-bold text-amber-800 dark:text-amber-300 text-sm">🎯 Hole Bets — Hole {currentHole}</p>
-                  <button
-                    onClick={() => setShowSideBetForm(true)}
-                    className="text-xs font-semibold px-2.5 py-1 rounded-lg bg-amber-500 text-white active:bg-amber-600"
-                  >
-                    + Side Bet
-                  </button>
-                </div>
-                <p className="text-xs text-amber-600 dark:text-amber-400 mt-1">No bets on this hole</p>
-              </div>
-            )
-          }
-          return (
-            <div className="bg-amber-50 dark:bg-amber-900/30 border border-amber-200 dark:border-amber-700 rounded-xl p-3 space-y-3">
-              <p className="font-bold text-amber-800 dark:text-amber-300 text-sm">🎯 Hole Bets — Hole {currentHole}</p>
-
-              {/* Quick Junks Row */}
-              {hasJunks && (
-                <div className="space-y-2">
-                  <p className="text-xs font-semibold text-indigo-700 dark:text-indigo-300">
-                    🎲 Junks <span className="text-indigo-400 font-normal">{fmtMoney(junkConfig!.valueCents)}/junk</span>
-                  </p>
-                  {junkConfig!.types.map(jt => {
-                    const info = JUNK_LABELS[jt]
-                    const isSnake = jt === 'snake'
-                    return (
-                      <div key={jt} className="space-y-1">
-                        <p className={`text-xs font-semibold ${isSnake ? 'text-red-600' : 'text-indigo-700 dark:text-indigo-300'}`}>
-                          {info.emoji} {info.name} — {info.description}
-                        </p>
-                        <div className="flex flex-wrap gap-1.5">
-                          {players.map(p => {
-                            const active = holeJunks.some(jr => jr.playerId === p.id && jr.junkType === jt)
-                            return (
-                              <button
-                                key={p.id}
-                                onClick={() => toggleJunk(jt, p.id)}
-                                className={`px-2.5 py-1 rounded-lg text-xs font-semibold transition-colors ${
-                                  active
-                                    ? isSnake ? 'bg-red-500 text-white' : 'bg-indigo-500 text-white'
-                                    : 'bg-white dark:bg-gray-700 border border-indigo-200 dark:border-indigo-600 text-indigo-700 dark:text-indigo-300'
-                                }`}
-                              >
-                                {p.name}
-                              </button>
-                            )
-                          })}
-                        </div>
-                      </div>
-                    )
-                  })}
-                </div>
-              )}
-
-              {/* Divider between junks and side bets */}
-              {hasJunks && (holeBets.length > 0 || showSideBetForm) && (
-                <div className="border-t border-amber-200 dark:border-amber-600" />
-              )}
-
-              {/* Side Bets List */}
-              {holeBets.length > 0 && (
-                <div className="space-y-2">
-                  <p className="text-xs font-semibold text-amber-700 dark:text-amber-300">💰 Side Bets</p>
-                  {holeBets.map(bet => {
-                    const participantNames = bet.participants.map(id => players.find(p => p.id === id)?.name ?? '?')
-                    const winnerName = bet.winnerPlayerId ? players.find(p => p.id === bet.winnerPlayerId)?.name : null
-                    return (
-                      <div key={bet.id} className={`rounded-lg p-2.5 ${bet.status === 'resolved' ? 'bg-green-50 dark:bg-green-900/30' : 'bg-white dark:bg-gray-800'}`}>
-                        <div className="flex items-center justify-between">
-                          <div>
-                            <p className="text-sm font-semibold text-gray-800 dark:text-gray-100">{bet.description}</p>
-                            <p className="text-xs text-gray-500 dark:text-gray-400">
-                              {fmtMoney(bet.amountCents)} · {participantNames.join(' vs ')}
-                            </p>
-                          </div>
-                          {bet.status === 'resolved' && winnerName && (
-                            <span className="text-xs font-bold text-green-700 dark:text-green-400">🏆 {winnerName}</span>
-                          )}
-                          {bet.status === 'open' && (
-                            <button
-                              onClick={() => cancelSideBet(bet.id)}
-                              className="text-xs text-red-500 font-semibold"
-                            >
-                              ✕
-                            </button>
-                          )}
-                        </div>
-                        {bet.status === 'open' && (
-                          <div className="mt-2 flex flex-wrap gap-1.5">
-                            <span className="text-xs text-gray-500 dark:text-gray-400 self-center">Winner:</span>
-                            {bet.participants.map(pid => {
-                              const pName = players.find(p => p.id === pid)?.name ?? '?'
-                              return (
-                                <button
-                                  key={pid}
-                                  onClick={() => resolveSideBet(bet.id, pid)}
-                                  className="px-2.5 py-1 rounded-lg text-xs font-semibold bg-green-100 dark:bg-green-800 text-green-700 dark:text-green-300 active:bg-green-200"
-                                >
-                                  {pName}
-                                </button>
-                              )
-                            })}
-                          </div>
-                        )}
-                      </div>
-                    )
-                  })}
-                </div>
-              )}
-
-              {/* New Side Bet Form */}
-              {showSideBetForm && (
-                <div className="space-y-2 bg-white dark:bg-gray-800 rounded-lg p-3">
-                  <input
-                    type="text"
-                    placeholder="e.g. CTP on #7, longest drive..."
-                    value={sideBetDesc}
-                    onChange={e => setSideBetDesc(e.target.value)}
-                    className="w-full text-sm border border-gray-200 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 rounded-lg px-3 py-2"
-                  />
-                  <div className="flex items-center gap-2">
-                    <span className="text-sm text-gray-600 dark:text-gray-400">$</span>
-                    <input
-                      type="number"
-                      value={sideBetAmount}
-                      onChange={e => setSideBetAmount(e.target.value)}
-                      min="1"
-                      step="1"
-                      className="w-20 text-sm border border-gray-200 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 rounded-lg px-3 py-2"
-                    />
-                    <span className="text-xs text-gray-500 dark:text-gray-400">per loser</span>
-                  </div>
-                  <p className="text-xs text-gray-500 dark:text-gray-400 font-medium">Participants:</p>
-                  <div className="flex flex-wrap gap-1.5">
-                    {players.map(p => {
-                      const active = sideBetParticipants.includes(p.id)
-                      return (
-                        <button
-                          key={p.id}
-                          onClick={() => setSideBetParticipants(prev => active ? prev.filter(id => id !== p.id) : [...prev, p.id])}
-                          className={`px-2.5 py-1 rounded-lg text-xs font-semibold transition-colors ${
-                            active ? 'bg-amber-500 text-white' : 'bg-white dark:bg-gray-700 border border-amber-200 dark:border-amber-600 text-amber-700 dark:text-amber-300'
-                          }`}
-                        >
-                          {p.name}
-                        </button>
-                      )
-                    })}
-                  </div>
-                  <button
-                    onClick={createSideBet}
-                    disabled={!sideBetDesc.trim() || sideBetParticipants.length < 2}
-                    className="w-full py-2 rounded-lg text-sm font-semibold bg-amber-500 text-white active:bg-amber-600 disabled:opacity-40"
-                  >
-                    Create Bet ({sideBetParticipants.length < 2 ? 'need 2+ players' : `$${sideBetAmount} each`})
-                  </button>
-                </div>
-              )}
-
-              {/* Add Side Bet button at bottom */}
-              {!showSideBetForm && (
-                <button
-                  onClick={() => setShowSideBetForm(true)}
-                  className="w-full text-xs font-semibold px-2.5 py-2 rounded-lg bg-amber-500 text-white active:bg-amber-600"
-                >
-                  + Add Side Bet
-                </button>
-              )}
-            </div>
-          )
-        })()}
+        {/* Hole Bets panel (junks + side bets) */}
+        {showGameStatus && !readOnly && (
+          <HoleBetsPanel
+            currentHole={currentHole}
+            players={players}
+            junkConfig={junkConfig}
+            junkRecords={junkRecords}
+            sideBets={sideBets}
+            showSideBetForm={showSideBetForm}
+            setShowSideBetForm={setShowSideBetForm}
+            sideBetDesc={sideBetDesc}
+            setSideBetDesc={setSideBetDesc}
+            sideBetAmount={sideBetAmount}
+            setSideBetAmount={setSideBetAmount}
+            sideBetParticipants={sideBetParticipants}
+            setSideBetParticipants={setSideBetParticipants}
+            toggleJunk={toggleJunk}
+            createSideBet={createSideBet}
+            resolveSideBet={resolveSideBet}
+            cancelSideBet={cancelSideBet}
+          />
+        )}
 
         {/* Event Approval Panel */}
         {isEventRound && canApproveScores && pendingScores.length > 0 && (

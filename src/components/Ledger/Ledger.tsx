@@ -1,5 +1,6 @@
 import { useEffect, useState, useMemo } from 'react'
 import { supabase, rowToSettlementRecord, rowToRound } from '../../lib/supabase'
+import { safeWrite } from '../../lib/safeWrite'
 import { PaymentButtons } from '../PaymentButtons'
 import { ConfirmModal } from '../ConfirmModal'
 import { fmtMoney } from '../../lib/gameLogic'
@@ -178,7 +179,7 @@ export function Ledger({ userId, onBack }: Props) {
     }
 
     if (settlementIds.length > 0) {
-      await supabase.from('settlements').update({ status: 'paid', paid_at: new Date().toISOString() }).in('id', settlementIds)
+      await safeWrite(supabase.from('settlements').update({ status: 'paid', paid_at: new Date().toISOString() }).in('id', settlementIds), 'mark settlements paid')
     }
 
     await loadLedger()
