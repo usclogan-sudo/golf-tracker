@@ -36,9 +36,10 @@ const EventSetup = lazy(() => import('./components/EventSetup/EventSetup').then(
 const EventLeaderboard = lazy(() => import('./components/EventLeaderboard/EventLeaderboard').then(m => ({ default: m.EventLeaderboard })))
 const Ledger = lazy(() => import('./components/Ledger/Ledger').then(m => ({ default: m.Ledger })))
 const LiveLeaderboard = lazy(() => import('./components/LiveLeaderboard/LiveLeaderboard').then(m => ({ default: m.LiveLeaderboard })))
+const PropBetsScreen = lazy(() => import('./components/PropBets/PropBetsScreen').then(m => ({ default: m.PropBetsScreen })))
 import type { AppNotification, Course, Round, HoleScore, UserProfile, GameType, StakesMode } from './types'
 
-type Screen = 'home' | 'course-catalog' | 'course-setup' | 'new-round' | 'scorecard' | 'settle-up' | 'round-history' | 'stats' | 'settings' | 'onboarding' | 'admin' | 'upgrade-account' | 'player-directory' | 'handicap-detail' | 'join-round' | 'tournament-list' | 'tournament-setup' | 'tournament-detail' | 'personal-dashboard' | 'event-setup' | 'event-leaderboard' | 'ledger' | 'spectate'
+type Screen = 'home' | 'course-catalog' | 'course-setup' | 'new-round' | 'scorecard' | 'settle-up' | 'round-history' | 'stats' | 'settings' | 'onboarding' | 'admin' | 'upgrade-account' | 'player-directory' | 'handicap-detail' | 'join-round' | 'tournament-list' | 'tournament-setup' | 'tournament-detail' | 'personal-dashboard' | 'event-setup' | 'event-leaderboard' | 'ledger' | 'spectate' | 'prop-bets'
 
 const GAME_EMOJI: Record<GameType, string> = {
   skins: '🎰 Skins',
@@ -464,16 +465,22 @@ function Home({
                     </div>
                   </div>
                 </button>
-                {onEndRound && (
-                  <div className="bg-amber-100 px-5 py-2 flex justify-end">
+                <div className="bg-amber-100 px-5 py-2 flex justify-between">
+                  <button
+                    onClick={(e) => { e.stopPropagation(); setActiveRoundId(round.id); setScreen('prop-bets') }}
+                    className="text-purple-600 text-sm font-semibold hover:text-purple-800 transition-colors"
+                  >
+                    Props
+                  </button>
+                  {onEndRound && (
                     <button
                       onClick={(e) => { e.stopPropagation(); onEndRound(round.id) }}
                       className="text-red-600 text-sm font-semibold hover:text-red-800 transition-colors"
                     >
                       End Round
                     </button>
-                  </div>
-                )}
+                  )}
+                </div>
               </div>
             ))}
           </section>
@@ -1053,6 +1060,15 @@ export default function App() {
       />
     ) : screen === 'ledger' ? (
       <Ledger userId={userId} onBack={goHome} />
+    ) : screen === 'prop-bets' && activeRoundId ? (
+      <PropBetsScreen
+        roundId={activeRoundId}
+        userId={userId}
+        onBack={() => {
+          if (activeRoundId) setScreen('scorecard')
+          else goHome()
+        }}
+      />
     ) : null
 
   if (screenContent) {

@@ -2,10 +2,10 @@ import { useEffect, useMemo, useState, useCallback, useRef } from 'react'
 import { v4 as uuidv4 } from 'uuid'
 import { useOnlineStatus } from '../../hooks/useOnlineStatus'
 import { enqueue, flush, getPending } from '../../lib/offlineQueue'
-import { supabase, rowToRound, rowToRoundPlayer, rowToHoleScore, rowToBuyIn, rowToBBBPoint, rowToJunkRecord, rowToSideBet, rowToRoundParticipant, rowToEvent, rowToEventParticipant, rowToUserProfile, holeScoreToRow, bbbPointToRow, junkRecordToRow, sideBetToRow, generateInviteCode } from '../../lib/supabase'
+import { supabase, rowToRound, rowToRoundPlayer, rowToHoleScore, rowToBuyIn, rowToBBBPoint, rowToJunkRecord, rowToSideBet, rowToRoundParticipant, rowToEvent, rowToEventParticipant, rowToUserProfile, holeScoreToRow, bbbPointToRow, junkRecordToRow, sideBetToRow, rowToPropBet, propBetToRow, rowToPropWager, propWagerToRow, generateInviteCode } from '../../lib/supabase'
 import { safeWrite } from '../../lib/safeWrite'
 import { computeScorecardPermissions } from '../../lib/permissions'
-import { applyHoleScorePayload, applyBBBPointPayload, applyJunkRecordPayload, applySideBetPayload, applyRoundParticipantPayload, applyBuyInPayload } from '../../lib/realtimeReducers'
+import { applyHoleScorePayload, applyBBBPointPayload, applyJunkRecordPayload, applySideBetPayload, applyRoundParticipantPayload, applyBuyInPayload, applyPropBetPayload, applyPropWagerPayload } from '../../lib/realtimeReducers'
 import { getCelebration, CelebrationToast, CelebrationFullscreen } from '../Celebrations'
 import { Tooltip } from '../ui/Tooltip'
 import { ConfirmModal } from '../ConfirmModal'
@@ -14,6 +14,7 @@ import { NumberPad } from './NumberPad'
 import { BuyInBanner } from './BuyInBanner'
 import { LeaderboardTab } from './LeaderboardTab'
 import { HoleBetsPanel } from './HoleBetsPanel'
+import { PropBetsPanel } from './PropBetsPanel'
 import {
   buildCourseHandicaps,
   calculateSkins,
@@ -56,6 +57,8 @@ import type {
   ScoreStatus,
   UserProfile,
   Player,
+  PropBet,
+  PropWager,
 } from '../../types'
 import { ShareCard, useShareImage } from '../ShareCard'
 import type { ShareCardLeaderboardEntry } from '../ShareCard'
@@ -161,6 +164,8 @@ export function Scorecard({ userId, roundId, onEndRound, onHome, readOnly: readO
   const [bbbPoints, setBbbPoints] = useState<BBBPoint[]>([])
   const [junkRecords, setJunkRecords] = useState<JunkRecord[]>([])
   const [sideBets, setSideBets] = useState<SideBet[]>([])
+  const [propBets, setPropBets] = useState<PropBet[]>([])
+  const [propWagers, setPropWagers] = useState<PropWager[]>([])
   const [roundParticipants, setRoundParticipants] = useState<RoundParticipant[]>([])
   const [loading, setLoading] = useState(true)
   const [loadError, setLoadError] = useState(false)
@@ -226,7 +231,9 @@ export function Scorecard({ userId, roundId, onEndRound, onHome, readOnly: readO
       supabase.from('side_bets').select('*').eq('round_id', roundId),
       supabase.from('round_participants').select('*').eq('round_id', roundId),
       supabase.from('buy_ins').select('*').eq('round_id', roundId),
-    ]).then(([roundRes, rpRes, hsRes, bbbRes, junkRes, sbRes, partRes, biRes]) => {
+      supabase.from('prop_bets').select('*').eq('round_id', roundId),
+      supabase.from('prop_wagers').select('*').eq('round_id', roundId),
+    ]).then(([roundRes, rpRes, hsRes, bbbRes, junkRes, sbRes, partRes, biRes, pbRes, pwRes]) => {
       if (roundRes.error || !roundRes.data) {
         setLoadError(true)
         setLoading(false)
@@ -240,6 +247,8 @@ export function Scorecard({ userId, roundId, onEndRound, onHome, readOnly: readO
       if (sbRes.data) setSideBets(sbRes.data.map(rowToSideBet))
       if (partRes.data) setRoundParticipants(partRes.data.map(rowToRoundParticipant))
       if (biRes.data) setBuyIns(biRes.data.map(rowToBuyIn))
+      if (pbRes?.data) setPropBets(pbRes.data.map(rowToPropBet))
+      if (pwRes?.data) setPropWagers(pwRes.data.map(rowToPropWager))
       setLoading(false)
     }).catch(() => {
       setLoadError(true)
@@ -327,6 +336,12 @@ export function Scorecard({ userId, roundId, onEndRound, onHome, readOnly: readO
       })
       .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'buy_ins', filter: `round_id=eq.${roundId}` }, (payload) => {
         setBuyIns(prev => applyBuyInPayload(prev, payload as any))
+      })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'prop_bets', filter: `round_id=eq.${roundId}` }, (payload) => {
+        setPropBets(prev => applyPropBetPayload(prev, payload as any))
+      })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'prop_wagers', filter: `round_id=eq.${roundId}` }, (payload) => {
+        setPropWagers(prev => applyPropWagerPayload(prev, payload as any))
       })
       .subscribe()
 
@@ -694,6 +709,124 @@ export function Scorecard({ userId, roundId, onEndRound, onHome, readOnly: readO
   const cancelSideBet = async (betId: string) => {
     setSideBets(prev => prev.map(sb => sb.id === betId ? { ...sb, status: 'cancelled' as const } : sb))
     safeWrite(supabase.from('side_bets').update({ status: 'cancelled' }).eq('id', betId), 'cancel side bet')
+  }
+
+  // Prop bet handlers
+  const myPlayerId = roundParticipants.find(rp => rp.userId === userId)?.playerId
+
+  const createPropBet = async (title: string, stakeCents: number, targetPlayerId?: string) => {
+    if (!myPlayerId || !title.trim() || stakeCents <= 0) return
+    const propId = uuidv4()
+    const wagerId = uuidv4()
+    const newProp: PropBet = {
+      id: propId,
+      roundId,
+      creatorId: myPlayerId,
+      userId,
+      title: title.trim(),
+      category: 'quick',
+      wagerModel: 'challenge',
+      stakeCents,
+      outcomes: [{ id: 'y', label: 'Yes' }, { id: 'n', label: 'No' }],
+      resolveType: 'manual',
+      targetPlayerId,
+      status: 'open',
+      createdAt: new Date(),
+      holeNumber: currentHole,
+    }
+    const creatorWager: PropWager = {
+      id: wagerId,
+      propBetId: propId,
+      roundId,
+      playerId: myPlayerId,
+      userId,
+      outcomeId: 'y',
+      amountCents: stakeCents,
+      createdAt: new Date(),
+    }
+    // Optimistic update
+    setPropBets(prev => [...prev, newProp])
+    setPropWagers(prev => [...prev, creatorWager])
+    // Write prop first, then wager (wager has FK on prop)
+    const { error: propErr } = await supabase.from('prop_bets').insert(propBetToRow(newProp, userId))
+    if (propErr) {
+      console.error('Failed to create prop:', propErr)
+      setPropBets(prev => prev.filter(p => p.id !== propId))
+      setPropWagers(prev => prev.filter(w => w.id !== wagerId))
+      return
+    }
+    const { error: wagerErr } = await supabase.from('prop_wagers').insert(propWagerToRow(creatorWager, userId))
+    if (wagerErr) {
+      console.error('Failed to create creator wager:', wagerErr)
+      // Prop exists but wager failed — still functional, wager can be re-created
+    }
+  }
+
+  const acceptPropBet = async (propId: string, outcomeId: string): Promise<boolean> => {
+    if (!myPlayerId) return false
+    const prop = propBets.find(p => p.id === propId)
+    if (!prop || prop.status !== 'open') return false
+    // Prevent duplicate accept
+    if (propWagers.some(w => w.propBetId === propId && w.playerId === myPlayerId)) return false
+    // Prevent self-accept on challenge
+    if (prop.wagerModel === 'challenge' && prop.creatorId === myPlayerId) return false
+
+    const wager: PropWager = {
+      id: uuidv4(),
+      propBetId: propId,
+      roundId,
+      playerId: myPlayerId,
+      userId,
+      outcomeId,
+      amountCents: prop.stakeCents,
+      createdAt: new Date(),
+    }
+    setPropWagers(prev => [...prev, wager])
+    const { error } = await supabase.from('prop_wagers').insert(propWagerToRow(wager, userId))
+    if (error) {
+      console.error('Failed to accept prop:', error)
+      setPropWagers(prev => prev.filter(w => w.id !== wager.id))
+      return false
+    }
+    return true
+  }
+
+  const resolvePropBet = async (propId: string, outcomeId: string): Promise<boolean> => {
+    const prop = propBets.find(p => p.id === propId)
+    if (!prop || prop.status !== 'open') return false
+    if (prop.creatorId !== myPlayerId) return false // only creator can resolve
+
+    const prev = prop.status
+    setPropBets(ps => ps.map(pb => pb.id === propId ? { ...pb, status: 'resolved' as const, winningOutcomeId: outcomeId, resolvedAt: new Date() } : pb))
+    // Conditional update: only resolve if still open (race-safe)
+    const { error, count } = await supabase.from('prop_bets')
+      .update({ status: 'resolved', winning_outcome_id: outcomeId, resolved_at: new Date().toISOString() })
+      .eq('id', propId)
+      .eq('status', 'open') // guard: only if still open
+    if (error || count === 0) {
+      console.error('Failed to resolve prop:', error)
+      setPropBets(ps => ps.map(pb => pb.id === propId ? { ...pb, status: prev } : pb))
+      return false
+    }
+    return true
+  }
+
+  const cancelPropBet = async (propId: string): Promise<boolean> => {
+    const prop = propBets.find(p => p.id === propId)
+    if (!prop || prop.status !== 'open') return false
+    if (prop.creatorId !== myPlayerId) return false
+
+    setPropBets(ps => ps.map(pb => pb.id === propId ? { ...pb, status: 'voided' as const } : pb))
+    const { error, count } = await supabase.from('prop_bets')
+      .update({ status: 'voided' })
+      .eq('id', propId)
+      .eq('status', 'open')
+    if (error || count === 0) {
+      console.error('Failed to void prop:', error)
+      setPropBets(ps => ps.map(pb => pb.id === propId ? { ...pb, status: 'open' as const } : pb))
+      return false
+    }
+    return true
   }
 
   const saveHandicapEdit = async () => {
@@ -2066,6 +2199,21 @@ export function Scorecard({ userId, roundId, onEndRound, onHome, readOnly: readO
             createSideBet={createSideBet}
             resolveSideBet={resolveSideBet}
             cancelSideBet={cancelSideBet}
+          />
+        )}
+
+        {/* Props panel */}
+        {showGameStatus && !readOnly && (
+          <PropBetsPanel
+            currentHole={currentHole}
+            players={players}
+            propBets={propBets}
+            propWagers={propWagers}
+            currentPlayerId={myPlayerId}
+            onCreateProp={createPropBet}
+            onAcceptProp={acceptPropBet}
+            onResolveProp={resolvePropBet}
+            onCancelProp={cancelPropBet}
           />
         )}
 

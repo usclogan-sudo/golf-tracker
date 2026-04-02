@@ -1,5 +1,5 @@
-import type { HoleScore, BBBPoint, JunkRecord, SideBet, RoundParticipant, BuyIn } from '../types'
-import { rowToHoleScore, rowToBBBPoint, rowToJunkRecord, rowToSideBet, rowToRoundParticipant, rowToBuyIn } from './supabase'
+import type { HoleScore, BBBPoint, JunkRecord, SideBet, RoundParticipant, BuyIn, PropBet, PropWager } from '../types'
+import { rowToHoleScore, rowToBBBPoint, rowToJunkRecord, rowToSideBet, rowToRoundParticipant, rowToBuyIn, rowToPropBet, rowToPropWager } from './supabase'
 
 type RealtimePayload = {
   eventType: 'INSERT' | 'UPDATE' | 'DELETE'
@@ -114,6 +114,44 @@ export function applyBuyInPayload(
   if (payload.eventType === 'UPDATE') {
     const row = payload.new
     return prev.map(b => b.id === row.id ? rowToBuyIn(row) : b)
+  }
+  return prev
+}
+
+/**
+ * Apply a realtime payload to the prop_bets state.
+ */
+export function applyPropBetPayload(
+  prev: PropBet[],
+  payload: RealtimePayload,
+): PropBet[] {
+  const row = payload.new
+  if (payload.eventType === 'INSERT') {
+    if (prev.some(pb => pb.id === row.id)) return prev
+    return [...prev, rowToPropBet(row)]
+  } else if (payload.eventType === 'UPDATE') {
+    return prev.map(pb => pb.id === row.id ? rowToPropBet(row) : pb)
+  } else if (payload.eventType === 'DELETE') {
+    return prev.filter(pb => pb.id !== payload.old.id)
+  }
+  return prev
+}
+
+/**
+ * Apply a realtime payload to the prop_wagers state.
+ */
+export function applyPropWagerPayload(
+  prev: PropWager[],
+  payload: RealtimePayload,
+): PropWager[] {
+  const row = payload.new
+  if (payload.eventType === 'INSERT') {
+    if (prev.some(pw => pw.id === row.id)) return prev
+    return [...prev, rowToPropWager(row)]
+  } else if (payload.eventType === 'UPDATE') {
+    return prev.map(pw => pw.id === row.id ? rowToPropWager(row) : pw)
+  } else if (payload.eventType === 'DELETE') {
+    return prev.filter(pw => pw.id !== payload.old.id)
   }
   return prev
 }

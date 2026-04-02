@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState, useCallback, useRef } from 'react'
 import { v4 as uuidv4 } from 'uuid'
-import { supabase, rowToRound, rowToRoundPlayer, rowToHoleScore, rowToBuyIn, rowToBBBPoint, rowToJunkRecord, rowToSideBet, rowToSettlementRecord, settlementRecordToRow, rowToUserProfile, rowToEvent, notificationToRow } from '../../lib/supabase'
+import { supabase, rowToRound, rowToRoundPlayer, rowToHoleScore, rowToBuyIn, rowToBBBPoint, rowToJunkRecord, rowToSideBet, rowToPropBet, rowToPropWager, rowToSettlementRecord, settlementRecordToRow, rowToUserProfile, rowToEvent, notificationToRow } from '../../lib/supabase'
 import type { AppNotification } from '../../types'
 import { PaymentButtons, getPreferredPayment } from '../PaymentButtons'
 import { Tooltip } from '../ui/Tooltip'
@@ -32,11 +32,13 @@ import {
   calculateQuotaPayouts,
   calculateJunks,
   calculateSideBetSettlements,
+  calculatePropSettlements,
+  autoResolveProps,
   buildUnifiedSettlements,
   JUNK_LABELS,
   fmtAmount,
 } from '../../lib/gameLogic'
-import type { PlayerPayout, JunkResult, SideBetSettlement, HammerResult } from '../../lib/gameLogic'
+import type { PlayerPayout, JunkResult, SideBetSettlement, PropSettlement, HammerResult } from '../../lib/gameLogic'
 import type {
   Round,
   RoundPlayer,
@@ -57,6 +59,8 @@ import type {
   QuotaConfig,
   GameType,
   SideBet,
+  PropBet,
+  PropWager,
   SettlementRecord,
   UserProfile,
   GolfEvent,
@@ -168,6 +172,8 @@ export function SettleUp({ roundId, userId, eventId, onDone, onContinue }: Props
   const [bbbPoints, setBbbPoints] = useState<BBBPoint[]>([])
   const [junkRecords, setJunkRecords] = useState<JunkRecord[]>([])
   const [sideBets, setSideBets] = useState<SideBet[]>([])
+  const [propBets, setPropBets] = useState<PropBet[]>([])
+  const [propWagers, setPropWagers] = useState<PropWager[]>([])
   const [settlementRecords, setSettlementRecords] = useState<SettlementRecord[]>([])
   const [profileMap, setProfileMap] = useState<Map<string, UserProfile>>(new Map())
   const [participantMap, setParticipantMap] = useState<Map<string, string>>(new Map()) // playerId → userId
@@ -203,7 +209,9 @@ export function SettleUp({ roundId, userId, eventId, onDone, onContinue }: Props
       supabase.from('side_bets').select('*').eq('round_id', roundId),
       supabase.from('settlements').select('*').eq('round_id', roundId),
       supabase.from('round_participants').select('*').eq('round_id', roundId),
-    ]).then(([roundRes, rpRes, hsRes, biRes, bbbRes, junkRes, sbRes, settlRes, partRes]) => {
+      supabase.from('prop_bets').select('*').eq('round_id', roundId),
+      supabase.from('prop_wagers').select('*').eq('round_id', roundId),
+    ]).then(([roundRes, rpRes, hsRes, biRes, bbbRes, junkRes, sbRes, settlRes, partRes, pbRes, pwRes]) => {
       if (roundRes.error || !roundRes.data) {
         setLoadError(true)
         setLoading(false)
@@ -216,6 +224,8 @@ export function SettleUp({ roundId, userId, eventId, onDone, onContinue }: Props
       if (bbbRes.data) setBbbPoints(bbbRes.data.map(rowToBBBPoint))
       if (junkRes.data) setJunkRecords(junkRes.data.map(rowToJunkRecord))
       if (sbRes.data) setSideBets(sbRes.data.map(rowToSideBet))
+      if (pbRes?.data) setPropBets(pbRes.data.map(rowToPropBet))
+      if (pwRes?.data) setPropWagers(pwRes.data.map(rowToPropWager))
       if (settlRes.data) setSettlementRecords(settlRes.data.map(rowToSettlementRecord))
 
       // Build participant map: playerId → userId
@@ -348,6 +358,16 @@ export function SettleUp({ roundId, userId, eventId, onDone, onContinue }: Props
     return calculateSideBetSettlements(sideBets)
   }, [sideBets])
 
+  // Auto-resolve props that can be resolved from scores
+  const resolvedPropBets = useMemo((): PropBet[] => {
+    if (!snapshot || propBets.length === 0) return propBets
+    return autoResolveProps(propBets, holeScores, snapshot, courseHcps)
+  }, [propBets, holeScores, snapshot, courseHcps])
+
+  const propSettlements = useMemo((): PropSettlement[] => {
+    return calculatePropSettlements(resolvedPropBets, propWagers)
+  }, [resolvedPropBets, propWagers])
+
   const payouts = useMemo((): PlayerPayout[] => {
     if (!game || !snapshot) return []
     if (game.type === 'skins' && skinsResult) {
@@ -394,11 +414,23 @@ export function SettleUp({ roundId, userId, eventId, onDone, onContinue }: Props
     // If DB already has settlements for this round, use those
     if (settlementRecords.length > 0) return
 
-    // No payouts and no junk and no side bets → nothing to settle
-    if (payouts.length === 0 && !junkResult && sideBetSettlements.length === 0) return
+    // No payouts and no junk and no side bets and no props → nothing to settle
+    if (payouts.length === 0 && !junkResult && sideBetSettlements.length === 0 && propSettlements.length === 0) return
+
+    // Write back auto-resolved prop statuses to Supabase (conditional: only if still open/locked)
+    for (const pb of resolvedPropBets) {
+      const original = propBets.find(o => o.id === pb.id)
+      if (original && original.status !== pb.status && (pb.status === 'resolved' || pb.status === 'voided')) {
+        safeWrite(supabase.from('prop_bets').update({
+          status: pb.status,
+          winning_outcome_id: pb.winningOutcomeId ?? null,
+          resolved_at: pb.resolvedAt ? pb.resolvedAt.toISOString() : null,
+        }).eq('id', pb.id).in('status', ['open', 'locked']), 'auto-resolve prop')
+      }
+    }
 
     setCalculatingSettlements(true)
-    const unified = buildUnifiedSettlements(payouts, treasurerId, junkResult, sideBetSettlements)
+    const unified = buildUnifiedSettlements(payouts, treasurerId, junkResult, sideBetSettlements, propSettlements)
     if (unified.length === 0) { setCalculatingSettlements(false); return }
 
     const records: SettlementRecord[] = unified.map(s => ({
@@ -443,7 +475,7 @@ export function SettleUp({ roundId, userId, eventId, onDone, onContinue }: Props
     }
 
     setCalculatingSettlements(false)
-  }, [treasurerId, userId, settlementsInitialized, settlementRecords.length, payouts, junkResult, sideBetSettlements, roundId, participantMap, players])
+  }, [treasurerId, userId, settlementsInitialized, settlementRecords.length, payouts, junkResult, sideBetSettlements, propSettlements, resolvedPropBets, propBets, roundId, participantMap, players])
 
   useEffect(() => {
     if (!loading && round && game && snapshot) {
@@ -1332,9 +1364,9 @@ export function SettleUp({ roundId, userId, eventId, onDone, onContinue }: Props
                       <div className="flex items-center gap-2 mt-0.5">
                         {s.reason && <p className="text-xs text-gray-500 truncate">{s.reason}</p>}
                         <span className={`text-xs font-semibold px-1.5 py-0.5 rounded flex-shrink-0 ${
-                          s.source === 'side_bet' ? 'bg-amber-100 text-amber-700' : s.source === 'junk' ? 'bg-indigo-100 text-indigo-700' : 'bg-blue-100 text-blue-700'
+                          s.source === 'prop' ? 'bg-purple-100 text-purple-700' : s.source === 'side_bet' ? 'bg-amber-100 text-amber-700' : s.source === 'junk' ? 'bg-indigo-100 text-indigo-700' : 'bg-blue-100 text-blue-700'
                         }`}>
-                          {s.source === 'side_bet' ? 'Side Bet' : s.source === 'junk' ? 'Junk' : 'Game'}
+                          {s.source === 'prop' ? 'Prop' : s.source === 'side_bet' ? 'Side Bet' : s.source === 'junk' ? 'Junk' : 'Game'}
                         </span>
                       </div>
                       {!isPaid && (() => {

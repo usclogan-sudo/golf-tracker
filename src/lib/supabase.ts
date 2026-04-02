@@ -1,5 +1,5 @@
 import { createClient } from '@supabase/supabase-js'
-import type { Course, Player, Round, RoundPlayer, HoleScore, BuyIn, BBBPoint, JunkRecord, JunkType, UserProfile, GamePreset, GameType, StakesMode, PinnedFriend, RoundParticipant, SettlementRecord, SettlementStatus, AppNotification, NotificationType, SideBet, SideBetStatus, Tournament, TournamentFormat, TournamentStatus, TournamentRound, TournamentMatchup, MatchupStatus, GolfEvent, EventStatus, EventParticipant, EventRole, ScoreStatus } from '../types'
+import type { Course, Player, Round, RoundPlayer, HoleScore, BuyIn, BBBPoint, JunkRecord, JunkType, UserProfile, GamePreset, GameType, StakesMode, PinnedFriend, RoundParticipant, SettlementRecord, SettlementStatus, AppNotification, NotificationType, SideBet, SideBetStatus, Tournament, TournamentFormat, TournamentStatus, TournamentRound, TournamentMatchup, MatchupStatus, GolfEvent, EventStatus, EventParticipant, EventRole, ScoreStatus, PropBet, PropCategory, PropWagerModel, PropStatus, PropResolveType, PropWager } from '../types'
 
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL
 const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY
@@ -333,7 +333,7 @@ export function rowToSettlementRecord(row: any): SettlementRecord {
     toPlayerId: row.to_player_id,
     amountCents: row.amount_cents,
     reason: row.reason ?? undefined,
-    source: row.source as 'game' | 'junk' | 'side_bet',
+    source: row.source as 'game' | 'junk' | 'side_bet' | 'prop',
     status: row.status as SettlementStatus,
     paidAt: row.paid_at ? new Date(row.paid_at) : undefined,
   }
@@ -457,6 +457,80 @@ export function sideBetToRow(sb: SideBet, userId: string) {
     participants: sb.participants,
     winner_player_id: sb.winnerPlayerId ?? null,
     status: sb.status,
+  }
+}
+
+// ─── Prop Bet mappers ──────────────────────────────────────────────────────
+
+export function rowToPropBet(row: any): PropBet {
+  return {
+    id: row.id,
+    roundId: row.round_id,
+    creatorId: row.creator_id,
+    userId: row.user_id,
+    title: row.title,
+    description: row.description ?? undefined,
+    category: row.category as PropCategory,
+    wagerModel: row.wager_model as PropWagerModel,
+    stakeCents: row.stake_cents,
+    outcomes: row.outcomes ?? [],
+    resolveType: row.resolve_type as PropResolveType,
+    autoResolveConfig: row.auto_resolve_config ?? undefined,
+    targetPlayerId: row.target_player_id ?? undefined,
+    status: row.status as PropStatus,
+    winningOutcomeId: row.winning_outcome_id ?? undefined,
+    locksAt: row.locks_at ? new Date(row.locks_at) : undefined,
+    resolvedAt: row.resolved_at ? new Date(row.resolved_at) : undefined,
+    createdAt: new Date(row.created_at),
+    holeNumber: row.hole_number ?? undefined,
+  }
+}
+
+export function propBetToRow(pb: PropBet, userId: string) {
+  return {
+    id: pb.id,
+    user_id: userId,
+    round_id: pb.roundId,
+    creator_id: pb.creatorId,
+    title: pb.title,
+    description: pb.description ?? null,
+    category: pb.category,
+    wager_model: pb.wagerModel,
+    stake_cents: pb.stakeCents,
+    outcomes: pb.outcomes,
+    resolve_type: pb.resolveType,
+    auto_resolve_config: pb.autoResolveConfig ?? null,
+    target_player_id: pb.targetPlayerId ?? null,
+    status: pb.status,
+    winning_outcome_id: pb.winningOutcomeId ?? null,
+    locks_at: pb.locksAt instanceof Date ? pb.locksAt.toISOString() : (pb.locksAt ?? null),
+    resolved_at: pb.resolvedAt instanceof Date ? pb.resolvedAt.toISOString() : (pb.resolvedAt ?? null),
+    hole_number: pb.holeNumber ?? null,
+  }
+}
+
+export function rowToPropWager(row: any): PropWager {
+  return {
+    id: row.id,
+    propBetId: row.prop_bet_id,
+    roundId: row.round_id,
+    playerId: row.player_id,
+    userId: row.user_id,
+    outcomeId: row.outcome_id,
+    amountCents: row.amount_cents,
+    createdAt: new Date(row.created_at),
+  }
+}
+
+export function propWagerToRow(pw: PropWager, userId: string) {
+  return {
+    id: pw.id,
+    user_id: userId,
+    prop_bet_id: pw.propBetId,
+    round_id: pw.roundId,
+    player_id: pw.playerId,
+    outcome_id: pw.outcomeId,
+    amount_cents: pw.amountCents,
   }
 }
 

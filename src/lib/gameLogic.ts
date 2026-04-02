@@ -22,6 +22,8 @@ import type {
   DotType,
   BankerConfig,
   QuotaConfig,
+  PropBet,
+  PropWager,
 } from '../types'
 
 // ─── Handicap math ────────────────────────────────────────────────────────────
@@ -1406,7 +1408,7 @@ export interface UnifiedSettlement {
   toId: string
   amountCents: number
   reason: string
-  source: 'game' | 'junk' | 'side_bet'
+  source: 'game' | 'junk' | 'side_bet' | 'prop'
 }
 
 /**
@@ -1419,11 +1421,13 @@ export function buildUnifiedSettlements(
   treasurerId: string,
   junkResult: JunkResult | null,
   sideBetSettlements: SideBetSettlement[] = [],
+  propSettlements: PropSettlement[] = [],
 ): UnifiedSettlement[] {
+  type SourceType = 'game' | 'junk' | 'side_bet' | 'prop'
   // Accumulate net flows: key = "fromId→toId", value = { amountCents, reasons }
-  const flows: Record<string, { amountCents: number; reasons: { reason: string; source: 'game' | 'junk' | 'side_bet' }[] }> = {}
+  const flows: Record<string, { amountCents: number; reasons: { reason: string; source: SourceType }[] }> = {}
 
-  const addFlow = (fromId: string, toId: string, amountCents: number, reason: string, source: 'game' | 'junk' | 'side_bet') => {
+  const addFlow = (fromId: string, toId: string, amountCents: number, reason: string, source: SourceType) => {
     if (amountCents <= 0 || fromId === toId) return
     const key = `${fromId}→${toId}`
     if (!flows[key]) flows[key] = { amountCents: 0, reasons: [] }
@@ -1457,6 +1461,11 @@ export function buildUnifiedSettlements(
     addFlow(sbs.fromId, sbs.toId, sbs.amountCents, `Side bet: ${sbs.description}`, 'side_bet')
   }
 
+  // Prop settlements: direct player-to-player (like side bets)
+  for (const ps of propSettlements) {
+    addFlow(ps.fromId, ps.toId, ps.amountCents, `Prop: ${ps.description}`, 'prop')
+  }
+
   // Net out bidirectional flows between same pair
   const settlements: UnifiedSettlement[] = []
   const processed = new Set<string>()
@@ -1482,14 +1491,15 @@ export function buildUnifiedSettlements(
     const hasGame = reasons.some(r => r.source === 'game')
     const hasJunk = reasons.some(r => r.source === 'junk')
     const hasSideBet = reasons.some(r => r.source === 'side_bet')
-    const source: 'game' | 'junk' | 'side_bet' = hasGame ? 'game' : hasJunk ? 'junk' : 'side_bet'
+    const hasProp = reasons.some(r => r.source === 'prop')
+    const source: SourceType = hasGame ? 'game' : hasJunk ? 'junk' : hasSideBet ? 'side_bet' : 'prop'
 
     // Build a combined reason string
     let reason: string
-    const sourceCount = [hasGame, hasJunk, hasSideBet].filter(Boolean).length
+    const sourceCount = [hasGame, hasJunk, hasSideBet, hasProp].filter(Boolean).length
     if (sourceCount > 1) {
       const gameReasons = reasons.filter(r => r.source === 'game').map(r => r.reason).join(', ')
-      const parts = [gameReasons, hasJunk ? 'junk' : '', hasSideBet ? 'side bets' : ''].filter(Boolean)
+      const parts = [gameReasons, hasJunk ? 'junk' : '', hasSideBet ? 'side bets' : '', hasProp ? 'props' : ''].filter(Boolean)
       reason = `${parts.join(' + ')} (netted)`
     } else if (net !== forward && net !== -reverse) {
       // Partial netting happened
@@ -1538,6 +1548,245 @@ export function calculateSideBetSettlements(sideBets: SideBet[]): SideBetSettlem
     }
   }
   return settlements
+}
+
+// ─── Prop Bet Settlements ────────────────────────────────────────────────────
+
+export interface PropSettlement {
+  fromId: string
+  toId: string
+  amountCents: number
+  description: string
+}
+
+/**
+ * Calculate settlements from resolved prop bets.
+ *
+ * Challenge model: each acceptor wagered on the opposing outcome.
+ *   - If creator's outcome wins, each acceptor pays creator stakeCents.
+ *   - If creator loses, creator pays each acceptor stakeCents.
+ *
+ * Pool model: winners split losers' pool proportionally by wager size.
+ *   Each loser pays their wager; each winner gets proportional share.
+ *
+ * Fixed model: everyone in for stakeCents. Winner(s) split total pot.
+ */
+export function calculatePropSettlements(
+  propBets: PropBet[],
+  propWagers: PropWager[],
+): PropSettlement[] {
+  const settlements: PropSettlement[] = []
+
+  for (const prop of propBets) {
+    if (prop.status !== 'resolved' || !prop.winningOutcomeId) continue
+    const wagers = propWagers.filter(w => w.propBetId === prop.id)
+    if (wagers.length === 0) continue
+
+    if (prop.wagerModel === 'challenge') {
+      // Creator implicitly wagered on their outcome (first outcome).
+      // Acceptors wagered on the opposing outcome.
+      const winningId = prop.winningOutcomeId
+      const creatorOutcome = prop.outcomes[0]?.id
+      const creatorWon = winningId === creatorOutcome
+
+      // Find acceptors (wagers by non-creator)
+      const acceptorWagers = wagers.filter(w => w.playerId !== prop.creatorId)
+
+      for (const aw of acceptorWagers) {
+        // Guard: no self-settlements
+        if (aw.playerId === prop.creatorId) continue
+        if (creatorWon) {
+          settlements.push({
+            fromId: aw.playerId,
+            toId: prop.creatorId,
+            amountCents: prop.stakeCents,
+            description: prop.title,
+          })
+        } else {
+          settlements.push({
+            fromId: prop.creatorId,
+            toId: aw.playerId,
+            amountCents: prop.stakeCents,
+            description: prop.title,
+          })
+        }
+      }
+    } else if (prop.wagerModel === 'pool') {
+      const winningId = prop.winningOutcomeId
+      const winnerWagers = wagers.filter(w => w.outcomeId === winningId)
+      const loserWagers = wagers.filter(w => w.outcomeId !== winningId)
+
+      const totalWinnerPool = winnerWagers.reduce((s, w) => s + w.amountCents, 0)
+      const totalLoserPool = loserWagers.reduce((s, w) => s + w.amountCents, 0)
+
+      if (totalWinnerPool === 0 || totalLoserPool === 0) continue
+
+      // Each loser pays proportionally to each winner
+      for (const loser of loserWagers) {
+        for (const winner of winnerWagers) {
+          if (loser.playerId === winner.playerId) continue // no self-settlement
+          const winnerShare = winner.amountCents / totalWinnerPool
+          const amount = Math.round(loser.amountCents * winnerShare)
+          if (amount > 0) {
+            settlements.push({
+              fromId: loser.playerId,
+              toId: winner.playerId,
+              amountCents: amount,
+              description: prop.title,
+            })
+          }
+        }
+      }
+    } else if (prop.wagerModel === 'fixed') {
+      const winningId = prop.winningOutcomeId
+      const winners = wagers.filter(w => w.outcomeId === winningId)
+      const losers = wagers.filter(w => w.outcomeId !== winningId)
+
+      if (winners.length === 0) continue
+
+      // Each loser owes stakeCents split equally among winners
+      const perWinner = Math.round(prop.stakeCents / winners.length)
+      for (const loser of losers) {
+        for (const winner of winners) {
+          if (loser.playerId === winner.playerId) continue // no self-settlement
+          if (perWinner > 0) {
+            settlements.push({
+              fromId: loser.playerId,
+              toId: winner.playerId,
+              amountCents: perWinner,
+              description: prop.title,
+            })
+          }
+        }
+      }
+    }
+  }
+
+  return settlements
+}
+
+/**
+ * Auto-resolve props that have auto-resolve configs.
+ * Returns new PropBet array with resolved statuses where applicable.
+ * Only resolves if all relevant holes have been scored.
+ */
+export function autoResolveProps(
+  props: PropBet[],
+  holeScores: HoleScore[],
+  snapshot: CourseSnapshot,
+  courseHcps?: Record<string, number>,
+): PropBet[] {
+  return props.map(prop => {
+    if (prop.status !== 'open' && prop.status !== 'locked') return prop
+    if (prop.resolveType !== 'auto' || !prop.autoResolveConfig) return prop
+
+    const config = prop.autoResolveConfig
+    const holes = snapshot.holes
+
+    // Determine which holes to consider
+    let holeNumbers: number[]
+    if (config.holeRange === 'front') {
+      holeNumbers = holes.filter(h => h.number <= 9).map(h => h.number)
+    } else if (config.holeRange === 'back') {
+      holeNumbers = holes.filter(h => h.number > 9).map(h => h.number)
+    } else {
+      holeNumbers = holes.map(h => h.number)
+    }
+
+    if (config.type === 'over_under') {
+      if (!config.playerId || config.threshold == null) return prop
+      const playerScores = holeScores.filter(s => s.playerId === config.playerId && holeNumbers.includes(s.holeNumber))
+      if (playerScores.length < holeNumbers.length) return prop // not all holes scored
+
+      let total: number
+      if (config.metric === 'net' && courseHcps) {
+        total = playerScores.reduce((sum, s) => {
+          const hole = holes.find(h => h.number === s.holeNumber)
+          const strokes = hole ? strokesOnHole(courseHcps[config.playerId!] ?? 0, hole.strokeIndex) : 0
+          return sum + (s.grossScore - strokes)
+        }, 0)
+      } else {
+        total = playerScores.reduce((sum, s) => sum + s.grossScore, 0)
+      }
+
+      if (total > config.threshold) {
+        // Over wins — outcome 'over'
+        const overOutcome = prop.outcomes.find(o => o.id === 'over')
+        if (overOutcome) {
+          return { ...prop, status: 'resolved' as const, winningOutcomeId: 'over', resolvedAt: new Date() }
+        }
+      } else if (total < config.threshold) {
+        const underOutcome = prop.outcomes.find(o => o.id === 'under')
+        if (underOutcome) {
+          return { ...prop, status: 'resolved' as const, winningOutcomeId: 'under', resolvedAt: new Date() }
+        }
+      } else {
+        // Exact match = push → void
+        return { ...prop, status: 'voided' as const, resolvedAt: new Date() }
+      }
+    } else if (config.type === 'h2h') {
+      if (!config.playerId || !config.playerIdB) return prop
+      const scoresA = holeScores.filter(s => s.playerId === config.playerId && holeNumbers.includes(s.holeNumber))
+      const scoresB = holeScores.filter(s => s.playerId === config.playerIdB && holeNumbers.includes(s.holeNumber))
+      if (scoresA.length < holeNumbers.length || scoresB.length < holeNumbers.length) return prop
+
+      const scoreFor = (scores: HoleScore[], playerId: string) => {
+        if (config.metric === 'net' && courseHcps) {
+          return scores.reduce((sum, s) => {
+            const hole = holes.find(h => h.number === s.holeNumber)
+            const strokes = hole ? strokesOnHole(courseHcps[playerId] ?? 0, hole.strokeIndex) : 0
+            return sum + (s.grossScore - strokes)
+          }, 0)
+        }
+        return scores.reduce((sum, s) => sum + s.grossScore, 0)
+      }
+
+      const totalA = scoreFor(scoresA, config.playerId)
+      const totalB = scoreFor(scoresB, config.playerIdB)
+
+      if (totalA < totalB) {
+        return { ...prop, status: 'resolved' as const, winningOutcomeId: config.playerId, resolvedAt: new Date() }
+      } else if (totalB < totalA) {
+        return { ...prop, status: 'resolved' as const, winningOutcomeId: config.playerIdB, resolvedAt: new Date() }
+      } else {
+        return { ...prop, status: 'voided' as const, resolvedAt: new Date() }
+      }
+    } else if (config.type === 'birdie_count') {
+      if (!config.playerId || config.threshold == null) return prop
+      const playerScores = holeScores.filter(s => s.playerId === config.playerId && holeNumbers.includes(s.holeNumber))
+      if (playerScores.length < holeNumbers.length) return prop
+
+      const birdies = playerScores.filter(s => {
+        const hole = holes.find(h => h.number === s.holeNumber)
+        return hole && s.grossScore < hole.par
+      }).length
+
+      if (birdies > config.threshold) {
+        return { ...prop, status: 'resolved' as const, winningOutcomeId: 'over', resolvedAt: new Date() }
+      } else if (birdies < config.threshold) {
+        return { ...prop, status: 'resolved' as const, winningOutcomeId: 'under', resolvedAt: new Date() }
+      } else {
+        return { ...prop, status: 'voided' as const, resolvedAt: new Date() }
+      }
+    } else if (config.type === 'hole_score') {
+      if (!config.playerId || !config.holeNumber) return prop
+      const score = holeScores.find(s => s.playerId === config.playerId && s.holeNumber === config.holeNumber)
+      if (!score) return prop
+
+      const hole = holes.find(h => h.number === config.holeNumber)
+      if (!hole) return prop
+
+      const diff = score.grossScore - hole.par
+      // Winner is 'y' if the condition was met (birdie or better), 'n' otherwise
+      if (diff < 0) {
+        return { ...prop, status: 'resolved' as const, winningOutcomeId: 'y', resolvedAt: new Date() }
+      } else {
+        return { ...prop, status: 'resolved' as const, winningOutcomeId: 'n', resolvedAt: new Date() }
+      }
+    }
+
+    return prop
+  })
 }
 
 // ─── Formatting ───────────────────────────────────────────────────────────────

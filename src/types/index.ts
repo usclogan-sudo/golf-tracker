@@ -332,7 +332,7 @@ export interface SettlementRecord {
   toPlayerId: string
   amountCents: number
   reason?: string
-  source: 'game' | 'junk' | 'side_bet'
+  source: 'game' | 'junk' | 'side_bet' | 'prop'
   status: SettlementStatus
   paidAt?: Date
 }
@@ -366,6 +366,61 @@ export interface SideBet {
   participants: string[] // playerIds
   winnerPlayerId?: string
   status: SideBetStatus
+  createdAt: Date
+}
+
+// ─── Prop Bets ───────────────────────────────────────────────────────────────
+
+export type PropCategory = 'quick' | 'skill' | 'h2h'
+export type PropWagerModel = 'challenge' | 'pool' | 'fixed'
+export type PropStatus = 'open' | 'locked' | 'resolved' | 'voided'
+export type PropResolveType = 'auto' | 'manual'
+
+export interface PropOutcome {
+  id: string    // 'y'/'n' or player ID
+  label: string // 'Yes'/'No' or player name
+}
+
+export interface AutoResolveConfig {
+  type: 'over_under' | 'h2h' | 'birdie_count' | 'hole_score'
+  playerId?: string
+  playerIdB?: string   // for H2H
+  threshold?: number   // e.g. 82.5 for over/under
+  metric?: 'gross' | 'net'
+  holeNumber?: number
+  holeRange?: 'front' | 'back' | 'all'
+}
+
+export interface PropBet {
+  id: string
+  roundId: string | null
+  creatorId: string         // player ID
+  userId: string            // auth user (RLS)
+  title: string
+  description?: string
+  category: PropCategory
+  wagerModel: PropWagerModel
+  stakeCents: number        // for challenge/fixed
+  outcomes: PropOutcome[]
+  resolveType: PropResolveType
+  autoResolveConfig?: AutoResolveConfig
+  targetPlayerId?: string
+  status: PropStatus
+  winningOutcomeId?: string
+  locksAt?: Date
+  resolvedAt?: Date
+  createdAt: Date
+  holeNumber?: number
+}
+
+export interface PropWager {
+  id: string
+  propBetId: string
+  roundId: string
+  playerId: string
+  userId: string
+  outcomeId: string
+  amountCents: number
   createdAt: Date
 }
 
