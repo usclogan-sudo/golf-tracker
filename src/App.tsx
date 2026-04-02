@@ -184,6 +184,7 @@ function Home({
   const [unsettledCount, setUnsettledCount] = useState(0)
   const [fetchError, setFetchError] = useState<string | null>(null)
   const [showAnonBlock, setShowAnonBlock] = useState(false)
+  const [betaDismissed, setBetaDismissed] = useState(() => localStorage.getItem('foreskins_beta_dismissed') === '1')
 
   const guardAnon = (action: () => void) => {
     if (isAnonymous) { setShowAnonBlock(true); return }
@@ -362,6 +363,13 @@ function Home({
 
       <main className="px-4 pt-5 max-w-2xl mx-auto space-y-6">
         <InstallBanner />
+
+        {!betaDismissed && (
+          <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-2xl px-4 py-3 flex items-center justify-between">
+            <p className="text-blue-700 dark:text-blue-300 text-sm font-medium">Welcome to the Fore Skins beta! We're actively building and would love your feedback.</p>
+            <button onClick={() => { setBetaDismissed(true); localStorage.setItem('foreskins_beta_dismissed', '1') }} className="text-blue-400 text-lg leading-none ml-2">&times;</button>
+          </div>
+        )}
 
         {fetchError && (
           <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-2xl px-4 py-3 flex items-center justify-between">
@@ -582,6 +590,20 @@ function Home({
           </div>
         </div>
 
+        {/* Send Feedback */}
+        <a
+          href="mailto:usclogan@gmail.com?subject=Fore%20Skins%20Beta%20Feedback"
+          className="block w-full bg-white dark:bg-gray-800 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700 p-4 text-left active:bg-gray-50 dark:active:bg-gray-700 transition-colors"
+        >
+          <div className="flex items-center gap-3">
+            <span className="text-xl">✉️</span>
+            <div>
+              <p className="font-semibold text-gray-900 dark:text-gray-100 text-sm">Send Feedback</p>
+              <p className="text-xs text-gray-500 dark:text-gray-400">Help us improve the beta</p>
+            </div>
+          </div>
+        </a>
+
         {userProfile?.displayName && (
           <section>
             <h2 className="font-display font-semibold text-gray-800 dark:text-gray-100 text-base mb-3">Your Profile</h2>
@@ -634,7 +656,7 @@ function Home({
           )}
         </section>
 
-        <p className="text-center text-xs text-gray-400 pb-8">Fore Skins Golf · Data synced to cloud</p>
+        <p className="text-center text-xs text-gray-400 pb-8">Fore Skins Golf · Beta</p>
       </main>
 
       {showAnonBlock && (
