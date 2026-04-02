@@ -336,6 +336,8 @@ export function rowToSettlementRecord(row: any): SettlementRecord {
     source: row.source as 'game' | 'junk' | 'side_bet' | 'prop',
     status: row.status as SettlementStatus,
     paidAt: row.paid_at ? new Date(row.paid_at) : undefined,
+    playerReportedAt: row.player_reported_at ? new Date(row.player_reported_at) : undefined,
+    reportedMethod: row.reported_method ?? undefined,
   }
 }
 

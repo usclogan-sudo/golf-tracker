@@ -182,6 +182,7 @@ function Home({
   const [roundCount, setRoundCount] = useState(0)
   const [joinCode, setJoinCode] = useState('')
   const [unsettledCount, setUnsettledCount] = useState(0)
+  const [unsettledAmounts, setUnsettledAmounts] = useState<{ youOwe: number; owedToYou: number }>({ youOwe: 0, owedToYou: 0 })
   const [fetchError, setFetchError] = useState<string | null>(null)
   const [showAnonBlock, setShowAnonBlock] = useState(false)
   const [betaDismissed, setBetaDismissed] = useState(() => localStorage.getItem('foreskins_beta_dismissed') === '1')
@@ -225,11 +226,23 @@ function Home({
       setRoundCount(count ?? 0)
     })
 
-    // Unsettled rounds count (limit to prevent unbounded fetch)
-    supabase.from('settlements').select('round_id').eq('status', 'owed').limit(200).then(({ data }) => {
+    // Unsettled rounds count + total owed (limit to prevent unbounded fetch)
+    supabase.from('settlements').select('round_id,amount_cents,from_player_id,to_player_id').eq('status', 'owed').limit(200).then(async ({ data }) => {
       if (data) {
         const uniqueRounds = new Set(data.map((d: any) => d.round_id))
         setUnsettledCount(uniqueRounds.size)
+
+        // Calculate how much the current user owes vs is owed
+        const { data: partData } = await supabase.from('round_participants').select('player_id').eq('user_id', userId)
+        const myPlayerIds = new Set((partData ?? []).map((p: any) => p.player_id))
+        myPlayerIds.add(userId)
+        let youOwe = 0
+        let owedToYou = 0
+        for (const s of data) {
+          if (myPlayerIds.has(s.from_player_id)) youOwe += s.amount_cents
+          if (myPlayerIds.has(s.to_player_id)) owedToYou += s.amount_cents
+        }
+        setUnsettledAmounts({ youOwe, owedToYou })
       }
     })
 
@@ -404,13 +417,18 @@ function Home({
         )}
         {unsettledCount > 0 && (
           <button
-            onClick={onRoundHistory}
+            onClick={onLedger}
             className="w-full bg-amber-50 border border-amber-200 rounded-2xl px-4 py-3 text-left active:bg-amber-100 transition-colors"
           >
             <p className="text-amber-800 text-sm font-semibold">
-              💰 {unsettledCount} round{unsettledCount !== 1 ? 's' : ''} ha{unsettledCount !== 1 ? 've' : 's'} unsettled payouts
+              {unsettledAmounts.youOwe > 0
+                ? `You owe $${(unsettledAmounts.youOwe / 100).toFixed(2)} across ${unsettledCount} round${unsettledCount !== 1 ? 's' : ''}`
+                : unsettledAmounts.owedToYou > 0
+                ? `$${(unsettledAmounts.owedToYou / 100).toFixed(2)} owed to you across ${unsettledCount} round${unsettledCount !== 1 ? 's' : ''}`
+                : `${unsettledCount} round${unsettledCount !== 1 ? 's' : ''} ha${unsettledCount !== 1 ? 've' : 's'} unsettled payouts`
+              }
             </p>
-            <p className="text-amber-600 text-xs mt-0.5">Tap to view in Round History →</p>
+            <p className="text-amber-600 text-xs mt-0.5">Tap to view Ledger →</p>
           </button>
         )}
 

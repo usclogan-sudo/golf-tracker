@@ -335,6 +335,8 @@ export interface SettlementRecord {
   source: 'game' | 'junk' | 'side_bet' | 'prop'
   status: SettlementStatus
   paidAt?: Date
+  playerReportedAt?: Date
+  reportedMethod?: string
 }
 
 // ─── Notifications ──────────────────────────────────────────────────────────

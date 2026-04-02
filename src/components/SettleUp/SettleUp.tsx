@@ -497,6 +497,53 @@ export function SettleUp({ roundId, userId, eventId, onDone, onContinue }: Props
   // Treasurer access control
   const isTreasurer = userId === treasurerId || userId === round?.createdBy
 
+  // Current user's player ID (for "I Paid" buttons)
+  const myPlayerId = useMemo(() => {
+    return Array.from(participantMap.entries()).find(([, uid]) => uid === userId)?.[0]
+      ?? (treasurerId && (userId === round?.createdBy) ? treasurerId : null)
+  }, [participantMap, userId, treasurerId, round?.createdBy])
+
+  // Report settlement payment (non-treasurer player)
+  const [reportingSettlementId, setReportingSettlementId] = useState<string | null>(null)
+  const reportSettlementPayment = async (settlement: SettlementRecord, method: string) => {
+    if (!userId || !myPlayerId) return
+    setReportingSettlementId(settlement.id)
+    const { error } = await supabase.rpc('player_report_settlement', {
+      p_settlement_id: settlement.id,
+      p_method: method,
+    })
+    if (!error) {
+      // Optimistic update
+      setSettlementRecords(prev => prev.map(s =>
+        s.id === settlement.id
+          ? { ...s, playerReportedAt: new Date(), reportedMethod: method }
+          : s
+      ))
+      // Notify treasurer
+      const treasurerUserId = treasurerId ? participantMap.get(treasurerId) : null
+      const creatorId = round?.createdBy
+      const targetUserId = treasurerUserId ?? creatorId
+      if (targetUserId && targetUserId !== userId) {
+        const myName = playerById(myPlayerId)?.name ?? 'A player'
+        const toName = playerById(settlement.toPlayerId)?.name ?? 'you'
+        const notification: AppNotification = {
+          id: uuidv4(),
+          userId: targetUserId,
+          type: 'unsettled_round',
+          title: `${myName} says they paid ${fmtAmount(settlement.amountCents)} to ${toName}`,
+          body: `Reported via ${method} — confirm in Settle Up`,
+          roundId,
+          read: false,
+          createdAt: new Date(),
+        }
+        safeWrite(supabase.from('notifications').insert(notificationToRow(notification, targetUserId)), 'send payment report notification')
+      }
+    } else {
+      setMutationError('Failed to report payment. Please try again.')
+    }
+    setReportingSettlementId(null)
+  }
+
   // Cancel any pending undo action
   const cancelPendingAction = () => {
     if (pendingAction) {
@@ -736,8 +783,8 @@ export function SettleUp({ roundId, userId, eventId, onDone, onContinue }: Props
         {/* Non-treasurer banner */}
         {!isTreasurer && treasurer && (
           <div className="bg-amber-50 border border-amber-200 rounded-xl px-4 py-3">
-            <p className="text-amber-800 text-sm font-semibold">Only {treasurer.name} can manage payments</p>
-            <p className="text-amber-600 text-xs mt-0.5">You can view results and standings below.</p>
+            <p className="text-amber-800 text-sm font-semibold">{treasurer.name} is managing payments</p>
+            <p className="text-amber-600 text-xs mt-0.5">Tap "I've Paid" on your settlements below to notify them.</p>
           </div>
         )}
 
@@ -840,8 +887,25 @@ export function SettleUp({ roundId, userId, eventId, onDone, onContinue }: Props
                         {item.isDirect ? fmt(item.netCents) : fmt(Math.abs(item.netCents))}
                       </p>
                     </div>
+                    {/* Show if any settlements in this group have been player-reported */}
+                    {(() => {
+                      const reportedSettlements = item.owedIds
+                        .map(id => settlementRecords.find(s => s.id === id))
+                        .filter(s => s?.playerReportedAt)
+                      if (reportedSettlements.length === 0) return null
+                      return (
+                        <div className="bg-amber-50 border border-amber-200 rounded-lg p-2">
+                          <p className="text-xs text-amber-700 font-semibold">
+                            {reportedSettlements.length === 1
+                              ? `${playerById(reportedSettlements[0]!.fromPlayerId)?.name ?? 'Player'} reported paying via ${reportedSettlements[0]!.reportedMethod ?? 'cash'}`
+                              : `${reportedSettlements.length} player${reportedSettlements.length !== 1 ? 's' : ''} reported paying`
+                            }
+                          </p>
+                        </div>
+                      )
+                    })()}
                     {!isPoints && !item.isDirect && item.player && item.netCents < 0 && (
-                      <PaymentButtons toPlayer={item.player} amountCents={Math.abs(item.netCents)} note={`Golf — ${snapshot.courseName}`} />
+                      <PaymentButtons toPlayer={item.player} amountCents={Math.abs(item.netCents)} note={`${snapshot.courseName} · ${gameLabel}`} />
                     )}
                     <button
                       onClick={() => markPlayerSettled(item.owedIds)}
@@ -1348,8 +1412,11 @@ export function SettleUp({ roundId, userId, eventId, onDone, onContinue }: Props
               const toPlayer = playerById(s.toPlayerId)
               if (!fromPlayer || !toPlayer) return null
               const isPaid = s.status === 'paid'
+              const playerReported = !!s.playerReportedAt && !isPaid
+              const isMyDebt = s.fromPlayerId === myPlayerId && !isPaid
+              const roundNote = `${snapshot.courseName} · ${gameLabel}${s.reason ? ` — ${s.reason}` : ''}`
               return (
-                <div key={s.id} className={`space-y-2 p-3 rounded-xl ${isPaid ? 'bg-green-50' : 'bg-gray-50'}`}>
+                <div key={s.id} className={`space-y-2 p-3 rounded-xl ${isPaid ? 'bg-green-50' : playerReported ? 'bg-amber-50' : 'bg-gray-50'}`}>
                   <div className="flex items-center justify-between">
                     <div className="flex-1 min-w-0">
                       <button
@@ -1369,7 +1436,12 @@ export function SettleUp({ roundId, userId, eventId, onDone, onContinue }: Props
                           {s.source === 'prop' ? 'Prop' : s.source === 'side_bet' ? 'Side Bet' : s.source === 'junk' ? 'Junk' : 'Game'}
                         </span>
                       </div>
-                      {!isPaid && (() => {
+                      {playerReported && (
+                        <p className="text-xs text-amber-600 font-semibold mt-0.5">
+                          {fromPlayer.name} says they paid via {s.reportedMethod ?? 'cash'}
+                        </p>
+                      )}
+                      {!isPaid && !playerReported && (() => {
                         const pref = getPreferredPayment(toPlayer)
                         return pref ? (
                           <p className="text-xs text-blue-600 mt-0.5">Pay via {pref.method} {pref.handle}</p>
@@ -1384,20 +1456,57 @@ export function SettleUp({ roundId, userId, eventId, onDone, onContinue }: Props
                           className={`px-3 py-1.5 rounded-xl text-sm font-semibold transition-colors ${
                             isPaid
                               ? 'bg-green-600 text-white active:bg-gray-800'
+                              : playerReported
+                              ? 'bg-amber-500 text-white active:bg-amber-600'
                               : 'bg-amber-100 text-amber-700 active:bg-amber-200'
                           }`}
                         >
-                          {isPaid ? 'Paid' : 'Mark Paid'}
+                          {isPaid ? 'Paid' : playerReported ? 'Confirm' : 'Mark Paid'}
                         </button>
                       ) : (
-                        <span className={`px-2 py-1 rounded-xl text-xs font-semibold ${isPaid ? 'text-green-600' : 'text-amber-600'}`}>
-                          {isPaid ? 'Paid' : 'Owed'}
+                        <span className={`px-2 py-1 rounded-xl text-xs font-semibold ${isPaid ? 'text-green-600' : playerReported ? 'text-amber-600' : 'text-red-500'}`}>
+                          {isPaid ? 'Paid' : playerReported ? 'Reported' : 'Owed'}
                         </span>
                       )}
                     </div>
                   </div>
-                  {!isPoints && !isPaid && (
-                    <PaymentButtons toPlayer={toPlayer} amountCents={s.amountCents} note={s.reason ?? 'settlement'} compact />
+                  {/* Payment links for unpaid & non-reported settlements */}
+                  {!isPoints && !isPaid && !playerReported && (
+                    <PaymentButtons toPlayer={toPlayer} amountCents={s.amountCents} note={roundNote} compact />
+                  )}
+                  {/* "I Paid" button for non-treasurer players on their own debts */}
+                  {!isTreasurer && isMyDebt && !playerReported && !isPoints && (() => {
+                    const isReporting = reportingSettlementId === s.id
+                    const hasDigitalPayment = !!(toPlayer.venmoUsername || toPlayer.zelleIdentifier || toPlayer.cashAppUsername || toPlayer.paypalEmail)
+                    const defaultMethod = toPlayer.venmoUsername ? 'venmo' : toPlayer.zelleIdentifier ? 'zelle' : toPlayer.cashAppUsername ? 'cashapp' : toPlayer.paypalEmail ? 'paypal' : 'cash'
+                    return (
+                      <div className="flex gap-2">
+                        {hasDigitalPayment && (
+                          <button
+                            onClick={() => reportSettlementPayment(s, defaultMethod)}
+                            disabled={isReporting}
+                            className="flex-1 h-10 bg-green-600 text-white font-semibold rounded-xl text-sm active:bg-green-700 disabled:opacity-50"
+                          >
+                            {isReporting ? 'Reporting...' : "I've Paid"}
+                          </button>
+                        )}
+                        <button
+                          onClick={() => reportSettlementPayment(s, 'cash')}
+                          disabled={isReporting}
+                          className={`${hasDigitalPayment ? 'px-4' : 'flex-1'} h-10 bg-gray-700 text-white font-semibold rounded-xl text-sm active:bg-gray-800 disabled:opacity-50`}
+                        >
+                          {isReporting ? 'Reporting...' : hasDigitalPayment ? 'Cash' : "I've Paid (Cash)"}
+                        </button>
+                      </div>
+                    )
+                  })()}
+                  {/* Player reported — waiting state for the payer */}
+                  {!isTreasurer && isMyDebt && playerReported && (
+                    <div className="flex items-center gap-2 text-sm">
+                      <span className="text-green-600">&#10003;</span>
+                      <span className="text-green-700 font-semibold">Reported as paid via {s.reportedMethod ?? 'cash'}</span>
+                      <span className="text-gray-400 text-xs">— waiting for confirmation</span>
+                    </div>
                   )}
                   {!isPoints && !isPaid && isTreasurer && (
                     <NudgeButton
