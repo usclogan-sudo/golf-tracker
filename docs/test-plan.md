@@ -1,4 +1,4 @@
-# Fore Skins Golf — User Test Plan
+# Gimme Golf — User Test Plan
 
 Thanks for testing! Walk through these steps on your phone and tell me what was confusing, broken, or annoying. Honest feedback > polite feedback.
 

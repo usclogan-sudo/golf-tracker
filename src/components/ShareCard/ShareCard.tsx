@@ -65,7 +65,7 @@ export const ShareCard = forwardRef<HTMLDivElement, ShareCardProps>(function Sha
         }}
       >
         <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: 3, opacity: 0.7, marginBottom: 4 }}>
-          FORE SKINS
+          GIMME GOLF
         </div>
         <div style={{ fontSize: 20, fontWeight: 800, lineHeight: 1.2 }}>{courseName}</div>
         <div style={{ fontSize: 13, opacity: 0.8, marginTop: 4 }}>
@@ -168,7 +168,7 @@ export const ShareCard = forwardRef<HTMLDivElement, ShareCardProps>(function Sha
       {/* Footer */}
       <div style={{ padding: '10px 24px 14px', textAlign: 'center' }}>
         <span style={{ fontSize: 10, color: '#d1d5db', fontWeight: 600, letterSpacing: 1 }}>
-          FORE SKINS GOLF TRACKER
+          GIMME GOLF
         </span>
         <br />
         <span style={{ fontSize: 8, color: '#e5e7eb', fontWeight: 400, letterSpacing: 0.5 }}>

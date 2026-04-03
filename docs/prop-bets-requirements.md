@@ -2,7 +2,7 @@
 
 ## Vision
 
-Turn the natural trash talk and side action that already happens in every golf group into a lightweight, fun betting layer inside Fore Skins. Think Polymarket meets your Saturday foursome.
+Turn the natural trash talk and side action that already happens in every golf group into a lightweight, fun betting layer inside Gimme. Think Polymarket meets your Saturday foursome.
 
 The system handles everything from quick in-the-moment bets ("$3 Stan hits this OB") to structured pre-round props ("Mike breaks 80, over/under") to long-running season bets ("Best handicap improvement by June"). All settlements flow into the existing money infrastructure.
 

@@ -773,7 +773,7 @@ export function EventSetup({ userId, onStart, onCancel, onAddCourse }: Props) {
 
     const shareInvite = async () => {
       const title = `Join ${eventName}!`
-      const text = `Join ${eventName} on Fore Skins! Code: ${createdInviteCode}\n${inviteUrl}`
+      const text = `Join ${eventName} on Gimme Golf! Code: ${createdInviteCode}\n${inviteUrl}`
       if (navigator.share) {
         try { await navigator.share({ title, text }) } catch {}
       } else {

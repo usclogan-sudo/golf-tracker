@@ -1,4 +1,4 @@
-# Marketing Plan: Fore Skins Golf Tracker
+# Marketing Plan: Gimme Golf Tracker
 
 Getting to 100 active users through grassroots, golf-community tactics. No ad budget required.
 
@@ -18,7 +18,7 @@ Getting to 100 active users through grassroots, golf-community tactics. No ad bu
 
 **One-liner:** "Score your skins, settle up, skip the math."
 
-**Elevator pitch:** Fore Skins Golf tracks every side game your group plays — Skins, Nassau, Wolf, Hammer, all of it — calculates payouts automatically, and sends everyone a Venmo link. No more napkin math at the 19th hole.
+**Elevator pitch:** Gimme Golf tracks every side game your group plays — Skins, Nassau, Wolf, Hammer, all of it — calculates payouts automatically, and sends everyone a Venmo link. No more napkin math at the 19th hole.
 
 **Key differentiators vs. competitors (18Birdies, Golf GameBook, etc.):**
 - 10+ side game formats with automatic payout calculation
@@ -65,8 +65,8 @@ Getting to 100 active users through grassroots, golf-community tactics. No ad bu
 ## Phase 3: Word of Mouth Engine (Weeks 8-12, Target: 100 users)
 
 ### Make Sharing Built-In
-- **Share cards after rounds** — the app already generates shareable result cards. Make sure they include a small "Scored with Fore Skins Golf" watermark and URL.
-- **Invite codes** — every round generates a code. Make the share text compelling: "Join our round on Fore Skins Golf: [link]. See the live leaderboard and scores."
+- **Share cards after rounds** — the app already generates shareable result cards. Make sure they include a small "Scored with Gimme Golf" watermark and URL.
+- **Invite codes** — every round generates a code. Make the share text compelling: "Join our round on Gimme Golf: [link]. See the live leaderboard and scores."
 - **Spectator mode** — this is a sleeper feature. Friends/spouses who follow along become future users. Make sure the spectate link is dead simple.
 
 ### Retention Hooks

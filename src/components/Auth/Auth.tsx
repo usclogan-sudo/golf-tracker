@@ -121,7 +121,7 @@ export function Auth({ inviteCode }: AuthProps = {}) {
         <div className="w-full max-w-sm space-y-6">
           <div className="text-center">
             <div className="text-7xl mb-4">&#9971;</div>
-            <h1 className="font-display text-4xl font-800 tracking-tight text-gray-900 dark:text-gray-100">Fore Skins</h1>
+            <h1 className="font-display text-4xl font-800 tracking-tight text-gray-900 dark:text-gray-100">Gimme</h1>
             <p className="text-amber-600 text-sm font-medium mt-2 tracking-widest uppercase">Golf &middot; Side Games &middot; Money</p>
           </div>
 
@@ -195,7 +195,7 @@ export function Auth({ inviteCode }: AuthProps = {}) {
       <div className="w-full max-w-sm space-y-6">
         <div className="text-center">
           <div className="text-6xl mb-4">&#9971;</div>
-          <h1 className="font-display text-3xl font-800 tracking-tight text-gray-900 dark:text-gray-100">Fore Skins</h1>
+          <h1 className="font-display text-3xl font-800 tracking-tight text-gray-900 dark:text-gray-100">Gimme</h1>
           <p className="text-amber-600 text-sm font-medium mt-1 tracking-wide">GOLF &middot; SIDE GAMES &middot; MONEY</p>
         </div>
 

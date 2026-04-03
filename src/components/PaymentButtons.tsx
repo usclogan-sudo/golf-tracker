@@ -27,7 +27,7 @@ export function getPreferredPayment(player: Player): { method: string; handle: s
 export function PaymentButtons({ toPlayer, amountCents, note, compact }: { toPlayer: Player; amountCents: number; note: string; compact?: boolean }) {
   const [copied, setCopied] = useState(false)
   const [showMore, setShowMore] = useState(false)
-  const fullNote = `Fore Skins Golf — ${note}`
+  const fullNote = `Gimme Golf — ${note}`
   const copyText = `Pay ${toPlayer.name} ${fmtMoney(amountCents)} for ${fullNote}`
   const handleCopy = () => {
     navigator.clipboard.writeText(copyText).then(() => { setCopied(true); setTimeout(() => setCopied(false), 2000) })

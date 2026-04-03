@@ -1,4 +1,4 @@
-# Fore Skins Golf Tracker — Scope Document
+# Gimme Golf Tracker — Scope Document
 
 **Last Updated:** March 22, 2026
 **Repo:** https://github.com/usclogan-sudo/golf-tracker
@@ -8,7 +8,7 @@
 
 ## 1. Project Overview
 
-Fore Skins is a mobile-first web app for tracking golf side games, scores, handicaps, and money between friends. Players sign in, set up courses and player profiles, start a round with a chosen game type and buy-in, score hole-by-hole on the course, and settle up payouts at the end. The app supports 11 game types, multi-group events, tournaments, real-time collaborative scoring, and in-app payment integration.
+Gimme is a mobile-first web app for tracking golf side games, scores, handicaps, and money between friends. Players sign in, set up courses and player profiles, start a round with a chosen game type and buy-in, score hole-by-hole on the course, and settle up payouts at the end. The app supports 11 game types, multi-group events, tournaments, real-time collaborative scoring, and in-app payment integration.
 
 ---
 

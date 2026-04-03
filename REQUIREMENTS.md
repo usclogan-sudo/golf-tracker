@@ -1,4 +1,4 @@
-# Fore Skins Golf Tracker — Functional Requirements
+# Gimme Golf Tracker — Functional Requirements
 
 **Last Updated:** March 22, 2026
 **Version:** 2.0

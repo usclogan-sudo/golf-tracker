@@ -309,7 +309,7 @@ function Home({
         <div className="max-w-2xl mx-auto">
           <div className="flex items-center justify-between mb-5">
             <div>
-              <h1 className="font-display text-3xl font-800 tracking-tight leading-none">Fore Skins</h1>
+              <h1 className="font-display text-3xl font-800 tracking-tight leading-none">Gimme</h1>
               <p className="text-amber-400 text-sm font-medium mt-0.5 tracking-wide">GOLF · SIDE GAMES · MONEY</p>
             </div>
             <div className="flex items-center gap-2">
@@ -379,7 +379,7 @@ function Home({
 
         {!betaDismissed && (
           <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-2xl px-4 py-3 flex items-center justify-between">
-            <p className="text-blue-700 dark:text-blue-300 text-sm font-medium">Welcome to the Fore Skins beta! We're actively building and would love your feedback.</p>
+            <p className="text-blue-700 dark:text-blue-300 text-sm font-medium">Welcome to the Gimme beta! We're actively building and would love your feedback.</p>
             <button onClick={() => { setBetaDismissed(true); localStorage.setItem('foreskins_beta_dismissed', '1') }} className="text-blue-400 text-lg leading-none ml-2">&times;</button>
           </div>
         )}
@@ -436,7 +436,7 @@ function Home({
           <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700 px-5 py-5 space-y-4">
             <div className="text-center">
               <p className="text-3xl mb-1">⛳</p>
-              <p className="font-display font-bold text-gray-800 dark:text-gray-100 text-lg">Welcome to Fore Skins!</p>
+              <p className="font-display font-bold text-gray-800 dark:text-gray-100 text-lg">Welcome to Gimme!</p>
               <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">Get started in 3 easy steps</p>
             </div>
             <div className="space-y-2">
@@ -674,7 +674,7 @@ function Home({
           )}
         </section>
 
-        <p className="text-center text-xs text-gray-400 pb-8">Fore Skins Golf · Beta</p>
+        <p className="text-center text-xs text-gray-400 pb-8">Gimme Golf · Beta</p>
       </main>
 
       {showAnonBlock && (

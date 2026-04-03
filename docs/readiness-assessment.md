@@ -1,6 +1,6 @@
 # Readiness Assessment: 100 Users Across All Formats
 
-What it would take to have 100 people actively using Fore Skins Golf through web, iOS PWA, and Android PWA.
+What it would take to have 100 people actively using Gimme Golf through web, iOS PWA, and Android PWA.
 
 ---
 

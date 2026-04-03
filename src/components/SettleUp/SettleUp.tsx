@@ -194,7 +194,7 @@ export function SettleUp({ roundId, userId, eventId, onDone, onContinue }: Props
   const [calculatingSettlements, setCalculatingSettlements] = useState(false)
   const [pendingAction, setPendingAction] = useState<{ type: 'settlement' | 'buyin' | 'bulk_buyin'; id: string; ids?: string[]; name: string; timer: ReturnType<typeof setTimeout>; prevBuyIns?: BuyIn[]; prevRecords?: SettlementRecord[] } | null>(null)
   const [showMarkAllPaidConfirm, setShowMarkAllPaidConfirm] = useState(false)
-  const { shareRef, sharing, shareImage } = useShareImage('fore-skins-results')
+  const { shareRef, sharing, shareImage } = useShareImage('gimme-results')
 
   const loadSettleUpData = () => {
     setLoadError(false)

@@ -212,7 +212,7 @@ export function Scorecard({ userId, roundId, onEndRound, onHome, readOnly: readO
   const scoreToastTimerRef = useRef<ReturnType<typeof setTimeout>>()
   const roundRef = useRef(round)
   roundRef.current = round
-  const { shareRef, sharing, shareImage } = useShareImage('fore-skins-leaderboard')
+  const { shareRef, sharing, shareImage } = useShareImage('gimme-leaderboard')
   const [scoreToast, setScoreToast] = useState<{ message: string; type: 'info' | 'success' | 'error' } | null>(null)
   const [showRoundSummary, setShowRoundSummary] = useState(true)
   const [showBatchEntry, setShowBatchEntry] = useState(false)
@@ -1083,8 +1083,8 @@ export function Scorecard({ userId, roundId, onEndRound, onHome, readOnly: readO
                       }
                       const title = event ? `Join ${event.name}!` : 'Join my round!'
                       const text = event
-                        ? `Join ${event.name} on Fore Skins! Code: ${code}`
-                        : `Join my round on Fore Skins! Code: ${code}`
+                        ? `Join ${event.name} on Gimme Golf! Code: ${code}`
+                        : `Join my round on Gimme Golf! Code: ${code}`
                       const url = `${window.location.origin}${window.location.pathname}?join=${code}`
                       if (navigator.share) {
                         try { await navigator.share({ title, text, url }) } catch {}
@@ -1115,7 +1115,7 @@ export function Scorecard({ userId, roundId, onEndRound, onHome, readOnly: readO
                       }
                       const url = `${window.location.origin}${window.location.pathname}?spectate=${code}`
                       const title = 'Watch live leaderboard!'
-                      const text = `Follow the round live on Fore Skins!`
+                      const text = `Follow the round live on Gimme Golf!`
                       if (navigator.share) {
                         try { await navigator.share({ title, text, url }) } catch {}
                       } else {

@@ -69,7 +69,7 @@ export function Onboarding({ userId, onComplete }: Props) {
     <div className="min-h-screen bg-slate-50 dark:bg-gray-900 flex flex-col">
       <header className="app-header text-white px-4 pt-6 pb-5 shadow-xl">
         <div className="max-w-2xl mx-auto text-center">
-          <h1 className="font-display text-3xl font-800 tracking-tight">Fore Skins</h1>
+          <h1 className="font-display text-3xl font-800 tracking-tight">Gimme</h1>
           <p className="text-amber-400 text-sm font-medium mt-0.5 tracking-wide">GOLF · SIDE GAMES · MONEY</p>
         </div>
       </header>
@@ -84,7 +84,7 @@ export function Onboarding({ userId, onComplete }: Props) {
         {step === 'profile' ? (
           <div className="text-center space-y-6 w-full">
             <div className="text-7xl">&#9971;</div>
-            <h2 className="font-display text-3xl font-bold text-gray-900">Welcome to Fore Skins</h2>
+            <h2 className="font-display text-3xl font-bold text-gray-900">Welcome to Gimme</h2>
             <p className="text-gray-500 text-lg">Track golf side games, collect buy-ins, and settle up — all in one place.</p>
 
             <div className="space-y-3 text-left">
