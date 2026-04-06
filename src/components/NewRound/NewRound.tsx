@@ -140,7 +140,7 @@ function CoursePicker({
     supabase.from('courses').select('*').order('name').then(({ data }) => {
       if (data) setSavedCourses(data.map(rowToCourse))
     })
-    supabase.from('shared_courses').select('*').order('name').then(({ data }) => {
+    supabase.from('shared_courses').select('*').order('name').limit(500).then(({ data }) => {
       if (data) setSharedCourses(data.map(rowToSharedCourse))
     })
   }, [])
@@ -441,7 +441,7 @@ function PlayerPicker({
 
   const handleAddPlayer = async () => {
     if (!newName.trim()) { setAddError('Name is required'); return }
-    const hcp = parseFloat(newHcp)
+    const hcp = newHcp.trim() === '' ? 0 : parseFloat(newHcp)
     if (isNaN(hcp) || hcp < -10 || hcp > 54) { setAddError('Handicap must be between -10 and 54'); return }
     setSaving(true)
     try {
@@ -623,7 +623,7 @@ function PlayerPicker({
             <input
               type="number"
               inputMode="decimal"
-              placeholder="Handicap Index"
+              placeholder="Handicap (optional)"
               value={newHcp}
               onChange={e => setNewHcp(e.target.value)}
               className="w-full h-11 px-3 rounded-xl border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 text-base focus:outline-none focus:ring-2 focus:ring-amber-500"
@@ -1329,8 +1329,9 @@ function GameSetup({
               </p>
               <p className="text-xs text-gray-400 mt-0.5">Optional peer-to-peer bets tracked per hole</p>
             </div>
-            <button
+            <div
               role="switch"
+              tabIndex={0}
               aria-checked={junksEnabled}
               onClick={() => {
                 if (junksEnabled) {
@@ -1339,10 +1340,11 @@ function GameSetup({
                 }
                 setJunksEnabled(v => !v)
               }}
-              className={`relative w-12 h-7 rounded-full transition-colors ${junksEnabled ? 'bg-amber-600' : 'bg-gray-300'}`}
+              onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setJunksEnabled(v => !v) } }}
+              className={`flex-shrink-0 w-12 h-7 rounded-full p-0.5 cursor-pointer transition-colors flex ${junksEnabled ? 'bg-amber-600 justify-end' : 'bg-gray-300 justify-start'}`}
             >
-              <span className={`absolute top-0.5 w-6 h-6 bg-white rounded-full shadow transition-transform ${junksEnabled ? 'translate-x-5' : 'translate-x-0.5'}`} />
-            </button>
+              <div className="w-6 h-6 bg-white rounded-full shadow" />
+            </div>
           </div>
 
           {junksEnabled && (

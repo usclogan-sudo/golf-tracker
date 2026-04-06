@@ -82,7 +82,7 @@ export function EventSetup({ userId, onStart, onCancel, onAddCourse }: Props) {
   useEffect(() => {
     Promise.all([
       supabase.from('courses').select('*').eq('user_id', userId).neq('hidden', true),
-      supabase.from('shared_courses').select('*'),
+      supabase.from('shared_courses').select('*').limit(500),
     ]).then(([ownedRes, sharedRes]) => {
       const owned = (ownedRes.data ?? []).map(rowToCourse)
       const shared = (sharedRes.data ?? []).map(rowToSharedCourse)
@@ -107,7 +107,7 @@ export function EventSetup({ userId, onStart, onCancel, onAddCourse }: Props) {
   useEffect(() => {
     Promise.all([
       supabase.from('players').select('*').eq('user_id', userId),
-      supabase.from('user_profiles').select('*'),
+      supabase.from('user_profiles').select('*').not('display_name', 'is', null).limit(500),
     ]).then(([playersRes, profilesRes]) => {
       const guestPlayers = (playersRes.data ?? []).map(rowToPlayer)
       const profiles = (profilesRes.data ?? []).map(rowToUserProfile)

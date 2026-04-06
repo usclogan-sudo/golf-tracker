@@ -2,6 +2,29 @@
 
 Getting to 100 active users through grassroots, golf-community tactics. No ad budget required.
 
+> **Last updated:** April 2026
+
+---
+
+## Current App Capabilities (what's actually built)
+
+- **11 game types:** Skins, Best Ball, Nassau, Wolf, BBB, Hammer, Vegas, Stableford, Dots, Banker, Quota
+- **Auth:** Email/password signup + password reset via email
+- **Guest/demo mode:** "Try it first" flow — no signup required to explore
+- **Join via invite:** Invite codes + shareable links for joining rounds/events
+- **Multi-group events:** Event creation with group assignment, per-group scorekeepers, live event leaderboard
+- **Live leaderboard:** Real-time spectator view via link
+- **Settlement:** Automatic payout calculation with deep links to Venmo, Zelle, Cash App
+- **Share cards:** Shareable round result images (via html2canvas)
+- **Offline support:** Offline queue for score entry, online status detection
+- **PWA:** Install banner, add-to-homescreen prompt
+- **Onboarding:** Guided first-run flow for new users
+- **Course catalog:** Pre-loaded Ventura-area courses + shared course library + "near me" search
+- **Player directory:** Public player profiles with handicap, tee preference
+- **Round history & stats:** Personal dashboard, per-course stats
+- **Ledger:** Running payment ledger across rounds
+- **No landing page yet** — non-logged-in visitors go straight to auth screen
+
 ---
 
 ## Target Audience
@@ -21,11 +44,12 @@ Getting to 100 active users through grassroots, golf-community tactics. No ad bu
 **Elevator pitch:** Gimme Golf tracks every side game your group plays — Skins, Nassau, Wolf, Hammer, all of it — calculates payouts automatically, and sends everyone a Venmo link. No more napkin math at the 19th hole.
 
 **Key differentiators vs. competitors (18Birdies, Golf GameBook, etc.):**
-- 10+ side game formats with automatic payout calculation
-- Built-in settlement with Venmo/Zelle/Cash App links
+- 11 side game formats with automatic payout calculation
+- Built-in settlement with Venmo/Zelle/Cash App deep links
 - Works offline on the course
 - Free, no subscription
 - Lightweight PWA — no App Store download needed
+- Multi-group event mode with live leaderboard and invite codes
 
 ---
 
@@ -37,9 +61,9 @@ Getting to 100 active users through grassroots, golf-community tactics. No ad bu
 - **Demo in person.** At the course, before a round, pull it up and walk through creating a round in 30 seconds. Seeing is believing.
 
 ### Make It Easy to Say Yes
-- Use **guest mode** as the entry point. "You don't even need to sign up — just tap 'Try it first.'"
-- Pre-load your local courses so nobody hits a blank course list.
-- The scorekeeper installs the app; other players just need to spectate via link at first.
+- Use **guest/demo mode** as the entry point. "You don't even need to sign up — just tap 'Try it first.'" (Already built.)
+- Local Ventura-area courses are pre-loaded, plus shared course library and "near me" search. No blank course list.
+- Other players can join via **invite code** or **shareable link**, or follow along via the **live spectator leaderboard**.
 
 ---
 
@@ -64,19 +88,19 @@ Getting to 100 active users through grassroots, golf-community tactics. No ad bu
 
 ## Phase 3: Word of Mouth Engine (Weeks 8-12, Target: 100 users)
 
-### Make Sharing Built-In
-- **Share cards after rounds** — the app already generates shareable result cards. Make sure they include a small "Scored with Gimme Golf" watermark and URL.
-- **Invite codes** — every round generates a code. Make the share text compelling: "Join our round on Gimme Golf: [link]. See the live leaderboard and scores."
-- **Spectator mode** — this is a sleeper feature. Friends/spouses who follow along become future users. Make sure the spectate link is dead simple.
+### Make Sharing Built-In (all already implemented)
+- **Share cards after rounds** — the app generates shareable result images via html2canvas. TODO: verify they include a "Scored with Gimme Golf" watermark and URL.
+- **Invite codes** — every event generates a code + shareable link. Share text includes the join URL.
+- **Spectator/live leaderboard** — real-time spectator view exists. Friends/spouses who follow along become future users.
 
 ### Retention Hooks
-- **Unsettled debts notification:** "You have $15 unsettled from Saturday's round." This pulls people back.
-- **Round history:** People check their stats. "What's my record at this course?" keeps them opening the app.
+- **Unsettled debts:** Settlement screen + ledger show outstanding balances. (Push notifications not yet implemented.)
+- **Round history & stats:** Already built — personal dashboard, per-course stats, round history. "What's my record at this course?" keeps them opening the app.
 - **Group habit:** Once a group uses it for 3 rounds, it becomes "the way we do it." The switching cost is social, not technical.
 
 ### Content (Low Effort)
 - Short **Instagram/TikTok clips** from the course showing the app in action. Not polished — phone in one hand, beer in the other, "look how easy this is." Golf social media is huge and authenticity wins.
-- A simple **landing page** explaining what the app does, with screenshots and a "Start scoring" button. (Could be a single static page on the same GitHub Pages site.)
+- **Landing page** — NOT YET BUILT. Currently non-logged-in visitors see the auth screen. A simple landing page with screenshots and a "Start scoring" button would help conversion from shared links. (Could be a single static page on the same GitHub Pages site.)
 
 ---
 

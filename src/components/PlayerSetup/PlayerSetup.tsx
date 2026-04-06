@@ -29,8 +29,8 @@ export function PlayerSetup({ userId, player, onSave, onCancel, onDelete }: Prop
   const validate = () => {
     const errs: Record<string, string> = {}
     if (!name.trim()) errs.name = 'Name is required'
-    const hcp = parseFloat(handicapIndex)
-    if (handicapIndex === '' || isNaN(hcp) || hcp < -10 || hcp > 54) {
+    const hcp = handicapIndex === '' ? 0 : parseFloat(handicapIndex)
+    if (isNaN(hcp) || hcp < -10 || hcp > 54) {
       errs.handicap = 'Must be between -10 and 54'
     }
     if (ghin.trim() && !/^\d+$/.test(ghin.trim())) {
@@ -112,7 +112,7 @@ export function PlayerSetup({ userId, player, onSave, onCancel, onDelete }: Prop
                 step="0.1"
                 min="-10"
                 max="54"
-                placeholder="e.g. 12.4"
+                placeholder="e.g. 12.4 (optional)"
                 value={handicapIndex}
                 onChange={e => setHandicapIndex(e.target.value)}
                 className={`w-full h-12 px-4 rounded-xl border text-base focus:outline-none focus:ring-2 focus:ring-amber-500 ${
