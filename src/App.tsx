@@ -379,7 +379,7 @@ function Home({
 
         {!betaDismissed && (
           <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-2xl px-4 py-3 flex items-center justify-between">
-            <p className="text-blue-700 dark:text-blue-300 text-sm font-medium">Welcome to the Gimme beta! We're actively building and would love your feedback.</p>
+            <p className="text-blue-700 dark:text-blue-300 text-sm font-medium">Welcome to the Gimme beta! We're actively building and would love <a href="https://docs.google.com/forms/d/e/1FAIpQLScC3xN8rQcoCBHSPQAG8k1tqiwoB1pz3IFytV2Mvmlikr9w4Q/viewform" target="_blank" rel="noopener noreferrer" className="underline">your feedback</a>.</p>
             <button onClick={() => { setBetaDismissed(true); localStorage.setItem('foreskins_beta_dismissed', '1') }} className="text-blue-400 text-lg leading-none ml-2">&times;</button>
           </div>
         )}
