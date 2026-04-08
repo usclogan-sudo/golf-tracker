@@ -84,12 +84,12 @@ export function Onboarding({ userId, onComplete }: Props) {
         {step === 'profile' ? (
           <div className="text-center space-y-6 w-full">
             <div className="text-7xl">&#9971;</div>
-            <h2 className="font-display text-3xl font-bold text-gray-900">Welcome to Gimme</h2>
-            <p className="text-gray-500 text-lg">Track golf side games, collect buy-ins, and settle up — all in one place.</p>
+            <h2 className="font-display text-3xl font-bold text-gray-900 dark:text-gray-100">Welcome to Gimme</h2>
+            <p className="text-gray-500 dark:text-gray-400 text-lg">Track golf side games, collect buy-ins, and settle up — all in one place.</p>
 
             <div className="space-y-3 text-left">
               <div>
-                <label className="block text-sm font-semibold text-gray-700 mb-1">Your Name</label>
+                <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-1">Your Name</label>
                 <input
                   type="text"
                   placeholder="e.g. John Smith"
@@ -99,7 +99,7 @@ export function Onboarding({ userId, onComplete }: Props) {
                 />
               </div>
               <div>
-                <label className="block text-sm font-semibold text-gray-700 mb-1">Handicap Index <span className="font-normal text-gray-400">(optional)</span></label>
+                <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-1">Handicap Index <span className="font-normal text-gray-400">(optional)</span></label>
                 <input
                   type="number"
                   inputMode="decimal"
@@ -124,34 +124,34 @@ export function Onboarding({ userId, onComplete }: Props) {
         ) : (
           <div className="text-center space-y-6 w-full">
             <div className="text-5xl">💰</div>
-            <h2 className="font-display text-2xl font-bold text-gray-900">Payment Info</h2>
-            <p className="text-gray-500">So your buddies can pay you when you win. Optional — you can add this later.</p>
+            <h2 className="font-display text-2xl font-bold text-gray-900 dark:text-gray-100">Payment Info</h2>
+            <p className="text-gray-500 dark:text-gray-400">So your buddies can pay you when you win. Optional — you can add this later.</p>
 
             <div className="space-y-3 text-left">
               <div>
-                <label className="block text-sm font-semibold text-gray-700 mb-1">Venmo Username</label>
+                <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-1">Venmo Username</label>
                 <input type="text" placeholder="@username" value={venmo} onChange={e => setVenmo(e.target.value)}
                   className="w-full h-12 px-4 rounded-xl border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 text-base focus:outline-none focus:ring-2 focus:ring-amber-500" />
               </div>
               <div>
-                <label className="block text-sm font-semibold text-gray-700 mb-1">Zelle Email or Phone</label>
+                <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-1">Zelle Email or Phone</label>
                 <input type="text" placeholder="email or phone" value={zelle} onChange={e => setZelle(e.target.value)}
                   className="w-full h-12 px-4 rounded-xl border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 text-base focus:outline-none focus:ring-2 focus:ring-amber-500" />
               </div>
               <div>
-                <label className="block text-sm font-semibold text-gray-700 mb-1">Cash App</label>
+                <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-1">Cash App</label>
                 <input type="text" placeholder="$cashtag" value={cashapp} onChange={e => setCashapp(e.target.value)}
                   className="w-full h-12 px-4 rounded-xl border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 text-base focus:outline-none focus:ring-2 focus:ring-amber-500" />
               </div>
               <div>
-                <label className="block text-sm font-semibold text-gray-700 mb-1">PayPal Email</label>
+                <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-1">PayPal Email</label>
                 <input type="email" placeholder="email@example.com" value={paypal} onChange={e => setPaypal(e.target.value)}
                   className="w-full h-12 px-4 rounded-xl border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 text-base focus:outline-none focus:ring-2 focus:ring-amber-500" />
               </div>
 
               {(venmo || zelle || cashapp || paypal) && (
                 <div>
-                  <label className="block text-sm font-semibold text-gray-700 mb-2">Preferred Method</label>
+                  <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">Preferred Method</label>
                   <div className="flex flex-wrap gap-2">
                     {METHODS.filter(m => {
                       if (m.key === 'venmo') return !!venmo
@@ -162,7 +162,7 @@ export function Onboarding({ userId, onComplete }: Props) {
                     }).map(m => (
                       <button key={m.key} onClick={() => setPreferred(m.key)}
                         className={`px-4 py-2 rounded-xl text-sm font-semibold transition-colors ${
-                          preferred === m.key ? 'bg-amber-500 text-white' : 'bg-gray-100 text-gray-700'
+                          preferred === m.key ? 'bg-amber-500 text-white' : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300'
                         }`}>
                         {m.label}
                       </button>
@@ -174,7 +174,7 @@ export function Onboarding({ userId, onComplete }: Props) {
 
             <div className="flex gap-3">
               <button onClick={() => setStep('profile')}
-                className="flex-1 h-14 border-2 border-gray-200 text-gray-600 font-semibold rounded-2xl active:bg-gray-50">
+                className="flex-1 h-14 border-2 border-gray-200 dark:border-gray-600 text-gray-600 dark:text-gray-300 font-semibold rounded-2xl active:bg-gray-50 dark:active:bg-gray-700">
                 Back
               </button>
               <button

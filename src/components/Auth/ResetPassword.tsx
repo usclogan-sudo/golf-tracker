@@ -13,7 +13,7 @@ export function ResetPassword({ onDone }: Props) {
   const [success, setSuccess] = useState(false)
 
   const handleReset = async () => {
-    if (password.length < 6) { setError('Password must be at least 6 characters'); return }
+    if (password.length < 8) { setError('Password must be at least 8 characters'); return }
     if (password !== confirm) { setError('Passwords do not match'); return }
     setLoading(true)
     setError(null)
@@ -56,7 +56,7 @@ export function ResetPassword({ onDone }: Props) {
               </label>
               <input
                 type="password"
-                placeholder="At least 6 characters"
+                placeholder="At least 8 characters"
                 value={password}
                 onChange={e => setPassword(e.target.value)}
                 onKeyDown={e => e.key === 'Enter' && handleReset()}

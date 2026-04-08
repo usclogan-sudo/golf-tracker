@@ -246,7 +246,7 @@ export function Auth({ inviteCode }: AuthProps = {}) {
                 </label>
                 <input
                   type="password"
-                  placeholder={mode === 'sign-up' ? 'At least 6 characters' : 'Your password'}
+                  placeholder={mode === 'sign-up' ? 'At least 8 characters' : 'Your password'}
                   value={password}
                   onChange={e => setPassword(e.target.value)}
                   onKeyDown={e => e.key === 'Enter' && handleSubmit()}

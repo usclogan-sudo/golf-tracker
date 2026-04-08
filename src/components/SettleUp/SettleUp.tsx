@@ -192,6 +192,7 @@ export function SettleUp({ roundId, userId, eventId, onDone, onContinue }: Props
   const [mutationError, setMutationError] = useState<string | null>(null)
   const [nudgedPlayerIds, setNudgedPlayerIds] = useState<Set<string>>(new Set())
   const [calculatingSettlements, setCalculatingSettlements] = useState(false)
+  const [settlementTimeout, setSettlementTimeout] = useState(false)
   const [pendingAction, setPendingAction] = useState<{ type: 'settlement' | 'buyin' | 'bulk_buyin'; id: string; ids?: string[]; name: string; timer: ReturnType<typeof setTimeout>; prevBuyIns?: BuyIn[]; prevRecords?: SettlementRecord[] } | null>(null)
   const [showMarkAllPaidConfirm, setShowMarkAllPaidConfirm] = useState(false)
   const { shareRef, sharing, shareImage } = useShareImage('gimme-results')
@@ -483,6 +484,13 @@ export function SettleUp({ roundId, userId, eventId, onDone, onContinue }: Props
     }
   }, [loading, round, game, snapshot, persistSettlements])
 
+  // Timeout: if settlement calculation takes too long, let user proceed
+  useEffect(() => {
+    if (!calculatingSettlements) { setSettlementTimeout(false); return }
+    const timer = setTimeout(() => setSettlementTimeout(true), 15000)
+    return () => clearTimeout(timer)
+  }, [calculatingSettlements])
+
   // H6: Clean up undo timer on unmount to prevent ghost DB writes
   useEffect(() => {
     return () => {
@@ -735,7 +743,7 @@ export function SettleUp({ roundId, userId, eventId, onDone, onContinue }: Props
     return <div className="min-h-screen bg-gray-50 dark:bg-gray-900 flex items-center justify-center"><p className="text-gray-400">Loading…</p></div>
   }
 
-  if (calculatingSettlements) {
+  if (calculatingSettlements && !settlementTimeout) {
     return (
       <div className="min-h-screen bg-gray-50 dark:bg-gray-900 flex flex-col items-center justify-center gap-3">
         <div className="w-8 h-8 border-4 border-amber-500 border-t-transparent rounded-full animate-spin" />
@@ -1112,7 +1120,7 @@ export function SettleUp({ roundId, userId, eventId, onDone, onContinue }: Props
               <div className="overflow-x-auto -mx-2">
                 <table className="w-full text-sm">
                   <thead>
-                    <tr className="text-xs text-gray-400 uppercase border-b border-gray-200">
+                    <tr className="text-xs text-gray-400 uppercase border-b border-gray-200 dark:border-gray-700">
                       <th className="text-left py-2 px-2 font-medium">Player</th>
                       <th className="text-center py-2 px-2 font-medium"><Tooltip term="Gross">Gross</Tooltip></th>
                       <th className="text-center py-2 px-2 font-medium"><Tooltip term="Net">Net</Tooltip></th>
@@ -1121,12 +1129,12 @@ export function SettleUp({ roundId, userId, eventId, onDone, onContinue }: Props
                   </thead>
                   <tbody>
                     {board.sort((a, b) => a.net - b.net).map(({ player, gross, net, vsPar }) => (
-                      <tr key={player.id} className="border-b border-gray-50">
-                        <td className="py-2 px-2 font-semibold text-gray-800">{player.name}</td>
-                        <td className={`py-2 px-2 text-center font-semibold ${gross === bestGross ? 'text-green-700' : 'text-gray-700'}`}>
+                      <tr key={player.id} className="border-b border-gray-50 dark:border-gray-700">
+                        <td className="py-2 px-2 font-semibold text-gray-800 dark:text-gray-100">{player.name}</td>
+                        <td className={`py-2 px-2 text-center font-semibold ${gross === bestGross ? 'text-green-700' : 'text-gray-700 dark:text-gray-300'}`}>
                           {gross}{gross === bestGross ? ' *' : ''}
                         </td>
-                        <td className={`py-2 px-2 text-center font-semibold ${net === bestNet ? 'text-green-700' : 'text-gray-700'}`}>
+                        <td className={`py-2 px-2 text-center font-semibold ${net === bestNet ? 'text-green-700' : 'text-gray-700 dark:text-gray-300'}`}>
                           {net}{net === bestNet ? ' *' : ''}
                         </td>
                         <td className={`py-2 px-2 text-center font-semibold ${vsPar > 0 ? 'text-red-600' : vsPar < 0 ? 'text-green-600' : 'text-gray-500'}`}>
@@ -1158,7 +1166,7 @@ export function SettleUp({ roundId, userId, eventId, onDone, onContinue }: Props
                     const skins = skinsResult.skinsWon[p.id] ?? 0
                     return (
                       <div key={p.id} className={`flex items-center justify-between p-3 rounded-xl ${skins > 0 ? 'bg-green-50' : 'bg-gray-50'}`}>
-                        <span className="font-semibold text-gray-800">{p.name}</span>
+                        <span className="font-semibold text-gray-800 dark:text-gray-100">{p.name}</span>
                         <span className={`font-bold ${skins > 0 ? 'text-green-700' : 'text-gray-400'}`}>{skins} skin{skins !== 1 ? 's' : ''}</span>
                       </div>
                     )
@@ -1218,7 +1226,7 @@ export function SettleUp({ roundId, userId, eventId, onDone, onContinue }: Props
                   return (
                     <div key={label} className={`rounded-xl p-3 ${seg.winner ? 'bg-teal-50' : 'bg-gray-50'}`}>
                       <div className="flex items-center justify-between">
-                        <p className="font-semibold text-gray-700 text-sm">{label}</p>
+                        <p className="font-semibold text-gray-700 dark:text-gray-300 text-sm">{label}</p>
                         <p className={`font-bold text-sm ${seg.winner ? 'text-teal-700' : 'text-gray-400'}`}>
                           {seg.incomplete ? 'Incomplete' : seg.winner ? `🏆 ${winner?.name}` : tiedNames ? `Tied: ${tiedNames}` : '—'}
                         </p>
@@ -1243,7 +1251,7 @@ export function SettleUp({ roundId, userId, eventId, onDone, onContinue }: Props
                   const units = wolfResult.netUnits[p.id] ?? 0
                   return (
                     <div key={p.id} className={`flex items-center justify-between p-3 rounded-xl ${units > 0 ? 'bg-purple-50' : units < 0 ? 'bg-red-50' : 'bg-gray-50'}`}>
-                      <span className="font-semibold text-gray-800">{p.name}</span>
+                      <span className="font-semibold text-gray-800 dark:text-gray-100">{p.name}</span>
                       <span className={`font-bold ${units > 0 ? 'text-purple-700' : units < 0 ? 'text-red-600' : 'text-gray-400'}`}>
                         {units > 0 ? `+${units}` : units} unit{Math.abs(units) !== 1 ? 's' : ''}
                       </span>
@@ -1267,7 +1275,7 @@ export function SettleUp({ roundId, userId, eventId, onDone, onContinue }: Props
                   const pts = bbbResult.pointsWon[p.id] ?? 0
                   return (
                     <div key={p.id} className={`flex items-center justify-between p-3 rounded-xl ${pts > 0 ? 'bg-amber-50' : 'bg-gray-50'}`}>
-                      <span className="font-semibold text-gray-800">{p.name}</span>
+                      <span className="font-semibold text-gray-800 dark:text-gray-100">{p.name}</span>
                       <span className={`font-bold ${pts > 0 ? 'text-amber-700' : 'text-gray-400'}`}>{pts} point{pts !== 1 ? 's' : ''}</span>
                     </div>
                   )
@@ -1289,7 +1297,7 @@ export function SettleUp({ roundId, userId, eventId, onDone, onContinue }: Props
                   const net = hammerResult.netCents[p.id] ?? 0
                   return (
                     <div key={p.id} className={`flex items-center justify-between p-3 rounded-xl ${net > 0 ? 'bg-green-50' : net < 0 ? 'bg-red-50' : 'bg-gray-50'}`}>
-                      <span className="font-semibold text-gray-800">{p.name}</span>
+                      <span className="font-semibold text-gray-800 dark:text-gray-100">{p.name}</span>
                       <span className={`font-bold ${net > 0 ? 'text-green-700' : net < 0 ? 'text-red-600' : 'text-gray-400'}`}>
                         {net > 0 ? '+' : ''}{fmt(Math.abs(net))}
                       </span>
@@ -1318,7 +1326,7 @@ export function SettleUp({ roundId, userId, eventId, onDone, onContinue }: Props
                   return (
                     <div key={p.id} className={`flex items-center justify-between p-3 rounded-xl ${net > 0 ? 'bg-indigo-50' : net < 0 ? 'bg-red-50' : 'bg-gray-50'}`}>
                       <div>
-                        <span className="font-semibold text-gray-800">{p.name}</span>
+                        <span className="font-semibold text-gray-800 dark:text-gray-100">{p.name}</span>
                         {junkDetails && <span className="text-xs ml-2">{junkDetails}</span>}
                       </div>
                       <span className={`font-bold ${net > 0 ? 'text-indigo-700' : net < 0 ? 'text-red-600' : 'text-gray-400'}`}>
@@ -1347,7 +1355,7 @@ export function SettleUp({ roundId, userId, eventId, onDone, onContinue }: Props
                     <div key={bet.id} className="bg-amber-50 rounded-xl p-3">
                       <div className="flex items-center justify-between">
                         <div>
-                          <p className="font-semibold text-gray-800 text-sm">{bet.description}</p>
+                          <p className="font-semibold text-gray-800 dark:text-gray-100 text-sm">{bet.description}</p>
                           <p className="text-xs text-gray-500">Hole {bet.holeNumber} · {fmt(bet.amountCents)}/loser</p>
                         </div>
                         <span className="text-sm font-bold text-amber-700">🏆 {winnerName}</span>
@@ -1372,7 +1380,7 @@ export function SettleUp({ roundId, userId, eventId, onDone, onContinue }: Props
                 const winner = playerById(payout.playerId)
                 return (
                   <div key={payout.playerId} className="bg-green-50 rounded-xl p-3 flex items-center justify-between">
-                    <div><p className="font-bold text-gray-800">{winner?.name}</p><p className="text-xs text-gray-500">{payout.reason}</p></div>
+                    <div><p className="font-bold text-gray-800 dark:text-gray-100">{winner?.name}</p><p className="text-xs text-gray-500">{payout.reason}</p></div>
                     <p className="text-2xl font-bold text-green-700">{fmt(payout.amountCents)}</p>
                   </div>
                 )
@@ -1423,7 +1431,7 @@ export function SettleUp({ roundId, userId, eventId, onDone, onContinue }: Props
                         onClick={() => setExpandedSettlement(expandedSettlement === s.id ? null : s.id)}
                         className="flex items-center gap-1 text-left"
                       >
-                        <p className="font-bold text-gray-800">{fromPlayer.name} → {toPlayer.name}</p>
+                        <p className="font-bold text-gray-800 dark:text-gray-100">{fromPlayer.name} → {toPlayer.name}</p>
                         <svg className={`w-3.5 h-3.5 text-gray-400 transition-transform flex-shrink-0 ${expandedSettlement === s.id ? 'rotate-90' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
                         </svg>

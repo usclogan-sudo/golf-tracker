@@ -147,6 +147,7 @@ function Home({
   onPersonalDashboard,
   onCreateEvent,
   onLedger,
+  onPlayAgain,
 }: {
 
   userId: string
@@ -175,17 +176,19 @@ function Home({
   onPersonalDashboard: () => void
   onCreateEvent: () => void
   onLedger: () => void
+  onPlayAgain: (round: Round) => void
 }) {
   const [courses, setCourses] = useState<Course[]>([])
   const [activeRounds, setActiveRounds] = useState<Round[]>([])
   const [participantRounds, setParticipantRounds] = useState<Round[]>([])
-  const [roundCount, setRoundCount] = useState(0)
+  const [roundCount, setRoundCount] = useState<number | null>(null)
   const [joinCode, setJoinCode] = useState('')
   const [unsettledCount, setUnsettledCount] = useState(0)
   const [unsettledAmounts, setUnsettledAmounts] = useState<{ youOwe: number; owedToYou: number }>({ youOwe: 0, owedToYou: 0 })
   const [fetchError, setFetchError] = useState<string | null>(null)
   const [showAnonBlock, setShowAnonBlock] = useState(false)
   const [betaDismissed, setBetaDismissed] = useState(() => localStorage.getItem('foreskins_beta_dismissed') === '1')
+  const [retryKey, setRetryKey] = useState(0)
 
   const guardAnon = (action: () => void) => {
     if (isAnonymous) { setShowAnonBlock(true); return }
@@ -197,12 +200,13 @@ function Home({
     lastDate: string
     lastScore: number | null
   } | null>(null)
+  const [lastRoundObj, setLastRoundObj] = useState<Round | null>(null)
   const [courseStats, setCourseStats] = useState<Map<string, { played: number; best: number | null; totalGross: number; scoredRounds: number }>>(new Map())
 
   useEffect(() => {
     setFetchError(null)
     supabase.from('courses').select('*').eq('user_id', userId).neq('hidden', true).order('name').then(({ data, error }) => {
-      if (error) { setFetchError('Failed to load data. Pull down to refresh.'); return }
+      if (error) { setFetchError('Failed to load data. Tap Retry to try again.'); return }
       if (data) setCourses(data.map(rowToCourse))
     })
     // Fetch both owned active rounds and rounds joined as participant
@@ -227,7 +231,7 @@ function Home({
     })
 
     // Unsettled rounds count + total owed (limit to prevent unbounded fetch)
-    supabase.from('settlements').select('round_id,amount_cents,from_player_id,to_player_id').eq('status', 'owed').limit(200).then(async ({ data }) => {
+    supabase.from('settlements').select('round_id,amount_cents,from_player_id,to_player_id').eq('status', 'owed').limit(1000).then(async ({ data }) => {
       if (data) {
         const uniqueRounds = new Set(data.map((d: any) => d.round_id))
         setUnsettledCount(uniqueRounds.size)
@@ -271,6 +275,7 @@ function Home({
           lastDate: lastRound.date.toLocaleDateString(undefined, { month: 'short', day: 'numeric' }),
           lastScore,
         })
+        setLastRoundObj(lastRound)
 
         // Compute per-course stats from completed rounds
         const cMap = new Map<string, { played: number; best: number | null; totalGross: number; scoredRounds: number }>()
@@ -301,7 +306,7 @@ function Home({
         }
         setCourseStats(cMap)
       })
-  }, [userId])
+  }, [userId, retryKey])
 
   return (
     <div className="min-h-screen bg-slate-50 dark:bg-gray-900 pb-8">
@@ -334,7 +339,7 @@ function Home({
             </div>
           </div>
           <div className="flex gap-2">
-            <StatChip label="Rounds" value={roundCount} />
+            <StatChip label="Rounds" value={roundCount ?? '–'} />
             <StatChip label="Courses" value={courses.length} />
             {userProfile?.handicapIndex != null && (
               <StatChip label="Handicap" value={userProfile.handicapIndex} accent onClick={onHandicapDetail} />
@@ -385,9 +390,10 @@ function Home({
         )}
 
         {fetchError && (
-          <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-2xl px-4 py-3 flex items-center justify-between">
-            <p className="text-red-700 dark:text-red-400 text-sm font-medium">{fetchError}</p>
-            <button onClick={() => setFetchError(null)} className="text-red-400 text-lg leading-none ml-2">&times;</button>
+          <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-2xl px-4 py-3 flex items-center justify-between gap-2">
+            <p className="text-red-700 dark:text-red-400 text-sm font-medium flex-1">{fetchError}</p>
+            <button onClick={() => { setFetchError(null); setRetryKey(k => k + 1) }} className="text-red-700 dark:text-red-400 text-sm font-bold px-3 py-1 rounded-lg active:bg-red-100 dark:active:bg-red-900/40 flex-shrink-0">Retry</button>
+            <button onClick={() => setFetchError(null)} className="text-red-400 text-lg leading-none ml-1 flex-shrink-0">&times;</button>
           </div>
         )}
 
@@ -413,6 +419,21 @@ function Home({
               </div>
               <span className="text-xs text-amber-600 font-semibold">View Stats →</span>
             </div>
+          </button>
+        )}
+        {lastRoundObj?.courseSnapshot && onPlayAgain && (
+          <button
+            onClick={() => onPlayAgain(lastRoundObj)}
+            className="w-full bg-white dark:bg-gray-800 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700 px-4 py-3 text-left active:bg-gray-50 dark:active:bg-gray-700 transition-colors flex items-center justify-between"
+          >
+            <div className="flex items-center gap-3">
+              <span className="text-2xl">🔄</span>
+              <div>
+                <p className="font-semibold text-gray-800 dark:text-gray-100 text-sm">Play Again</p>
+                <p className="text-xs text-gray-500 dark:text-gray-400">{lastRoundObj.courseSnapshot.courseName} · {lastRoundObj.players?.length ?? 0} players</p>
+              </div>
+            </div>
+            <span className="text-xs text-amber-600 font-semibold">Go →</span>
           </button>
         )}
         {unsettledCount > 0 && (
@@ -1208,6 +1229,7 @@ export default function App() {
       onPersonalDashboard={() => setScreen('personal-dashboard')}
       onCreateEvent={() => setScreen('event-setup')}
       onLedger={() => setScreen('ledger')}
+      onPlayAgain={(round) => { setPlayAgainRound(round); setNewRoundStakesMode(round.game?.stakesMode ?? 'standard'); setScreen('new-round') }}
     />
     {appConfirmModal && (
       <ConfirmModal

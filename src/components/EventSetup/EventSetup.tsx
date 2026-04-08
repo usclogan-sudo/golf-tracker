@@ -62,6 +62,7 @@ export function EventSetup({ userId, onStart, onCancel, onAddCourse }: Props) {
   // Step 4: Groups & scorekeepers
   const [groups, setGroups] = useState<Record<string, number>>({})
   const [groupScorekeepers, setGroupScorekeepers] = useState<Record<number, string>>({})
+  const [groupError, setGroupError] = useState<string | null>(null)
 
   // Step 5: Game
   const [gameType, setGameType] = useState<GameType>('skins')
@@ -136,6 +137,7 @@ export function EventSetup({ userId, onStart, onCancel, onAddCourse }: Props) {
   const playerIdKey = useMemo(() => selectedPlayers.map(p => p.id).join(','), [selectedPlayers])
   useEffect(() => {
     setGroups(autoAssignGroups(selectedPlayers.map(p => p.id)))
+    setGroupError(null)
   }, [playerIdKey])
 
   const togglePlayer = (player: Player) => {
@@ -573,7 +575,7 @@ export function EventSetup({ userId, onStart, onCancel, onAddCourse }: Props) {
                       {groupNumbers.map(targetGn => (
                         <button
                           key={targetGn}
-                          onClick={() => setGroups(prev => ({ ...prev, [player.id]: targetGn }))}
+                          onClick={() => { setGroupError(null); setGroups(prev => ({ ...prev, [player.id]: targetGn })) }}
                           className={`w-7 h-7 rounded-lg text-xs font-bold transition-colors ${
                             groups[player.id] === targetGn
                               ? 'bg-amber-500 text-white'
@@ -592,13 +594,17 @@ export function EventSetup({ userId, onStart, onCancel, onAddCourse }: Props) {
         </div>
         <div className="fixed bottom-0 inset-x-0 p-4 bg-white/95 dark:bg-gray-800/95 backdrop-blur-sm border-t border-gray-200 safe-bottom">
           <div className="max-w-2xl mx-auto">
+            {groupError && (
+              <p className="text-red-500 text-sm font-semibold text-center mb-2">{groupError}</p>
+            )}
             <button
               onClick={() => {
                 // Validate groups: no empty groups, max per group
                 const hasEmpty = groupNumbers.some(gn => !selectedPlayers.some(p => groups[p.id] === gn))
-                if (hasEmpty) return
+                if (hasEmpty) { setGroupError('Each group needs at least 1 player'); return }
                 const oversize = groupNumbers.some(gn => selectedPlayers.filter(p => groups[p.id] === gn).length > MAX_PER_GROUP)
-                if (oversize) return
+                if (oversize) { setGroupError(`Max ${MAX_PER_GROUP} players per group`); return }
+                setGroupError(null)
                 setStep('game')
               }}
               className="w-full h-14 bg-gray-800 text-white text-lg font-bold rounded-2xl active:bg-gray-900"

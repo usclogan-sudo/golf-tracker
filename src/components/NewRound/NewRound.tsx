@@ -134,14 +134,17 @@ function CoursePicker({
   const [selecting, setSelecting] = useState<string | null>(null)
   const [savedCourses, setSavedCourses] = useState<Course[]>([])
   const [sharedCourses, setSharedCourses] = useState<Course[]>([])
+  const [loading, setLoading] = useState(true)
   const headerClass = stakesMode === 'high_roller' ? 'hr-header' : 'app-header'
 
   useEffect(() => {
-    supabase.from('courses').select('*').order('name').then(({ data }) => {
-      if (data) setSavedCourses(data.map(rowToCourse))
-    })
-    supabase.from('shared_courses').select('*').order('name').limit(500).then(({ data }) => {
-      if (data) setSharedCourses(data.map(rowToSharedCourse))
+    Promise.all([
+      supabase.from('courses').select('*').order('name'),
+      supabase.from('shared_courses').select('*').order('name').limit(500),
+    ]).then(([coursesRes, sharedRes]) => {
+      if (coursesRes.data) setSavedCourses(coursesRes.data.map(rowToCourse))
+      if (sharedRes.data) setSharedCourses(sharedRes.data.map(rowToSharedCourse))
+      setLoading(false)
     })
   }, [])
 
@@ -204,7 +207,9 @@ function CoursePicker({
         holes: item.dbCourse.holes,
         createdAt: new Date(),
       }
+      // Fire-and-forget — course snapshot is stored in the round, so proceed even if save fails
       safeWrite(supabase.from('courses').insert(courseToRow(course, userId)), 'insert shared course')
+        .catch(() => {})
       onSelect(course)
       return
     }
@@ -217,6 +222,7 @@ function CoursePicker({
       createdAt: new Date(),
     }
     safeWrite(supabase.from('courses').insert(courseToRow(course, userId)), 'insert template course')
+      .catch(() => {})
     onSelect(course)
   }
 
@@ -286,7 +292,12 @@ function CoursePicker({
             </button>
           ))}
 
-          {filtered.length === 0 && (
+          {loading && (
+            <div className="flex justify-center py-8">
+              <div className="w-6 h-6 border-2 border-amber-500 border-t-transparent rounded-full animate-spin" />
+            </div>
+          )}
+          {!loading && filtered.length === 0 && (
             <p className="text-center text-gray-400 py-8">No courses match "{query}"</p>
           )}
         </div>
@@ -337,6 +348,7 @@ function PlayerPicker({
   const [newTee, setNewTee] = useState(course.tees[0]?.name ?? 'White')
   const [addError, setAddError] = useState('')
   const [saving, setSaving] = useState(false)
+  const [loadingPlayers, setLoadingPlayers] = useState(true)
 
   const MAX_PLAYERS = 6
   const headerClass = stakesMode === 'high_roller' ? 'hr-header' : 'app-header'
@@ -407,6 +419,7 @@ function PlayerPicker({
       } catch {
         // Non-critical — continue without recent friends
       }
+      setLoadingPlayers(false)
     }
     loadPlayers()
   }, [userId])
@@ -492,10 +505,16 @@ function PlayerPicker({
           {selectedIds.size === 0
             ? `Select up to ${MAX_PLAYERS} players`
             : `${selectedIds.size} player${selectedIds.size !== 1 ? 's' : ''} selected`}
-          {selectedIds.size === MAX_PLAYERS && ' (max — Create Event for larger groups)'}
+          {selectedIds.size === MAX_PLAYERS && ' (max)'}
         </p>
 
-        {(() => {
+        {loadingPlayers && (
+          <div className="flex justify-center py-8">
+            <div className="w-6 h-6 border-2 border-amber-500 border-t-transparent rounded-full animate-spin" />
+          </div>
+        )}
+
+        {!loadingPlayers && (() => {
           const renderPlayerCard = (player: Player, badge?: string) => {
             const selected = selectedIds.has(player.id)
             const activeTee = playerTees[player.id] ?? player.tee
@@ -605,10 +624,6 @@ function PlayerPicker({
             </div>
           )
         })()}
-
-        {isSearching && filtered.length === 0 && (
-          <p className="text-center text-gray-400 py-8">No players match "{query}"</p>
-        )}
 
         {showAddForm ? (
           <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700 p-4 space-y-3">
@@ -977,8 +992,9 @@ function GameSetup({
   }
 
   useEffect(() => {
-    supabase.from('game_presets').select('*').order('sort_order').then(({ data }) => {
+    supabase.from('game_presets').select('*').order('sort_order').then(({ data, error }) => {
       if (data) setGamePresets(data.map(rowToGamePreset))
+      if (error) console.warn('Failed to load game presets:', error.message)
     })
   }, [])
 
@@ -1626,14 +1642,14 @@ function GameSetup({
                         <button
                           onClick={() => moveWolfPlayer(index, -1)}
                           disabled={index === 0}
-                          className="w-8 h-8 rounded-lg bg-white border border-gray-200 text-gray-600 disabled:opacity-30 flex items-center justify-center text-sm"
+                          className="w-10 h-10 rounded-lg bg-white border border-gray-200 text-gray-600 disabled:opacity-30 flex items-center justify-center text-sm"
                         >
                           ↑
                         </button>
                         <button
                           onClick={() => moveWolfPlayer(index, 1)}
                           disabled={index === wolfOrder.length - 1}
-                          className="w-8 h-8 rounded-lg bg-white border border-gray-200 text-gray-600 disabled:opacity-30 flex items-center justify-center text-sm"
+                          className="w-10 h-10 rounded-lg bg-white border border-gray-200 text-gray-600 disabled:opacity-30 flex items-center justify-center text-sm"
                         >
                           ↓
                         </button>
@@ -1872,14 +1888,14 @@ function GameSetup({
                         <button
                           onClick={() => moveBankerPlayer(index, -1)}
                           disabled={index === 0}
-                          className="w-8 h-8 rounded-lg bg-white border border-gray-200 text-gray-600 disabled:opacity-30 flex items-center justify-center text-sm"
+                          className="w-10 h-10 rounded-lg bg-white border border-gray-200 text-gray-600 disabled:opacity-30 flex items-center justify-center text-sm"
                         >
                           ↑
                         </button>
                         <button
                           onClick={() => moveBankerPlayer(index, 1)}
                           disabled={index === bankerOrder.length - 1}
-                          className="w-8 h-8 rounded-lg bg-white border border-gray-200 text-gray-600 disabled:opacity-30 flex items-center justify-center text-sm"
+                          className="w-10 h-10 rounded-lg bg-white border border-gray-200 text-gray-600 disabled:opacity-30 flex items-center justify-center text-sm"
                         >
                           ↓
                         </button>
@@ -1982,7 +1998,10 @@ function TreasurerAndBuyIns({
   onBack: () => void
   stepIndicator?: React.ReactNode
 }) {
-  const [treasurerId, setTreasurerId] = useState<string | null>(null)
+  const [treasurerId, setTreasurerId] = useState<string | null>(() => {
+    const me = players.find(p => p.id === userId)
+    return me ? me.id : null
+  })
   const [gameMasterId, setGameMasterId] = useState<string>(players.find(p => p.id === userId)?.id ?? players[0]?.id ?? userId)
   const [paid, setPaid] = useState<Record<string, boolean>>(() => {
     const init: Record<string, boolean> = {}
@@ -2190,6 +2209,14 @@ function TreasurerAndBuyIns({
             <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Confirm Payments</p>
             <p className="text-sm text-gray-500 mt-1">Tap each player once they've paid the treasurer.</p>
           </div>
+          {!allPaid && (
+            <button
+              onClick={() => setPaid(Object.fromEntries(players.map(p => [p.id, true])))}
+              className="w-full h-10 bg-amber-100 text-amber-700 text-sm font-semibold rounded-xl active:bg-amber-200 transition-colors"
+            >
+              Mark All Paid
+            </button>
+          )}
           <div className="space-y-2">
             {players.map(p => (
               <button
@@ -2272,6 +2299,7 @@ export function NewRound({ userId, onStart, onCancel, onAddCourse, initialStakes
 
   const preSelectedPlayerIds = templateRound?.players?.map(p => p.id)
   const [creatingDirect, setCreatingDirect] = useState(false)
+  const [directCreateError, setDirectCreateError] = useState<string | null>(null)
 
   const skipGroups = !players || players.length <= MAX_PER_GROUP_CONST
 
@@ -2290,6 +2318,7 @@ export function NewRound({ userId, onStart, onCancel, onAddCourse, initialStakes
   const createRoundDirect = async (g: Game, jc?: JunkConfig) => {
     if (!course || !players || creatingDirect) return
     setCreatingDirect(true)
+    setDirectCreateError(null)
     try {
       const roundId = uuidv4()
       const inviteCode = generateInviteCode()
@@ -2324,10 +2353,13 @@ export function NewRound({ userId, onStart, onCancel, onAddCourse, initialStakes
         supabase.from('round_players').insert(roundPlayers.map(rp => roundPlayerToRow(rp, userId))),
       ])
       if (roundResult.error || rpResult.error) {
+        setDirectCreateError('Failed to create round. Check your connection and try again.')
         setCreatingDirect(false)
         return
       }
       onStart(roundId)
+    } catch {
+      setDirectCreateError('Failed to create round. Check your connection and try again.')
     } finally {
       setCreatingDirect(false)
     }
@@ -2380,23 +2412,30 @@ export function NewRound({ userId, onStart, onCancel, onAddCourse, initialStakes
 
   if (step === 'game' && players) {
     return (
-      <GameSetup
-        players={players}
-        initialStakesMode={initialStakesMode}
-        onNext={(g, jc) => {
-          setGame(g); setJunkConfig(jc)
-          if (g.buyInCents === 0 || g.stakesMode === 'points') {
-            // Skip TreasurerAndBuyIns — create round directly with no treasurer
-            createRoundDirect(g, jc)
-          } else {
-            setStep('money')
-          }
-        }}
-        onBack={() => players.length > MAX_PER_GROUP_CONST ? setStep('groups') : setStep('players')}
-        initialGame={templateRound?.game}
-        initialJunkConfig={junkConfig}
-        stepIndicator={stepBar}
-      />
+      <>
+        {directCreateError && (
+          <div className="fixed top-0 inset-x-0 z-50 p-4 bg-red-500 text-white text-center text-sm font-semibold">
+            {directCreateError}
+          </div>
+        )}
+        <GameSetup
+          players={players}
+          initialStakesMode={initialStakesMode}
+          onNext={(g, jc) => {
+            setGame(g); setJunkConfig(jc)
+            if (g.buyInCents === 0 || g.stakesMode === 'points') {
+              // Skip TreasurerAndBuyIns — create round directly with no treasurer
+              createRoundDirect(g, jc)
+            } else {
+              setStep('money')
+            }
+          }}
+          onBack={() => players.length > MAX_PER_GROUP_CONST ? setStep('groups') : setStep('players')}
+          initialGame={templateRound?.game}
+          initialJunkConfig={junkConfig}
+          stepIndicator={stepBar}
+        />
+      </>
     )
   }
 

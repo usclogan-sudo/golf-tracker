@@ -535,7 +535,7 @@ export function Scorecard({ userId, roundId, onEndRound, onHome, readOnly: readO
           })
         }
         setPendingCount(getPending())
-        // No error shown — offline indicator is displayed instead
+        showScoreToast('Saved offline — will sync when connected', 'success')
       } else {
         setSaveError('Score failed to save — check your connection')
         setLastFailedSave({ playerId, grossScore })
