@@ -857,6 +857,8 @@ export function Scorecard({ userId, roundId, onEndRound, onHome, readOnly: readO
     canApproveScores,
     readOnly,
     myEventGroupNumber,
+    myParticipant,
+    myEventParticipant,
   } = computeScorecardPermissions(userId, round, roundParticipants, eventParticipants, isEventRound, readOnlyProp)
 
   // Filter scores for game logic: only use approved scores

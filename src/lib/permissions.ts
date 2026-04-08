@@ -5,6 +5,8 @@ export interface ScorecardPermissions {
   isGameMaster: boolean
   isScoremasterRole: boolean
   selfEntryOnly: boolean
+  myParticipant: RoundParticipant | undefined
+  myEventParticipant: EventParticipant | undefined
   isEventManager: boolean
   isGroupScorekeeper: boolean
   canApproveScores: boolean
@@ -39,6 +41,8 @@ export function computeScorecardPermissions(
     isGameMaster,
     isScoremasterRole,
     selfEntryOnly,
+    myParticipant,
+    myEventParticipant,
     isEventManager,
     isGroupScorekeeper,
     canApproveScores,
