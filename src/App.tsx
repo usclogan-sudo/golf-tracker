@@ -66,21 +66,6 @@ function coursePhotoClass(name: string): string {
 }
 
 
-function StatChip({ label, value, accent, onClick }: { label: string; value: string | number; accent?: boolean; onClick?: () => void }) {
-  const cls = `flex-1 rounded-2xl py-3 px-2 text-center ${accent ? 'bg-gold-400/20 border border-gold-400/30' : 'bg-white/10'} ${onClick ? 'active:scale-95 transition-transform cursor-pointer' : ''}`
-  const inner = (
-    <>
-      <p className={`text-xl font-bold font-display ${accent ? 'gold-text' : 'text-white'}`}>{value}</p>
-      <p className={`text-xs mt-0.5 ${accent ? 'text-gold-300' : 'text-gray-300'}`}>{label}</p>
-    </>
-  )
-  if (onClick) {
-    return <button className={cls} onClick={onClick}>{inner}</button>
-  }
-  return <div className={cls}>{inner}</div>
-}
-
-
 function CourseCard({ course, onEdit, onDelete, stats }: { course: Course; onEdit: () => void; onDelete: () => void; stats?: { played: number; best: number | null; avg: number | null } }) {
   const par = totalPar(course)
   return (
@@ -124,7 +109,6 @@ function Home({
   userId,
   userProfile,
   onNewRound,
-  onNewHighRollerRound,
   onAddCourse,
   onResumeRound,
   onEditCourse,
@@ -140,7 +124,6 @@ function Home({
   onUpgrade,
   onEndRound,
   onViewRound,
-  onHandicapDetail,
   onJoinRound,
   notificationCount,
   onTournaments,
@@ -153,7 +136,6 @@ function Home({
   userId: string
   userProfile: UserProfile | null
   onNewRound: () => void
-  onNewHighRollerRound: () => void
   onAddCourse: (courseName?: string) => void
   onResumeRound: (roundId: string) => void
   onEditCourse: (course: Course) => void
@@ -169,7 +151,6 @@ function Home({
   onUpgrade?: () => void
   onEndRound?: (roundId: string) => void
   onViewRound?: (roundId: string) => void
-  onHandicapDetail: () => void
   notificationCount?: number
   onJoinRound: (code?: string) => void
   onTournaments: () => void
@@ -310,71 +291,31 @@ function Home({
 
   return (
     <div className="min-h-screen bg-slate-50 dark:bg-gray-900 pb-8">
-      <header className="app-header text-white px-4 pt-6 pb-5 sticky top-0 z-10 shadow-xl">
-        <div className="max-w-2xl mx-auto">
-          <div className="flex items-center justify-between mb-5">
-            <div>
-              <h1 className="font-display text-3xl font-800 tracking-tight leading-none">Gimme</h1>
-              <p className="text-amber-400 text-sm font-medium mt-0.5 tracking-wide">GOLF · SIDE GAMES · MONEY</p>
-            </div>
-            <div className="flex items-center gap-2">
-              {isAdmin && (
-                <button
-                  onClick={onAdmin}
-                  className="min-w-[44px] min-h-[44px] flex items-center justify-center rounded-full hover:bg-gray-600 border border-gray-500 text-gray-300"
-                  aria-label="Admin"
-                >
-                  <span className="text-lg">🛡️</span>
-                </button>
-              )}
-              <button onClick={onSettings} aria-label="Settings">
-                <UserAvatar url={userProfile?.avatarUrl} preset={userProfile?.avatarPreset} name={userProfile?.displayName} size="sm" />
-              </button>
+      <header className="app-header text-white px-4 pt-5 pb-4 sticky top-0 z-10 shadow-xl">
+        <div className="max-w-2xl mx-auto flex items-center justify-between gap-2">
+          <div className="min-w-0">
+            <h1 className="font-display text-2xl font-800 tracking-tight leading-none">Gimme</h1>
+            <p className="text-amber-400 text-[11px] font-medium mt-0.5 tracking-wide">GOLF · SIDE GAMES · MONEY</p>
+          </div>
+          <div className="flex items-center gap-2 flex-shrink-0">
+            {isAdmin && (
               <button
-                onClick={onSignOut}
-                className="text-gray-300 text-xs font-medium px-3 py-1.5 rounded-lg hover:bg-gray-600 border border-gray-500"
+                onClick={onAdmin}
+                className="min-w-[40px] min-h-[40px] flex items-center justify-center rounded-full hover:bg-gray-600 border border-gray-500 text-gray-300"
+                aria-label="Admin"
               >
-                Sign Out
+                <span className="text-base">🛡️</span>
               </button>
-            </div>
-          </div>
-          <div className="flex gap-2">
-            <StatChip label="Rounds" value={roundCount ?? '–'} />
-            <StatChip label="Courses" value={courses.length} />
-            {userProfile?.handicapIndex != null && (
-              <StatChip label="Handicap" value={userProfile.handicapIndex} accent onClick={onHandicapDetail} />
             )}
-          </div>
-          <div className="mt-3 grid grid-cols-3 gap-2">
-            <button onClick={onPersonalDashboard} className={`flex flex-col items-center justify-center min-h-[60px] rounded-xl transition-colors ${roundCount > 0 ? 'bg-gray-700/50 text-gray-200 active:bg-gray-600' : 'bg-gray-700/30 text-gray-500'}`}>
-              <span className="text-lg">📈</span>
-              <span className="text-xs font-medium mt-0.5">My Stats</span>
+            <button onClick={onSettings} aria-label="Settings">
+              <UserAvatar url={userProfile?.avatarUrl} preset={userProfile?.avatarPreset} name={userProfile?.displayName} size="sm" />
             </button>
-            {roundCount > 0 && (
-              <>
-                <button onClick={onRoundHistory} className="flex flex-col items-center justify-center min-h-[60px] rounded-xl bg-gray-700/50 text-gray-200 active:bg-gray-600 transition-colors relative">
-                  <span className="text-lg">📋</span>
-                  <span className="text-xs font-medium mt-0.5">History</span>
-                  {(notificationCount ?? 0) > 0 && <span className="absolute top-1 right-1"><NotificationBadge count={notificationCount!} /></span>}
-                </button>
-                <button onClick={onStats} className="flex flex-col items-center justify-center min-h-[60px] rounded-xl bg-gray-700/50 text-gray-200 active:bg-gray-600 transition-colors">
-                  <span className="text-lg">📊</span>
-                  <span className="text-xs font-medium mt-0.5">Leaderboard</span>
-                </button>
-                <button onClick={onLedger} className="flex flex-col items-center justify-center min-h-[60px] rounded-xl bg-gray-700/50 text-gray-200 active:bg-gray-600 transition-colors">
-                  <span className="text-lg">💰</span>
-                  <span className="text-xs font-medium mt-0.5">Ledger</span>
-                </button>
-                <button onClick={onPlayers} className="flex flex-col items-center justify-center min-h-[60px] rounded-xl bg-gray-700/50 text-gray-200 active:bg-gray-600 transition-colors">
-                  <span className="text-lg">🏌️</span>
-                  <span className="text-xs font-medium mt-0.5">Players</span>
-                </button>
-                <button onClick={() => guardAnon(onTournaments)} className="flex flex-col items-center justify-center min-h-[60px] rounded-xl bg-gray-700/50 text-gray-200 active:bg-gray-600 transition-colors">
-                  <span className="text-lg">🏆</span>
-                  <span className="text-xs font-medium mt-0.5">Tournaments</span>
-                </button>
-              </>
-            )}
+            <button
+              onClick={onSignOut}
+              className="text-gray-300 text-xs font-medium px-3 py-1.5 rounded-lg hover:bg-gray-600 border border-gray-500"
+            >
+              Sign Out
+            </button>
           </div>
         </div>
       </header>
@@ -401,41 +342,19 @@ function Home({
           <GuestBanner onUpgrade={onUpgrade} />
         )}
 
-        {/* Personal Summary */}
-        {personalSummary && (
-          <button
-            onClick={onPersonalDashboard}
-            className="w-full bg-white dark:bg-gray-800 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700 px-4 py-3 text-left active:bg-gray-50 dark:active:bg-gray-700 transition-colors"
-          >
-            <div className="flex items-center justify-between">
-              <div>
-                <div className="flex items-center gap-2 text-sm">
-                  <span className="font-bold text-gray-800 dark:text-gray-100">{personalSummary.totalRounds} Round{personalSummary.totalRounds !== 1 ? 's' : ''} Played</span>
-                </div>
-                <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                  Last: {personalSummary.lastCourse}, {personalSummary.lastDate}
-                  {personalSummary.lastScore != null && ` — Shot ${personalSummary.lastScore}`}
-                </p>
-              </div>
-              <span className="text-xs text-amber-600 font-semibold">View Stats →</span>
+        {/* Primary CTA: Start New Round — directly below feedback banner */}
+        <button onClick={() => guardAnon(onNewRound)}
+          className="w-full rounded-2xl shadow-lg overflow-hidden active:scale-[0.98] transition-transform"
+          style={{ background: 'linear-gradient(135deg, #1f2937 0%, #374151 100%)' }}>
+          <div className="px-6 py-5 flex items-center justify-between">
+            <div className="text-left">
+              <p className="font-display font-bold text-white text-xl">Start New Round</p>
+              <p className="text-gray-300 text-sm mt-0.5">Skins · Best Ball · Nassau · Wolf · BBB</p>
             </div>
-          </button>
-        )}
-        {lastRoundObj?.courseSnapshot && onPlayAgain && (
-          <button
-            onClick={() => onPlayAgain(lastRoundObj)}
-            className="w-full bg-white dark:bg-gray-800 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700 px-4 py-3 text-left active:bg-gray-50 dark:active:bg-gray-700 transition-colors flex items-center justify-between"
-          >
-            <div className="flex items-center gap-3">
-              <span className="text-2xl">🔄</span>
-              <div>
-                <p className="font-semibold text-gray-800 dark:text-gray-100 text-sm">Play Again</p>
-                <p className="text-xs text-gray-500 dark:text-gray-400">{lastRoundObj.courseSnapshot.courseName} · {lastRoundObj.players?.length ?? 0} players</p>
-              </div>
-            </div>
-            <span className="text-xs text-amber-600 font-semibold">Go →</span>
-          </button>
-        )}
+            <div className="w-14 h-14 bg-white/15 rounded-2xl flex items-center justify-center text-4xl border border-white/20">▶</div>
+          </div>
+        </button>
+
         {unsettledCount > 0 && (
           <button
             onClick={onLedger}
@@ -566,34 +485,6 @@ function Home({
           </section>
         )}
 
-        <button onClick={() => guardAnon(onNewRound)}
-          className="w-full rounded-2xl shadow-lg overflow-hidden active:scale-[0.98] transition-transform"
-          style={{ background: 'linear-gradient(135deg, #1f2937 0%, #374151 100%)' }}>
-          <div className="px-6 py-5 flex items-center justify-between">
-            <div className="text-left">
-              <p className="font-display font-bold text-white text-xl">Start New Round</p>
-              <p className="text-gray-300 text-sm mt-0.5">Skins · Best Ball · Nassau · Wolf · BBB</p>
-            </div>
-            <div className="w-14 h-14 bg-white/15 rounded-2xl flex items-center justify-center text-4xl border border-white/20">▶</div>
-          </div>
-        </button>
-
-        <button onClick={() => guardAnon(onNewHighRollerRound)}
-          className="w-full rounded-2xl shadow-lg overflow-hidden active:scale-[0.98] transition-transform"
-          style={{ background: 'linear-gradient(135deg, #1a0e00 0%, #5c3d00 100%)' }}>
-          <div className="px-6 py-5 flex items-center justify-between">
-            <div className="text-left">
-              <p className="font-display font-bold text-xl"
-                style={{ background: 'linear-gradient(135deg,#d97706,#fbbf24)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', backgroundClip: 'text' }}>
-                💎 High Roller Round
-              </p>
-              <p className="text-amber-400 text-sm mt-0.5">Premium stakes · Nassau · Wolf · Skins</p>
-            </div>
-            <div className="w-14 h-14 rounded-2xl flex items-center justify-center text-4xl border border-amber-600/40 bg-amber-900/30">💎</div>
-          </div>
-        </button>
-
-
         <button onClick={() => guardAnon(onCreateEvent)}
           className="w-full rounded-2xl shadow-lg overflow-hidden active:scale-[0.98] transition-transform"
           style={{ background: 'linear-gradient(135deg, #0f172a 0%, #1e40af 100%)' }}>
@@ -629,19 +520,58 @@ function Home({
           </div>
         </div>
 
-        {/* Send Feedback */}
-        <a
-          href="mailto:usclogan@gmail.com?subject=Fore%20Skins%20Beta%20Feedback"
-          className="block w-full bg-white dark:bg-gray-800 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700 p-4 text-left active:bg-gray-50 dark:active:bg-gray-700 transition-colors"
-        >
-          <div className="flex items-center gap-3">
-            <span className="text-xl">✉️</span>
-            <div>
-              <p className="font-semibold text-gray-900 dark:text-gray-100 text-sm">Send Feedback</p>
-              <p className="text-xs text-gray-500 dark:text-gray-400">Help us improve the beta</p>
+        {/* Play Again — below the fold for repeat players */}
+        {lastRoundObj?.courseSnapshot && onPlayAgain && (
+          <button
+            onClick={() => onPlayAgain(lastRoundObj)}
+            className="w-full bg-white dark:bg-gray-800 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700 px-4 py-3 text-left active:bg-gray-50 dark:active:bg-gray-700 transition-colors flex items-center justify-between"
+          >
+            <div className="flex items-center gap-3">
+              <span className="text-2xl">🔄</span>
+              <div>
+                <p className="font-semibold text-gray-800 dark:text-gray-100 text-sm">Play Again</p>
+                <p className="text-xs text-gray-500 dark:text-gray-400">{lastRoundObj.courseSnapshot.courseName} · {lastRoundObj.players?.length ?? 0} players</p>
+              </div>
             </div>
+            <span className="text-xs text-amber-600 font-semibold">Go →</span>
+          </button>
+        )}
+
+        {/* More — secondary navigation (was in header) */}
+        <section>
+          <h2 className="font-display font-semibold text-gray-800 dark:text-gray-100 text-base mb-3">More</h2>
+          <div className="grid grid-cols-3 gap-2">
+            <button onClick={onPersonalDashboard} className={`flex flex-col items-center justify-center min-h-[68px] rounded-2xl border shadow-sm transition-colors ${(roundCount ?? 0) > 0 ? 'bg-white dark:bg-gray-800 border-gray-100 dark:border-gray-700 text-gray-700 dark:text-gray-200 active:bg-gray-50 dark:active:bg-gray-700' : 'bg-gray-50 dark:bg-gray-800/40 border-gray-100 dark:border-gray-700 text-gray-400'}`}>
+              <span className="text-xl">📈</span>
+              <span className="text-xs font-semibold mt-0.5">My Stats</span>
+            </button>
+            {(roundCount ?? 0) > 0 && (
+              <>
+                <button onClick={onRoundHistory} className="flex flex-col items-center justify-center min-h-[68px] rounded-2xl border bg-white dark:bg-gray-800 border-gray-100 dark:border-gray-700 text-gray-700 dark:text-gray-200 active:bg-gray-50 dark:active:bg-gray-700 shadow-sm transition-colors relative">
+                  <span className="text-xl">📋</span>
+                  <span className="text-xs font-semibold mt-0.5">History</span>
+                  {(notificationCount ?? 0) > 0 && <span className="absolute top-1 right-1"><NotificationBadge count={notificationCount!} /></span>}
+                </button>
+                <button onClick={onStats} className="flex flex-col items-center justify-center min-h-[68px] rounded-2xl border bg-white dark:bg-gray-800 border-gray-100 dark:border-gray-700 text-gray-700 dark:text-gray-200 active:bg-gray-50 dark:active:bg-gray-700 shadow-sm transition-colors">
+                  <span className="text-xl">📊</span>
+                  <span className="text-xs font-semibold mt-0.5">Leaderboard</span>
+                </button>
+                <button onClick={onLedger} className="flex flex-col items-center justify-center min-h-[68px] rounded-2xl border bg-white dark:bg-gray-800 border-gray-100 dark:border-gray-700 text-gray-700 dark:text-gray-200 active:bg-gray-50 dark:active:bg-gray-700 shadow-sm transition-colors">
+                  <span className="text-xl">💰</span>
+                  <span className="text-xs font-semibold mt-0.5">Ledger</span>
+                </button>
+                <button onClick={onPlayers} className="flex flex-col items-center justify-center min-h-[68px] rounded-2xl border bg-white dark:bg-gray-800 border-gray-100 dark:border-gray-700 text-gray-700 dark:text-gray-200 active:bg-gray-50 dark:active:bg-gray-700 shadow-sm transition-colors">
+                  <span className="text-xl">🏌️</span>
+                  <span className="text-xs font-semibold mt-0.5">Players</span>
+                </button>
+                <button onClick={() => guardAnon(onTournaments)} className="flex flex-col items-center justify-center min-h-[68px] rounded-2xl border bg-white dark:bg-gray-800 border-gray-100 dark:border-gray-700 text-gray-700 dark:text-gray-200 active:bg-gray-50 dark:active:bg-gray-700 shadow-sm transition-colors">
+                  <span className="text-xl">🏆</span>
+                  <span className="text-xs font-semibold mt-0.5">Tournaments</span>
+                </button>
+              </>
+            )}
           </div>
-        </a>
+        </section>
 
         {userProfile?.displayName && (
           <section>
@@ -694,6 +624,20 @@ function Home({
             </div>
           )}
         </section>
+
+        {/* Send Feedback — at the bottom */}
+        <a
+          href="mailto:usclogan@gmail.com?subject=Fore%20Skins%20Beta%20Feedback"
+          className="block w-full bg-white dark:bg-gray-800 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700 p-4 text-left active:bg-gray-50 dark:active:bg-gray-700 transition-colors"
+        >
+          <div className="flex items-center gap-3">
+            <span className="text-xl">✉️</span>
+            <div>
+              <p className="font-semibold text-gray-900 dark:text-gray-100 text-sm">Send Feedback</p>
+              <p className="text-xs text-gray-500 dark:text-gray-400">Help us improve the beta</p>
+            </div>
+          </div>
+        </a>
 
         <p className="text-center text-xs text-gray-400 pb-8">Gimme Golf · Beta</p>
       </main>
@@ -1195,7 +1139,6 @@ export default function App() {
       userId={userId}
       userProfile={userProfile}
       onNewRound={() => { setNewRoundStakesMode('standard'); setScreen('new-round') }}
-      onNewHighRollerRound={() => { setNewRoundStakesMode('high_roller'); setScreen('new-round') }}
       onAddCourse={(courseName) => {
         setAfterCourseSetup('home')
         if (courseName) {
@@ -1219,7 +1162,6 @@ export default function App() {
       onUpgrade={() => setScreen('upgrade-account')}
       onEndRound={handleEndRound}
       onViewRound={roundId => { setScorecardReadOnly(false); setActiveRoundId(roundId); setScreen('scorecard') }}
-      onHandicapDetail={() => setScreen('handicap-detail')}
       onJoinRound={(code) => {
         if (code) setPendingJoinCode(code)
         setScreen('join-round')
