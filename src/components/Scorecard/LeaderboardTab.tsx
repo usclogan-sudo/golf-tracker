@@ -26,6 +26,16 @@ interface Props {
   stablefordResult: StablefordResult | null
   bankerResult: BankerResult | null
   quotaResult: QuotaResult | null
+  // Alt (opposite mode) results
+  skinsResultAlt?: SkinsResult | null
+  bestBallResultAlt?: BestBallResult | null
+  nassauResultAlt?: NassauResult | null
+  wolfResultAlt?: WolfResult | null
+  vegasResultAlt?: VegasResult | null
+  stablefordResultAlt?: StablefordResult | null
+  bankerResultAlt?: BankerResult | null
+  quotaResultAlt?: QuotaResult | null
+  primaryMode?: 'net' | 'gross'
   shareRef: RefObject<HTMLDivElement | null>
   sharing: boolean
   shareImage: () => void
@@ -41,8 +51,14 @@ export function LeaderboardTab({
   snapshot, players, holeScores, courseHcps, game, round,
   skinsResult, bestBallResult, nassauResult, wolfResult, bbbResult,
   hammerResult, vegasResult, stablefordResult, bankerResult, quotaResult,
+  skinsResultAlt, bestBallResultAlt, nassauResultAlt, wolfResultAlt,
+  vegasResultAlt, stablefordResultAlt, bankerResultAlt, quotaResultAlt,
+  primaryMode = 'net',
   shareRef, sharing, shareImage,
 }: Props) {
+  const primaryLabel = primaryMode === 'net' ? 'Net' : 'Gross'
+  const altLabel = primaryMode === 'net' ? 'Gross' : 'Net'
+
   const board = players.map(p => {
     const pScores = holeScores.filter(s => s.playerId === p.id)
     const gross = pScores.reduce((s, hs) => s + hs.grossScore, 0)
@@ -161,10 +177,12 @@ export function LeaderboardTab({
         </table>
 
         {/* Game-specific running totals */}
+
+        {/* Skins */}
         {skinsResult && (
           <div className="mt-3 pt-3 border-t border-gray-100">
             <p className="text-xs font-semibold text-gray-500 uppercase mb-2">
-              Skins — {skinsResult.totalSkins} won{skinsResult.pendingCarry > 0 ? ` · ${skinsResult.pendingCarry} carry` : ''}
+              Skins ({primaryLabel}) — {skinsResult.totalSkins} won{skinsResult.pendingCarry > 0 ? ` · ${skinsResult.pendingCarry} carry` : ''}
             </p>
             <div className="flex flex-wrap gap-2">
               {players.filter(p => (skinsResult.skinsWon[p.id] ?? 0) > 0).map(p => (
@@ -178,19 +196,46 @@ export function LeaderboardTab({
             </div>
           </div>
         )}
+        {skinsResultAlt && (
+          <div className="mt-2 pl-2 border-l-2 border-gray-200">
+            <p className="text-xs font-medium text-gray-400 uppercase mb-1">
+              Skins ({altLabel}) — {skinsResultAlt.totalSkins} won
+            </p>
+            <div className="flex flex-wrap gap-2">
+              {players.filter(p => (skinsResultAlt.skinsWon[p.id] ?? 0) > 0).map(p => (
+                <span key={p.id} className="text-xs text-gray-500 px-2 py-0.5 rounded bg-gray-50">
+                  {p.name}: {skinsResultAlt.skinsWon[p.id]}
+                </span>
+              ))}
+              {skinsResultAlt.totalSkins === 0 && (
+                <span className="text-xs text-gray-400">No skins won yet</span>
+              )}
+            </div>
+          </div>
+        )}
 
+        {/* Best Ball */}
         {bestBallResult && (
           <div className="mt-3 pt-3 border-t border-gray-100">
-            <p className="text-xs font-semibold text-gray-500 uppercase mb-1">Best Ball</p>
+            <p className="text-xs font-semibold text-gray-500 uppercase mb-1">Best Ball ({primaryLabel})</p>
             <p className="text-sm font-semibold text-gray-700">
               Team A: {bestBallResult.holesWon.A}W · Team B: {bestBallResult.holesWon.B}W · Tied: {bestBallResult.holesWon.tied}
             </p>
           </div>
         )}
+        {bestBallResultAlt && (
+          <div className="mt-2 pl-2 border-l-2 border-gray-200">
+            <p className="text-xs font-medium text-gray-400 uppercase mb-1">Best Ball ({altLabel})</p>
+            <p className="text-sm text-gray-500">
+              Team A: {bestBallResultAlt.holesWon.A}W · Team B: {bestBallResultAlt.holesWon.B}W · Tied: {bestBallResultAlt.holesWon.tied}
+            </p>
+          </div>
+        )}
 
+        {/* Nassau */}
         {nassauResult && (
           <div className="mt-3 pt-3 border-t border-gray-100">
-            <p className="text-xs font-semibold text-gray-500 uppercase mb-2">Nassau</p>
+            <p className="text-xs font-semibold text-gray-500 uppercase mb-2">Nassau ({primaryLabel})</p>
             <div className="space-y-1">
               {[
                 { label: 'Front', seg: nassauResult.front },
@@ -209,10 +254,32 @@ export function LeaderboardTab({
             </div>
           </div>
         )}
+        {nassauResultAlt && (
+          <div className="mt-2 pl-2 border-l-2 border-gray-200">
+            <p className="text-xs font-medium text-gray-400 uppercase mb-1">Nassau ({altLabel})</p>
+            <div className="space-y-0.5">
+              {[
+                { label: 'Front', seg: nassauResultAlt.front },
+                { label: 'Back', seg: nassauResultAlt.back },
+                { label: 'Total', seg: nassauResultAlt.total },
+              ].map(({ label, seg }) => {
+                const leader = seg.winner ? players.find(p => p.id === seg.winner)?.name : null
+                const tiedNames = seg.tiedPlayers.map(id => players.find(p => p.id === id)?.name).filter(Boolean).join(', ')
+                return (
+                  <p key={label} className="text-xs text-gray-500">
+                    <span className="font-medium">{label}:</span>{' '}
+                    {seg.incomplete ? 'In progress' : leader ?? (tiedNames ? `Tied (${tiedNames})` : '—')}
+                  </p>
+                )
+              })}
+            </div>
+          </div>
+        )}
 
+        {/* Wolf */}
         {wolfResult && (
           <div className="mt-3 pt-3 border-t border-gray-100">
-            <p className="text-xs font-semibold text-gray-500 uppercase mb-2">Wolf — Net Units</p>
+            <p className="text-xs font-semibold text-gray-500 uppercase mb-2">Wolf ({primaryLabel}) — Units</p>
             <div className="flex flex-wrap gap-2">
               {players.slice().sort((a, b) => (wolfResult.netUnits[b.id] ?? 0) - (wolfResult.netUnits[a.id] ?? 0)).map(p => {
                 const u = wolfResult.netUnits[p.id] ?? 0
@@ -225,7 +292,23 @@ export function LeaderboardTab({
             </div>
           </div>
         )}
+        {wolfResultAlt && (
+          <div className="mt-2 pl-2 border-l-2 border-gray-200">
+            <p className="text-xs font-medium text-gray-400 uppercase mb-1">Wolf ({altLabel}) — Units</p>
+            <div className="flex flex-wrap gap-2">
+              {players.slice().sort((a, b) => (wolfResultAlt.netUnits[b.id] ?? 0) - (wolfResultAlt.netUnits[a.id] ?? 0)).map(p => {
+                const u = wolfResultAlt.netUnits[p.id] ?? 0
+                return (
+                  <span key={p.id} className="text-xs text-gray-500 px-2 py-0.5 rounded bg-gray-50">
+                    {p.name}: {u > 0 ? '+' : ''}{u}
+                  </span>
+                )
+              })}
+            </div>
+          </div>
+        )}
 
+        {/* BBB — no mode, no alt */}
         {bbbResult && (
           <div className="mt-3 pt-3 border-t border-gray-100">
             <p className="text-xs font-semibold text-gray-500 uppercase mb-2">Bingo Bango Bongo</p>
@@ -235,6 +318,133 @@ export function LeaderboardTab({
                 return (
                   <span key={p.id} className={`text-xs font-semibold px-2 py-1 rounded-lg ${pts > 0 ? 'bg-amber-50 text-amber-700' : 'bg-gray-50 text-gray-500'}`}>
                     {p.name}: {pts}pt{pts !== 1 ? 's' : ''}
+                  </span>
+                )
+              })}
+            </div>
+          </div>
+        )}
+
+        {/* Hammer — no mode, no alt */}
+        {hammerResult && (
+          <div className="mt-3 pt-3 border-t border-gray-100">
+            <p className="text-xs font-semibold text-gray-500 uppercase mb-2">Hammer</p>
+            <div className="flex flex-wrap gap-2">
+              {players.slice().sort((a, b) => (hammerResult.netCents[b.id] ?? 0) - (hammerResult.netCents[a.id] ?? 0)).map(p => {
+                const net = hammerResult.netCents[p.id] ?? 0
+                return (
+                  <span key={p.id} className={`text-xs font-semibold px-2 py-1 rounded-lg ${net > 0 ? 'bg-orange-50 text-orange-700' : net < 0 ? 'bg-red-50 text-red-600' : 'bg-gray-50 text-gray-500'}`}>
+                    {p.name}: {net > 0 ? '+' : ''}{fmtMoney(Math.abs(net))}
+                  </span>
+                )
+              })}
+            </div>
+          </div>
+        )}
+
+        {/* Vegas */}
+        {vegasResult && (
+          <div className="mt-3 pt-3 border-t border-gray-100">
+            <p className="text-xs font-semibold text-gray-500 uppercase mb-1">Vegas ({primaryLabel})</p>
+            <p className="text-sm font-semibold text-gray-700">
+              Team A: {vegasResult.netPoints.A} pts · Team B: {vegasResult.netPoints.B} pts
+              {vegasResult.winner !== 'tie' ? ` · Winner: Team ${vegasResult.winner}` : ' · Tied'}
+            </p>
+          </div>
+        )}
+        {vegasResultAlt && (
+          <div className="mt-2 pl-2 border-l-2 border-gray-200">
+            <p className="text-xs font-medium text-gray-400 uppercase mb-1">Vegas ({altLabel})</p>
+            <p className="text-xs text-gray-500">
+              Team A: {vegasResultAlt.netPoints.A} pts · Team B: {vegasResultAlt.netPoints.B} pts
+              {vegasResultAlt.winner !== 'tie' ? ` · Winner: Team ${vegasResultAlt.winner}` : ' · Tied'}
+            </p>
+          </div>
+        )}
+
+        {/* Stableford */}
+        {stablefordResult && (
+          <div className="mt-3 pt-3 border-t border-gray-100">
+            <p className="text-xs font-semibold text-gray-500 uppercase mb-2">Stableford ({primaryLabel})</p>
+            <div className="flex flex-wrap gap-2">
+              {players.slice().sort((a, b) => (stablefordResult.points[b.id] ?? 0) - (stablefordResult.points[a.id] ?? 0)).map(p => (
+                <span key={p.id} className="text-xs font-semibold px-2 py-1 rounded-lg bg-indigo-50 text-indigo-700">
+                  {p.name}: {stablefordResult.points[p.id] ?? 0} pts
+                </span>
+              ))}
+            </div>
+          </div>
+        )}
+        {stablefordResultAlt && (
+          <div className="mt-2 pl-2 border-l-2 border-gray-200">
+            <p className="text-xs font-medium text-gray-400 uppercase mb-1">Stableford ({altLabel})</p>
+            <div className="flex flex-wrap gap-2">
+              {players.slice().sort((a, b) => (stablefordResultAlt.points[b.id] ?? 0) - (stablefordResultAlt.points[a.id] ?? 0)).map(p => (
+                <span key={p.id} className="text-xs text-gray-500 px-2 py-0.5 rounded bg-gray-50">
+                  {p.name}: {stablefordResultAlt.points[p.id] ?? 0} pts
+                </span>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Banker */}
+        {bankerResult && (
+          <div className="mt-3 pt-3 border-t border-gray-100">
+            <p className="text-xs font-semibold text-gray-500 uppercase mb-2">Banker ({primaryLabel})</p>
+            <div className="flex flex-wrap gap-2">
+              {players.slice().sort((a, b) => (bankerResult.netCents[b.id] ?? 0) - (bankerResult.netCents[a.id] ?? 0)).map(p => {
+                const net = bankerResult.netCents[p.id] ?? 0
+                return (
+                  <span key={p.id} className={`text-xs font-semibold px-2 py-1 rounded-lg ${net > 0 ? 'bg-emerald-50 text-emerald-700' : net < 0 ? 'bg-red-50 text-red-600' : 'bg-gray-50 text-gray-500'}`}>
+                    {p.name}: {net > 0 ? '+' : ''}{fmtMoney(Math.abs(net))}
+                  </span>
+                )
+              })}
+            </div>
+          </div>
+        )}
+        {bankerResultAlt && (
+          <div className="mt-2 pl-2 border-l-2 border-gray-200">
+            <p className="text-xs font-medium text-gray-400 uppercase mb-1">Banker ({altLabel})</p>
+            <div className="flex flex-wrap gap-2">
+              {players.slice().sort((a, b) => (bankerResultAlt.netCents[b.id] ?? 0) - (bankerResultAlt.netCents[a.id] ?? 0)).map(p => {
+                const net = bankerResultAlt.netCents[p.id] ?? 0
+                return (
+                  <span key={p.id} className="text-xs text-gray-500 px-2 py-0.5 rounded bg-gray-50">
+                    {p.name}: {net > 0 ? '+' : ''}{fmtMoney(Math.abs(net))}
+                  </span>
+                )
+              })}
+            </div>
+          </div>
+        )}
+
+        {/* Quota */}
+        {quotaResult && (
+          <div className="mt-3 pt-3 border-t border-gray-100">
+            <p className="text-xs font-semibold text-gray-500 uppercase mb-2">Quota ({primaryLabel})</p>
+            <div className="flex flex-wrap gap-2">
+              {players.slice().sort((a, b) => (quotaResult.netPoints[b.id] ?? 0) - (quotaResult.netPoints[a.id] ?? 0)).map(p => {
+                const net = quotaResult.netPoints[p.id] ?? 0
+                return (
+                  <span key={p.id} className={`text-xs font-semibold px-2 py-1 rounded-lg ${net > 0 ? 'bg-blue-50 text-blue-700' : net < 0 ? 'bg-red-50 text-red-600' : 'bg-gray-50 text-gray-500'}`}>
+                    {p.name}: {net > 0 ? '+' : ''}{net}
+                  </span>
+                )
+              })}
+            </div>
+          </div>
+        )}
+        {quotaResultAlt && (
+          <div className="mt-2 pl-2 border-l-2 border-gray-200">
+            <p className="text-xs font-medium text-gray-400 uppercase mb-1">Quota ({altLabel})</p>
+            <div className="flex flex-wrap gap-2">
+              {players.slice().sort((a, b) => (quotaResultAlt.netPoints[b.id] ?? 0) - (quotaResultAlt.netPoints[a.id] ?? 0)).map(p => {
+                const net = quotaResultAlt.netPoints[p.id] ?? 0
+                return (
+                  <span key={p.id} className="text-xs text-gray-500 px-2 py-0.5 rounded bg-gray-50">
+                    {p.name}: {net > 0 ? '+' : ''}{net}
                   </span>
                 )
               })}

@@ -949,6 +949,55 @@ export function Scorecard({ userId, roundId, onEndRound, onHome, readOnly: readO
     return calculateQuota(players, approvedScores, snapshot, game.config as QuotaConfig, courseHcps)
   }, [game, players, approvedScores, snapshot, courseHcps])
 
+  // Alt (opposite mode) results — compute the other mode for dual display
+  const skinsResultAlt = useMemo(() => {
+    if (!game || game.type !== 'skins' || !snapshot) return null
+    const cfg = game.config as SkinsConfig
+    return calculateSkins(players, approvedScores, snapshot, { ...cfg, mode: cfg.mode === 'net' ? 'gross' : 'net' }, courseHcps)
+  }, [game, players, approvedScores, snapshot, courseHcps])
+
+  const bestBallResultAlt = useMemo(() => {
+    if (!game || game.type !== 'best_ball' || !snapshot) return null
+    const cfg = game.config as BestBallConfig
+    return calculateBestBall(players, approvedScores, snapshot, { ...cfg, mode: cfg.mode === 'net' ? 'gross' : 'net' }, courseHcps)
+  }, [game, players, approvedScores, snapshot, courseHcps])
+
+  const nassauResultAlt = useMemo(() => {
+    if (!game || game.type !== 'nassau' || !snapshot) return null
+    const cfg = game.config as NassauConfig
+    return calculateNassau(players, approvedScores, snapshot, { ...cfg, mode: cfg.mode === 'net' ? 'gross' : 'net' }, courseHcps)
+  }, [game, players, approvedScores, snapshot, courseHcps])
+
+  const wolfResultAlt = useMemo(() => {
+    if (!game || game.type !== 'wolf' || !snapshot) return null
+    const cfg = game.config as WolfConfig
+    return calculateWolf(players, approvedScores, snapshot, { ...cfg, mode: cfg.mode === 'net' ? 'gross' : 'net' }, courseHcps)
+  }, [game, players, approvedScores, snapshot, courseHcps])
+
+  const vegasResultAlt = useMemo(() => {
+    if (!game || game.type !== 'vegas' || !snapshot) return null
+    const cfg = game.config as VegasConfig
+    return calculateVegas(players, approvedScores, snapshot, { ...cfg, mode: cfg.mode === 'net' ? 'gross' : 'net' }, courseHcps)
+  }, [game, players, approvedScores, snapshot, courseHcps])
+
+  const stablefordResultAlt = useMemo(() => {
+    if (!game || game.type !== 'stableford' || !snapshot) return null
+    const cfg = game.config as StablefordConfig
+    return calculateStableford(players, approvedScores, snapshot, { ...cfg, mode: cfg.mode === 'net' ? 'gross' : 'net' }, courseHcps)
+  }, [game, players, approvedScores, snapshot, courseHcps])
+
+  const bankerResultAlt = useMemo(() => {
+    if (!game || game.type !== 'banker' || !snapshot) return null
+    const cfg = game.config as BankerConfig
+    return calculateBanker(players, approvedScores, snapshot, { ...cfg, mode: cfg.mode === 'net' ? 'gross' : 'net' }, courseHcps)
+  }, [game, players, approvedScores, snapshot, courseHcps])
+
+  const quotaResultAlt = useMemo(() => {
+    if (!game || game.type !== 'quota' || !snapshot) return null
+    const cfg = game.config as QuotaConfig
+    return calculateQuota(players, approvedScores, snapshot, { ...cfg, mode: cfg.mode === 'net' ? 'gross' : 'net' }, courseHcps)
+  }, [game, players, approvedScores, snapshot, courseHcps])
+
   const currentHammerState = hammerStates[currentHole] ?? null
 
   const currentCarry = useMemo(() => {
@@ -1503,6 +1552,15 @@ export function Scorecard({ userId, roundId, onEndRound, onHome, readOnly: readO
           stablefordResult={stablefordResult}
           bankerResult={bankerResult}
           quotaResult={quotaResult}
+          skinsResultAlt={skinsResultAlt}
+          bestBallResultAlt={bestBallResultAlt}
+          nassauResultAlt={nassauResultAlt}
+          wolfResultAlt={wolfResultAlt}
+          vegasResultAlt={vegasResultAlt}
+          stablefordResultAlt={stablefordResultAlt}
+          bankerResultAlt={bankerResultAlt}
+          quotaResultAlt={quotaResultAlt}
+          primaryMode={(game?.config as any)?.mode ?? 'net'}
           shareRef={shareRef}
           sharing={sharing}
           shareImage={shareImage}

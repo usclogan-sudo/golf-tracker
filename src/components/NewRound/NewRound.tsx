@@ -111,9 +111,8 @@ function StepIndicator({ current, skipGroups, stakesMode }: { current: string; s
   )
 }
 
-const STANDARD_PRESETS = [500, 1000, 2000, 5000]
-const HIGH_ROLLER_PRESETS = [10000, 25000, 50000, 100000]
-const POINTS_PRESETS = [10, 25, 50, 100]
+// Default buy-in values when stakes mode changes
+const DEFAULT_BUY_IN: Record<StakesMode, string> = { standard: '10', high_roller: '100', points: '25' }
 
 // ─── Step 1: Course Picker ────────────────────────────────────────────────────
 
@@ -877,21 +876,17 @@ function GameSetup({
   const [gamePresets, setGamePresets] = useState<GamePreset[]>([])
   const [stakesMode, setStakesMode] = useState<StakesMode>(initialGame?.stakesMode ?? initialStakesMode)
   const [type, setType] = useState<GameType>(initialGame?.type ?? 'skins')
-  const TOP_4_GAMES: GameType[] = ['skins', 'best_ball', 'nassau', 'wolf']
+  const PRIMARY_GAMES: GameType[] = ['skins', 'best_ball']
   const [showAllGames, setShowAllGames] = useState(() => {
-    // Auto-show all if initial game is not in top 4
-    if (initialGame && !['skins', 'best_ball', 'nassau', 'wolf'].includes(initialGame.type)) return true
+    // Auto-show all if initial game is not a primary type
+    if (initialGame && !['skins', 'best_ball'].includes(initialGame.type)) return true
     return false
   })
   const [buyInDollars, setBuyInDollars] = useState(
-    initialGame ? String(initialGame.buyInCents / 100) : (initialStakesMode === 'high_roller' ? '100' : '10')
+    initialGame ? String(initialGame.buyInCents / 100) : DEFAULT_BUY_IN[initialStakesMode]
   )
-  const [showCustomBuyIn, setShowCustomBuyIn] = useState(false)
 
   // Skins
-  const [skinsMode, setSkinsMode] = useState<'gross' | 'net'>(
-    initialGame?.type === 'skins' ? (initialGame.config as any).mode : 'net'
-  )
   const [carryovers, setCarryovers] = useState(
     initialGame?.type === 'skins' ? (initialGame.config as any).carryovers : true
   )
@@ -900,9 +895,6 @@ function GameSetup({
   const [bbScoring, setBbScoring] = useState<'match' | 'total'>(
     initialGame?.type === 'best_ball' ? (initialGame.config as any).scoring : 'match'
   )
-  const [bbMode, setBbMode] = useState<'gross' | 'net'>(
-    initialGame?.type === 'best_ball' ? (initialGame.config as any).mode : 'net'
-  )
   const [teams, setTeams] = useState<Record<string, 'A' | 'B'>>(() => {
     if (initialGame?.type === 'best_ball') return (initialGame.config as any).teams ?? {}
     const t: Record<string, 'A' | 'B'> = {}
@@ -910,22 +902,9 @@ function GameSetup({
     return t
   })
 
-  // Nassau
-  const [nassauMode, setNassauMode] = useState<'gross' | 'net'>(
-    initialGame?.type === 'nassau' ? (initialGame.config as any).mode : 'net'
-  )
-
   // Wolf
-  const [wolfMode, setWolfMode] = useState<'gross' | 'net'>(
-    initialGame?.type === 'wolf' ? (initialGame.config as any).mode : 'net'
-  )
   const [wolfOrder, setWolfOrder] = useState<string[]>(() =>
     initialGame?.type === 'wolf' ? (initialGame.config as any).wolfOrder : players.map(p => p.id)
-  )
-
-  // BBB
-  const [bbbMode, setBbbMode] = useState<'gross' | 'net'>(
-    initialGame?.type === 'bingo_bango_bongo' ? (initialGame.config as any).mode : 'net'
   )
 
   // Hammer
@@ -937,9 +916,6 @@ function GameSetup({
   )
 
   // Vegas
-  const [vegasMode, setVegasMode] = useState<'gross' | 'net'>(
-    initialGame?.type === 'vegas' ? (initialGame.config as any).mode : 'net'
-  )
   const [vegasTeams, setVegasTeams] = useState<Record<string, 'A' | 'B'>>(() => {
     if (initialGame?.type === 'vegas') return (initialGame.config as any).teams ?? {}
     const t: Record<string, 'A' | 'B'> = {}
@@ -947,27 +923,14 @@ function GameSetup({
     return t
   })
 
-  // Stableford
-  const [stablefordMode, setStablefordMode] = useState<'gross' | 'net'>(
-    initialGame?.type === 'stableford' ? (initialGame.config as any).mode : 'net'
-  )
-
   // Dots
   const [dotsValueDollars, setDotsValueDollars] = useState(
     initialGame?.type === 'dots' ? String((initialGame.config as any).valueCentsPerDot / 100) : '1'
   )
 
   // Banker
-  const [bankerMode, setBankerMode] = useState<'gross' | 'net'>(
-    initialGame?.type === 'banker' ? (initialGame.config as any).mode : 'net'
-  )
   const [bankerOrder, setBankerOrder] = useState<string[]>(() =>
     initialGame?.type === 'banker' ? (initialGame.config as any).bankerOrder : players.map(p => p.id)
-  )
-
-  // Quota
-  const [quotaMode, setQuotaMode] = useState<'gross' | 'net'>(
-    initialGame?.type === 'quota' ? (initialGame.config as any).mode : 'net'
   )
 
   // Game rules modal
@@ -1000,62 +963,26 @@ function GameSetup({
 
   const applyPreset = (preset: GamePreset) => {
     setType(preset.gameType)
-    if (!TOP_4_GAMES.includes(preset.gameType)) setShowAllGames(true)
+    if (!PRIMARY_GAMES.includes(preset.gameType)) setShowAllGames(true)
     setStakesMode(preset.stakesMode)
     setBuyInDollars(String(preset.buyInCents / 100))
-    setShowCustomBuyIn(false)
     const cfg = preset.config as any
     if (preset.gameType === 'skins') {
-      setSkinsMode(cfg.mode ?? 'net')
       setCarryovers(cfg.carryovers ?? true)
     } else if (preset.gameType === 'best_ball') {
-      setBbMode(cfg.mode ?? 'net')
       setBbScoring(cfg.scoring ?? 'match')
-    } else if (preset.gameType === 'nassau') {
-      setNassauMode(cfg.mode ?? 'net')
-    } else if (preset.gameType === 'wolf') {
-      setWolfMode(cfg.mode ?? 'net')
-    } else if (preset.gameType === 'bingo_bango_bongo') {
-      setBbbMode(cfg.mode ?? 'net')
-    } else if (preset.gameType === 'vegas') {
-      setVegasMode(cfg.mode ?? 'net')
-    } else if (preset.gameType === 'stableford') {
-      setStablefordMode(cfg.mode ?? 'net')
-    } else if (preset.gameType === 'banker') {
-      setBankerMode(cfg.mode ?? 'net')
-    } else if (preset.gameType === 'quota') {
-      setQuotaMode(cfg.mode ?? 'net')
     }
   }
-
-  const presets = stakesMode === 'points' ? POINTS_PRESETS : stakesMode === 'high_roller' ? HIGH_ROLLER_PRESETS : STANDARD_PRESETS
 
   const handleStakesChange = (mode: StakesMode) => {
     setStakesMode(mode)
-    if (mode === 'points') {
-      setBuyInDollars(String(POINTS_PRESETS[0]))
-      setShowCustomBuyIn(false)
-    } else {
-      const newPresets = mode === 'high_roller' ? HIGH_ROLLER_PRESETS : STANDARD_PRESETS
-      setBuyInDollars(String(newPresets[0] / 100))
-      setShowCustomBuyIn(false)
-    }
-  }
-
-  const selectPreset = (value: number) => {
-    if (stakesMode === 'points') {
-      setBuyInDollars(String(value))
-    } else {
-      setBuyInDollars(String(value / 100))
-    }
-    setShowCustomBuyIn(false)
+    setBuyInDollars(DEFAULT_BUY_IN[mode])
   }
 
   // In points mode, buyInCents stores raw point value; in money mode, stores cents
   const buyInCents = stakesMode === 'points'
     ? Math.max(0, Math.round(parseFloat(buyInDollars || '0')))
     : Math.max(0, Math.round(parseFloat(buyInDollars || '0') * 100))
-  const activePreset = presets.find(p => p === buyInCents) ?? null
 
   const bestBallAllowed = players.length >= 2 && players.length % 2 === 0
   const wolfAllowed = players.length >= 3
@@ -1116,19 +1043,19 @@ function GameSetup({
   const makeGame = (): Game => {
     const id = uuidv4()
     if (type === 'skins') {
-      const config: SkinsConfig = { mode: skinsMode, carryovers }
+      const config: SkinsConfig = { mode: 'net', carryovers }
       return { id, type: 'skins', buyInCents, stakesMode, config }
     }
     if (type === 'best_ball') {
-      const config: BestBallConfig = { scoring: bbScoring, mode: bbMode, teams }
+      const config: BestBallConfig = { scoring: bbScoring, mode: 'net', teams }
       return { id, type: 'best_ball', buyInCents, stakesMode, config }
     }
     if (type === 'nassau') {
-      const config: NassauConfig = { mode: nassauMode }
+      const config: NassauConfig = { mode: 'net' }
       return { id, type: 'nassau', buyInCents, stakesMode, config }
     }
     if (type === 'wolf') {
-      const config: WolfConfig = { mode: wolfMode, wolfOrder }
+      const config: WolfConfig = { mode: 'net', wolfOrder }
       return { id, type: 'wolf', buyInCents, stakesMode, config }
     }
     if (type === 'hammer') {
@@ -1137,11 +1064,11 @@ function GameSetup({
       return { id, type: 'hammer', buyInCents: 0, stakesMode, config }
     }
     if (type === 'vegas') {
-      const config: VegasConfig = { mode: vegasMode, teams: vegasTeams }
+      const config: VegasConfig = { mode: 'net', teams: vegasTeams }
       return { id, type: 'vegas', buyInCents, stakesMode, config }
     }
     if (type === 'stableford') {
-      const config: StablefordConfig = { mode: stablefordMode }
+      const config: StablefordConfig = { mode: 'net' }
       return { id, type: 'stableford', buyInCents, stakesMode, config }
     }
     if (type === 'dots') {
@@ -1151,20 +1078,19 @@ function GameSetup({
       return { id, type: 'dots', buyInCents: 0, stakesMode, config }
     }
     if (type === 'banker') {
-      const config: BankerConfig = { mode: bankerMode, bankerOrder }
+      const config: BankerConfig = { mode: 'net', bankerOrder }
       return { id, type: 'banker', buyInCents, stakesMode, config }
     }
     if (type === 'quota') {
-      // Auto-calculate quotas: 36 minus handicap index (clamped to 0-36)
       const quotas: Record<string, number> = {}
       for (const p of players) {
         quotas[p.id] = Math.max(0, Math.min(36, Math.round(36 - p.handicapIndex)))
       }
-      const config: QuotaConfig = { mode: quotaMode, quotas }
+      const config: QuotaConfig = { mode: 'net', quotas }
       return { id, type: 'quota', buyInCents, stakesMode, config }
     }
     // bingo_bango_bongo
-    const config: BBBConfig = { mode: bbbMode }
+    const config: BBBConfig = { mode: 'net' }
     return { id, type: 'bingo_bango_bongo', buyInCents, stakesMode, config }
   }
 
@@ -1294,28 +1220,26 @@ function GameSetup({
           <div className="grid grid-cols-2 gap-2">
             <GameButton gameType="skins" label="🎰 Skins" />
             <GameButton gameType="best_ball" label="🤝 Best Ball" disabled={!bestBallAllowed} />
-            <GameButton gameType="nassau" label="🏳️ Nassau" />
-            <GameButton gameType="wolf" label="🐺 Wolf" disabled={!wolfAllowed} />
-            {showAllGames && (
-              <>
-                <GameButton gameType="bingo_bango_bongo" label="⭐ BBB" />
-                <GameButton gameType="hammer" label="🔨 Hammer" disabled={!hammerAllowed} />
-                <GameButton gameType="vegas" label="🎲 Vegas" disabled={!vegasAllowed} />
-                <GameButton gameType="stableford" label="📊 Stableford" />
-                <GameButton gameType="dots" label="🔴 Dots" />
-                <GameButton gameType="banker" label="🏦 Banker" disabled={!bankerAllowed} />
-                <GameButton gameType="quota" label="📋 Quota" />
-              </>
-            )}
           </div>
-          {!showAllGames && (
-            <button
-              onClick={() => setShowAllGames(true)}
-              className="w-full text-sm font-semibold text-gray-500 py-2 rounded-xl bg-gray-50 active:bg-gray-100 transition-colors"
-            >
-              Show all games (7 more)
-            </button>
+          {showAllGames && (
+            <div className="grid grid-cols-2 gap-2 mt-2">
+              <GameButton gameType="nassau" label="🏳️ Nassau" />
+              <GameButton gameType="wolf" label="🐺 Wolf" disabled={!wolfAllowed} />
+              <GameButton gameType="bingo_bango_bongo" label="⭐ BBB" />
+              <GameButton gameType="hammer" label="🔨 Hammer" disabled={!hammerAllowed} />
+              <GameButton gameType="vegas" label="🎲 Vegas" disabled={!vegasAllowed} />
+              <GameButton gameType="stableford" label="📊 Stableford" />
+              <GameButton gameType="dots" label="🔴 Dots" />
+              <GameButton gameType="banker" label="🏦 Banker" disabled={!bankerAllowed} />
+              <GameButton gameType="quota" label="📋 Quota" />
+            </div>
           )}
+          <button
+            onClick={() => setShowAllGames(v => !v)}
+            className="w-full text-sm font-semibold text-gray-500 py-2 rounded-xl bg-gray-50 active:bg-gray-100 transition-colors"
+          >
+            {showAllGames ? 'Hide extra games' : 'More Games (9 more)'}
+          </button>
           {!bestBallAllowed && type === 'best_ball' && (
             <p className="text-sm text-gray-400">Best Ball requires an even number of players (2, 4, 6…).</p>
           )}
@@ -1387,20 +1311,17 @@ function GameSetup({
 
               <div>
                 <p className="text-sm text-gray-600 mb-2">Value per junk</p>
-                <div className="flex gap-2">
-                  {[50, 100, 200, 500].map(cents => (
-                    <button
-                      key={cents}
-                      onClick={() => setJunkValueDollars(String(cents / 100))}
-                      className={`px-3 h-10 rounded-xl font-semibold text-sm transition-colors ${
-                        Math.round(parseFloat(junkValueDollars || '0') * 100) === cents
-                          ? 'bg-gray-800 text-white'
-                          : 'bg-gray-100 text-gray-700'
-                      }`}
-                    >
-                      {fmtMoney(cents)}
-                    </button>
-                  ))}
+                <div className="flex items-center gap-2">
+                  <span className="text-xl font-bold text-gray-500">$</span>
+                  <input
+                    type="number"
+                    inputMode="decimal"
+                    min="0"
+                    step="0.5"
+                    value={junkValueDollars}
+                    onChange={e => setJunkValueDollars(e.target.value)}
+                    className="flex-1 h-12 px-4 rounded-xl border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 text-base focus:outline-none focus:ring-2 focus:ring-amber-500"
+                  />
                 </div>
               </div>
 
@@ -1426,54 +1347,18 @@ function GameSetup({
               : <><Tooltip term="Buy-in">Buy-in Per Player</Tooltip>{type === 'nassau' ? ' (covers all 3 bets)' : ''}</>}
           </p>
 
-          <div className="flex gap-2 flex-wrap">
-            {presets.map(value => (
-              <button
-                key={value}
-                onClick={() => selectPreset(value)}
-                className={`px-4 h-10 rounded-xl font-semibold text-sm transition-colors ${
-                  activePreset === value
-                    ? stakesMode === 'high_roller'
-                      ? 'text-black'
-                      : stakesMode === 'points'
-                      ? 'bg-blue-600 text-white'
-                      : 'bg-gray-800 text-white'
-                    : 'bg-gray-100 text-gray-700'
-                }`}
-                style={activePreset === value && stakesMode === 'high_roller'
-                  ? { background: 'linear-gradient(135deg,#d97706,#fbbf24)' }
-                  : undefined}
-              >
-                {stakesMode === 'points' ? `${value} pts` : fmtMoney(value)}
-              </button>
-            ))}
-            <button
-              onClick={() => setShowCustomBuyIn(v => !v)}
-              className={`px-4 h-10 rounded-xl font-semibold text-sm transition-colors ${
-                showCustomBuyIn || activePreset === null
-                  ? 'bg-blue-600 text-white'
-                  : 'bg-gray-100 text-gray-700'
-              }`}
-            >
-              Custom
-            </button>
+          <div className="flex items-center gap-2">
+            <span className="text-xl font-bold text-gray-500">{stakesMode === 'points' ? 'pts' : '$'}</span>
+            <input
+              type="number"
+              inputMode="decimal"
+              min="0"
+              step="1"
+              value={buyInDollars}
+              onChange={e => setBuyInDollars(e.target.value)}
+              className="flex-1 h-12 px-4 rounded-xl border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 text-base focus:outline-none focus:ring-2 focus:ring-amber-500"
+            />
           </div>
-
-          {showCustomBuyIn && (
-            <div className="flex items-center gap-2">
-              <span className="text-xl font-bold text-gray-500">{stakesMode === 'points' ? 'pts' : '$'}</span>
-              <input
-                type="number"
-                inputMode="decimal"
-                min="0"
-                step="1"
-                autoFocus
-                value={buyInDollars}
-                onChange={e => setBuyInDollars(e.target.value)}
-                className="flex-1 h-12 px-4 rounded-xl border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 text-base focus:outline-none focus:ring-2 focus:ring-amber-500"
-              />
-            </div>
-          )}
 
           <div className="bg-amber-50 rounded-xl px-4 py-3 flex items-center justify-between">
             <span className="text-sm text-gray-600">{stakesMode === 'points' ? 'Total points' : 'Total pot'}</span>
@@ -1493,19 +1378,6 @@ function GameSetup({
         {type === 'skins' && (
           <section className="bg-white dark:bg-gray-800 rounded-2xl shadow-sm p-4 space-y-3">
             <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Skins Options</p>
-            <div>
-              <p className="text-sm text-gray-600 mb-2">Scoring</p>
-              <div className="grid grid-cols-2 gap-2">
-                <button onClick={() => setSkinsMode('net')}
-                  className={`h-12 rounded-xl font-semibold ${skinsMode === 'net' ? 'bg-gray-800 text-white' : 'bg-gray-100 text-gray-700'}`}>
-                  Net (handicap)
-                </button>
-                <button onClick={() => setSkinsMode('gross')}
-                  className={`h-12 rounded-xl font-semibold ${skinsMode === 'gross' ? 'bg-gray-800 text-white' : 'bg-gray-100 text-gray-700'}`}>
-                  Gross (raw)
-                </button>
-              </div>
-            </div>
             <button
               onClick={() => setCarryovers((v: boolean) => !v)}
               className={`w-full h-12 rounded-xl font-semibold border-2 ${
@@ -1535,19 +1407,6 @@ function GameSetup({
                 <button onClick={() => setBbScoring('total')}
                   className={`h-12 rounded-xl font-semibold text-sm ${bbScoring === 'total' ? 'bg-gray-800 text-white' : 'bg-gray-100 text-gray-700'}`}>
                   Stroke Play
-                </button>
-              </div>
-            </div>
-            <div>
-              <p className="text-sm text-gray-600 mb-2">Scoring</p>
-              <div className="grid grid-cols-2 gap-2">
-                <button onClick={() => setBbMode('net')}
-                  className={`h-12 rounded-xl font-semibold ${bbMode === 'net' ? 'bg-gray-800 text-white' : 'bg-gray-100 text-gray-700'}`}>
-                  Net (handicap)
-                </button>
-                <button onClick={() => setBbMode('gross')}
-                  className={`h-12 rounded-xl font-semibold ${bbMode === 'gross' ? 'bg-gray-800 text-white' : 'bg-gray-100 text-gray-700'}`}>
-                  Gross (raw)
                 </button>
               </div>
             </div>
@@ -1587,19 +1446,6 @@ function GameSetup({
         {type === 'nassau' && (
           <section className="bg-white dark:bg-gray-800 rounded-2xl shadow-sm p-4 space-y-3">
             <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Nassau Options</p>
-            <div>
-              <p className="text-sm text-gray-600 mb-2">Scoring</p>
-              <div className="grid grid-cols-2 gap-2">
-                <button onClick={() => setNassauMode('net')}
-                  className={`h-12 rounded-xl font-semibold ${nassauMode === 'net' ? 'bg-gray-800 text-white' : 'bg-gray-100 text-gray-700'}`}>
-                  Net (handicap)
-                </button>
-                <button onClick={() => setNassauMode('gross')}
-                  className={`h-12 rounded-xl font-semibold ${nassauMode === 'gross' ? 'bg-gray-800 text-white' : 'bg-gray-100 text-gray-700'}`}>
-                  Gross (raw)
-                </button>
-              </div>
-            </div>
             <div className="bg-teal-50 rounded-xl p-3 text-sm text-teal-700 space-y-1">
               <p className="font-semibold">3 separate bets:</p>
               <p>• Front 9 — lowest total strokes wins</p>
@@ -1613,19 +1459,6 @@ function GameSetup({
         {type === 'wolf' && (
           <section className="bg-white dark:bg-gray-800 rounded-2xl shadow-sm p-4 space-y-4">
             <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Wolf Options</p>
-            <div>
-              <p className="text-sm text-gray-600 mb-2">Scoring</p>
-              <div className="grid grid-cols-2 gap-2">
-                <button onClick={() => setWolfMode('net')}
-                  className={`h-12 rounded-xl font-semibold ${wolfMode === 'net' ? 'bg-gray-800 text-white' : 'bg-gray-100 text-gray-700'}`}>
-                  Net (handicap)
-                </button>
-                <button onClick={() => setWolfMode('gross')}
-                  className={`h-12 rounded-xl font-semibold ${wolfMode === 'gross' ? 'bg-gray-800 text-white' : 'bg-gray-100 text-gray-700'}`}>
-                  Gross (raw)
-                </button>
-              </div>
-            </div>
             <div>
               <p className="text-sm text-gray-600 mb-2">Wolf Rotation Order</p>
               <p className="text-xs text-gray-400 mb-2">Player 1 is Wolf on hole 1, Player 2 on hole 2, etc.</p>
@@ -1672,19 +1505,6 @@ function GameSetup({
         {type === 'bingo_bango_bongo' && (
           <section className="bg-white dark:bg-gray-800 rounded-2xl shadow-sm p-4 space-y-3">
             <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Bingo Bango Bongo Options</p>
-            <div>
-              <p className="text-sm text-gray-600 mb-2">Scoring</p>
-              <div className="grid grid-cols-2 gap-2">
-                <button onClick={() => setBbbMode('net')}
-                  className={`h-12 rounded-xl font-semibold ${bbbMode === 'net' ? 'bg-gray-800 text-white' : 'bg-gray-100 text-gray-700'}`}>
-                  Net (handicap)
-                </button>
-                <button onClick={() => setBbbMode('gross')}
-                  className={`h-12 rounded-xl font-semibold ${bbbMode === 'gross' ? 'bg-gray-800 text-white' : 'bg-gray-100 text-gray-700'}`}>
-                  Gross (raw)
-                </button>
-              </div>
-            </div>
             <div className="bg-amber-50 rounded-xl p-3 text-sm text-amber-700 space-y-1">
               <p className="font-semibold">3 points per hole:</p>
               <p>🟢 <strong>Bingo</strong> — First ball on the green</p>
@@ -1700,20 +1520,17 @@ function GameSetup({
             <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Hammer Options</p>
             <div>
               <p className="text-sm text-gray-600 mb-2">Base Value Per Hole</p>
-              <div className="flex gap-2">
-                {[0.5, 1, 2, 5].map(dollars => (
-                  <button
-                    key={dollars}
-                    onClick={() => setHammerBaseValueDollars(String(dollars))}
-                    className={`px-3 h-10 rounded-xl font-semibold text-sm transition-colors ${
-                      parseFloat(hammerBaseValueDollars || '0') === dollars
-                        ? 'bg-gray-800 text-white'
-                        : 'bg-gray-100 text-gray-700'
-                    }`}
-                  >
-                    {fmtMoney(dollars * 100)}
-                  </button>
-                ))}
+              <div className="flex items-center gap-2">
+                <span className="text-xl font-bold text-gray-500">$</span>
+                <input
+                  type="number"
+                  inputMode="decimal"
+                  min="0"
+                  step="0.5"
+                  value={hammerBaseValueDollars}
+                  onChange={e => setHammerBaseValueDollars(e.target.value)}
+                  className="flex-1 h-12 px-4 rounded-xl border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 text-base focus:outline-none focus:ring-2 focus:ring-amber-500"
+                />
               </div>
             </div>
             <div>
@@ -1748,19 +1565,6 @@ function GameSetup({
         {type === 'vegas' && (
           <section className="bg-white dark:bg-gray-800 rounded-2xl shadow-sm p-4 space-y-4">
             <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Vegas Options</p>
-            <div>
-              <p className="text-sm text-gray-600 mb-2">Scoring</p>
-              <div className="grid grid-cols-2 gap-2">
-                <button onClick={() => setVegasMode('net')}
-                  className={`h-12 rounded-xl font-semibold ${vegasMode === 'net' ? 'bg-gray-800 text-white' : 'bg-gray-100 text-gray-700'}`}>
-                  Net (handicap)
-                </button>
-                <button onClick={() => setVegasMode('gross')}
-                  className={`h-12 rounded-xl font-semibold ${vegasMode === 'gross' ? 'bg-gray-800 text-white' : 'bg-gray-100 text-gray-700'}`}>
-                  Gross (raw)
-                </button>
-              </div>
-            </div>
             <div>
               <p className="text-sm text-gray-600 mb-2">Teams (tap to assign)</p>
               <div className="grid grid-cols-2 gap-2">
@@ -1801,19 +1605,6 @@ function GameSetup({
         {type === 'stableford' && (
           <section className="bg-white dark:bg-gray-800 rounded-2xl shadow-sm p-4 space-y-3">
             <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Stableford Options</p>
-            <div>
-              <p className="text-sm text-gray-600 mb-2">Scoring</p>
-              <div className="grid grid-cols-2 gap-2">
-                <button onClick={() => setStablefordMode('net')}
-                  className={`h-12 rounded-xl font-semibold ${stablefordMode === 'net' ? 'bg-gray-800 text-white' : 'bg-gray-100 text-gray-700'}`}>
-                  Net (handicap)
-                </button>
-                <button onClick={() => setStablefordMode('gross')}
-                  className={`h-12 rounded-xl font-semibold ${stablefordMode === 'gross' ? 'bg-gray-800 text-white' : 'bg-gray-100 text-gray-700'}`}>
-                  Gross (raw)
-                </button>
-              </div>
-            </div>
             <div className="bg-indigo-50 rounded-xl p-3 text-sm text-indigo-700 space-y-1">
               <p className="font-semibold">Point values per hole:</p>
               <p>• Double bogey+ = 0 pts, Bogey = 1, Par = 2</p>
@@ -1829,20 +1620,17 @@ function GameSetup({
             <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Dots / Trash Options</p>
             <div>
               <p className="text-sm text-gray-600 mb-2">Value Per Dot</p>
-              <div className="flex gap-2">
-                {[0.5, 1, 2, 5].map(dollars => (
-                  <button
-                    key={dollars}
-                    onClick={() => setDotsValueDollars(String(dollars))}
-                    className={`px-3 h-10 rounded-xl font-semibold text-sm transition-colors ${
-                      parseFloat(dotsValueDollars || '0') === dollars
-                        ? 'bg-gray-800 text-white'
-                        : 'bg-gray-100 text-gray-700'
-                    }`}
-                  >
-                    {fmtMoney(dollars * 100)}
-                  </button>
-                ))}
+              <div className="flex items-center gap-2">
+                <span className="text-xl font-bold text-gray-500">$</span>
+                <input
+                  type="number"
+                  inputMode="decimal"
+                  min="0"
+                  step="0.5"
+                  value={dotsValueDollars}
+                  onChange={e => setDotsValueDollars(e.target.value)}
+                  className="flex-1 h-12 px-4 rounded-xl border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 text-base focus:outline-none focus:ring-2 focus:ring-amber-500"
+                />
               </div>
             </div>
             <p className="text-xs text-gray-500">Configure active dot types in the Junk Side Bets section below.</p>
@@ -1859,19 +1647,6 @@ function GameSetup({
         {type === 'banker' && (
           <section className="bg-white dark:bg-gray-800 rounded-2xl shadow-sm p-4 space-y-4">
             <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Banker Options</p>
-            <div>
-              <p className="text-sm text-gray-600 mb-2">Scoring</p>
-              <div className="grid grid-cols-2 gap-2">
-                <button onClick={() => setBankerMode('net')}
-                  className={`h-12 rounded-xl font-semibold ${bankerMode === 'net' ? 'bg-gray-800 text-white' : 'bg-gray-100 text-gray-700'}`}>
-                  Net (handicap)
-                </button>
-                <button onClick={() => setBankerMode('gross')}
-                  className={`h-12 rounded-xl font-semibold ${bankerMode === 'gross' ? 'bg-gray-800 text-white' : 'bg-gray-100 text-gray-700'}`}>
-                  Gross (raw)
-                </button>
-              </div>
-            </div>
             <div>
               <p className="text-sm text-gray-600 mb-2">Banker Rotation Order</p>
               <p className="text-xs text-gray-400 mb-2">Player 1 is banker on hole 1, Player 2 on hole 2, etc.</p>
@@ -1918,19 +1693,6 @@ function GameSetup({
         {type === 'quota' && (
           <section className="bg-white dark:bg-gray-800 rounded-2xl shadow-sm p-4 space-y-3">
             <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Quota Options</p>
-            <div>
-              <p className="text-sm text-gray-600 mb-2">Scoring</p>
-              <div className="grid grid-cols-2 gap-2">
-                <button onClick={() => setQuotaMode('net')}
-                  className={`h-12 rounded-xl font-semibold ${quotaMode === 'net' ? 'bg-gray-800 text-white' : 'bg-gray-100 text-gray-700'}`}>
-                  Net (handicap)
-                </button>
-                <button onClick={() => setQuotaMode('gross')}
-                  className={`h-12 rounded-xl font-semibold ${quotaMode === 'gross' ? 'bg-gray-800 text-white' : 'bg-gray-100 text-gray-700'}`}>
-                  Gross (raw)
-                </button>
-              </div>
-            </div>
             <div className="bg-gray-50 rounded-xl p-3 space-y-2">
               <p className="text-xs font-semibold text-gray-500 uppercase">Player Quotas (auto-calculated)</p>
               {players.map(p => {
