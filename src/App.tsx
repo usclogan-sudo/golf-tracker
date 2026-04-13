@@ -357,6 +357,18 @@ function Home({
           </div>
         </button>
 
+        <button onClick={() => guardAnon(onCreateEvent)}
+          className="w-full rounded-2xl shadow-lg overflow-hidden active:scale-[0.98] transition-transform"
+          style={{ background: 'linear-gradient(135deg, #0f172a 0%, #1e40af 100%)' }}>
+          <div className="px-6 py-5 flex items-center justify-between">
+            <div className="text-left">
+              <p className="font-display font-bold text-white text-xl">Create Event</p>
+              <p className="text-blue-200 text-sm mt-0.5">Multi-group outing · Players self-score</p>
+            </div>
+            <div className="w-14 h-14 bg-white/15 rounded-2xl flex items-center justify-center text-3xl border border-white/20">🏌️</div>
+          </div>
+        </button>
+
         {unsettledCount > 0 && (
           <button
             onClick={onLedger}
@@ -486,18 +498,6 @@ function Home({
             ))}
           </section>
         )}
-
-        <button onClick={() => guardAnon(onCreateEvent)}
-          className="w-full rounded-2xl shadow-lg overflow-hidden active:scale-[0.98] transition-transform"
-          style={{ background: 'linear-gradient(135deg, #0f172a 0%, #1e40af 100%)' }}>
-          <div className="px-6 py-5 flex items-center justify-between">
-            <div className="text-left">
-              <p className="font-display font-bold text-white text-xl">Create Event</p>
-              <p className="text-blue-200 text-sm mt-0.5">Multi-group outing · Players self-score</p>
-            </div>
-            <div className="w-14 h-14 bg-white/15 rounded-2xl flex items-center justify-center text-3xl border border-white/20">🏌️</div>
-          </div>
-        </button>
 
         {/* Join Round */}
         <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700 p-4">
