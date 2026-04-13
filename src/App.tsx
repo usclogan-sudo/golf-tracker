@@ -124,6 +124,7 @@ function Home({
   onUpgrade,
   onEndRound,
   onViewRound,
+  onViewProps,
   onJoinRound,
   notificationCount,
   onTournaments,
@@ -151,6 +152,7 @@ function Home({
   onUpgrade?: () => void
   onEndRound?: (roundId: string) => void
   onViewRound?: (roundId: string) => void
+  onViewProps?: (roundId: string) => void
   notificationCount?: number
   onJoinRound: (code?: string) => void
   onTournaments: () => void
@@ -433,7 +435,7 @@ function Home({
                 </button>
                 <div className="bg-amber-100 px-5 py-2 flex justify-between">
                   <button
-                    onClick={(e) => { e.stopPropagation(); setActiveRoundId(round.id); setScreen('prop-bets') }}
+                    onClick={(e) => { e.stopPropagation(); onViewProps?.(round.id) }}
                     className="text-purple-600 text-sm font-semibold hover:text-purple-800 transition-colors"
                   >
                     Props
@@ -1162,6 +1164,7 @@ export default function App() {
       onUpgrade={() => setScreen('upgrade-account')}
       onEndRound={handleEndRound}
       onViewRound={roundId => { setScorecardReadOnly(false); setActiveRoundId(roundId); setScreen('scorecard') }}
+      onViewProps={roundId => { setActiveRoundId(roundId); setScreen('prop-bets') }}
       onJoinRound={(code) => {
         if (code) setPendingJoinCode(code)
         setScreen('join-round')
