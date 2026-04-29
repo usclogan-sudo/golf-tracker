@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useState } from 'react'
 import { supabase } from '../../lib/supabase'
 import { buildCourseHandicaps, fmtMoney } from '../../lib/gameLogic'
-import type { CourseSnapshot, Player, RoundPlayer, HoleScore, Game } from '../../types'
+import { makePlayableSnapshot } from '../../lib/holeUtils'
+import type { CourseSnapshot, Player, RoundPlayer, HoleScore, Game, HolesMode } from '../../types'
 
 interface Props {
   inviteCode: string
@@ -17,6 +18,7 @@ interface SpectateData {
   game?: Game
   holeScores: HoleScore[]
   roundPlayers: RoundPlayer[]
+  holesMode?: HolesMode
 }
 
 export function LiveLeaderboard({ inviteCode, onBack }: Props) {
@@ -78,6 +80,7 @@ export function LiveLeaderboard({ inviteCode, onBack }: Props) {
         game: rd.game,
         holeScores,
         roundPlayers,
+        holesMode: rd.holes_mode ?? undefined,
       })
       setError(null)
       setLastRefresh(new Date())
@@ -102,13 +105,13 @@ export function LiveLeaderboard({ inviteCode, onBack }: Props) {
 
   const courseHcps = useMemo(() => {
     if (!data?.courseSnapshot || !data.roundPlayers) return {}
-    return buildCourseHandicaps(data.players, data.roundPlayers, data.courseSnapshot)
-  }, [data?.players, data?.roundPlayers, data?.courseSnapshot])
+    return buildCourseHandicaps(data.players, data.roundPlayers, data.courseSnapshot, data.holesMode)
+  }, [data?.players, data?.roundPlayers, data?.courseSnapshot, data?.holesMode])
 
   // Build leaderboard
   const leaderboard = useMemo(() => {
     if (!data) return []
-    const snapshot = data.courseSnapshot
+    const snapshot = makePlayableSnapshot(data.courseSnapshot, { holesMode: data.holesMode })
     const totalPar = snapshot.holes.reduce((s, h) => s + h.par, 0)
     const holesPlayed = snapshot.holes.length
 
@@ -170,7 +173,7 @@ export function LiveLeaderboard({ inviteCode, onBack }: Props) {
     )
   }
 
-  const snapshot = data.courseSnapshot
+  const snapshot = makePlayableSnapshot(data.courseSnapshot, { holesMode: data.holesMode })
   const isActive = data.status === 'active'
   const isComplete = data.status === 'complete'
   const gameLabel = data.game ? ({

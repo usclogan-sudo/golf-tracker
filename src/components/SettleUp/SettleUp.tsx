@@ -39,6 +39,7 @@ import {
   fmtAmount,
 } from '../../lib/gameLogic'
 import type { PlayerPayout, JunkResult, SideBetSettlement, PropSettlement, HammerResult } from '../../lib/gameLogic'
+import { makePlayableSnapshot, roundToHolesConfig } from '../../lib/holeUtils'
 import type {
   Round,
   RoundPlayer,
@@ -285,6 +286,12 @@ export function SettleUp({ roundId, userId, eventId, onDone, onContinue }: Props
   const treasurerId = round?.treasurerPlayerId
   const treasurer = players.find(p => p.id === treasurerId)
 
+  // Build playable snapshot (filters/rotates holes for 9-hole or shotgun modes)
+  const playableSnapshot = useMemo(() => {
+    if (!snapshot || !round) return snapshot ?? null
+    return makePlayableSnapshot(snapshot, roundToHolesConfig(round))
+  }, [snapshot, round])
+
   // Merge fresh payment info from profiles over snapshot
   const enrichedPlayers = useMemo(() => {
     return players.map(p => mergePaymentInfo(p, profileMap, participantMap))
@@ -292,28 +299,28 @@ export function SettleUp({ roundId, userId, eventId, onDone, onContinue }: Props
 
   const courseHcps = useMemo(() => {
     if (!snapshot || !roundPlayers) return {}
-    return buildCourseHandicaps(players, roundPlayers, snapshot)
-  }, [players, roundPlayers, snapshot])
+    return buildCourseHandicaps(players, roundPlayers, snapshot, round?.holesMode)
+  }, [players, roundPlayers, snapshot, round?.holesMode])
 
   const skinsResult = useMemo(() => {
-    if (!game || game.type !== 'skins' || !snapshot) return null
-    return calculateSkins(players, holeScores, snapshot, game.config as SkinsConfig, courseHcps)
-  }, [game, players, holeScores, snapshot, courseHcps])
+    if (!game || game.type !== 'skins' || !playableSnapshot) return null
+    return calculateSkins(players, holeScores, playableSnapshot, game.config as SkinsConfig, courseHcps)
+  }, [game, players, holeScores, playableSnapshot, courseHcps])
 
   const bestBallResult = useMemo(() => {
-    if (!game || game.type !== 'best_ball' || !snapshot) return null
-    return calculateBestBall(players, holeScores, snapshot, game.config as BestBallConfig, courseHcps)
-  }, [game, players, holeScores, snapshot, courseHcps])
+    if (!game || game.type !== 'best_ball' || !playableSnapshot) return null
+    return calculateBestBall(players, holeScores, playableSnapshot, game.config as BestBallConfig, courseHcps)
+  }, [game, players, holeScores, playableSnapshot, courseHcps])
 
   const nassauResult = useMemo(() => {
-    if (!game || game.type !== 'nassau' || !snapshot) return null
-    return calculateNassau(players, holeScores, snapshot, game.config as NassauConfig, courseHcps)
-  }, [game, players, holeScores, snapshot, courseHcps])
+    if (!game || game.type !== 'nassau' || !playableSnapshot) return null
+    return calculateNassau(players, holeScores, playableSnapshot, game.config as NassauConfig, courseHcps)
+  }, [game, players, holeScores, playableSnapshot, courseHcps])
 
   const wolfResult = useMemo(() => {
-    if (!game || game.type !== 'wolf' || !snapshot) return null
-    return calculateWolf(players, holeScores, snapshot, game.config as WolfConfig, courseHcps)
-  }, [game, players, holeScores, snapshot, courseHcps])
+    if (!game || game.type !== 'wolf' || !playableSnapshot) return null
+    return calculateWolf(players, holeScores, playableSnapshot, game.config as WolfConfig, courseHcps)
+  }, [game, players, holeScores, playableSnapshot, courseHcps])
 
   const bbbResult = useMemo(() => {
     if (!game || game.type !== 'bingo_bango_bongo') return null
@@ -321,19 +328,19 @@ export function SettleUp({ roundId, userId, eventId, onDone, onContinue }: Props
   }, [game, players, bbbPoints])
 
   const hammerResult = useMemo((): HammerResult | null => {
-    if (!game || game.type !== 'hammer' || !snapshot) return null
-    return calculateHammer(players, holeScores, snapshot, game.config as HammerConfig, courseHcps)
-  }, [game, players, holeScores, snapshot, courseHcps])
+    if (!game || game.type !== 'hammer' || !playableSnapshot) return null
+    return calculateHammer(players, holeScores, playableSnapshot, game.config as HammerConfig, courseHcps)
+  }, [game, players, holeScores, playableSnapshot, courseHcps])
 
   const vegasResult = useMemo(() => {
-    if (!game || game.type !== 'vegas' || !snapshot) return null
-    return calculateVegas(players, holeScores, snapshot, game.config as VegasConfig, courseHcps)
-  }, [game, players, holeScores, snapshot, courseHcps])
+    if (!game || game.type !== 'vegas' || !playableSnapshot) return null
+    return calculateVegas(players, holeScores, playableSnapshot, game.config as VegasConfig, courseHcps)
+  }, [game, players, holeScores, playableSnapshot, courseHcps])
 
   const stablefordResult = useMemo(() => {
-    if (!game || game.type !== 'stableford' || !snapshot) return null
-    return calculateStableford(players, holeScores, snapshot, game.config as StablefordConfig, courseHcps)
-  }, [game, players, holeScores, snapshot, courseHcps])
+    if (!game || game.type !== 'stableford' || !playableSnapshot) return null
+    return calculateStableford(players, holeScores, playableSnapshot, game.config as StablefordConfig, courseHcps)
+  }, [game, players, holeScores, playableSnapshot, courseHcps])
 
   const dotsResult = useMemo(() => {
     if (!game || game.type !== 'dots') return null
@@ -341,14 +348,14 @@ export function SettleUp({ roundId, userId, eventId, onDone, onContinue }: Props
   }, [game, players, junkRecords])
 
   const bankerResult = useMemo(() => {
-    if (!game || game.type !== 'banker' || !snapshot) return null
-    return calculateBanker(players, holeScores, snapshot, game.config as BankerConfig, courseHcps)
-  }, [game, players, holeScores, snapshot, courseHcps])
+    if (!game || game.type !== 'banker' || !playableSnapshot) return null
+    return calculateBanker(players, holeScores, playableSnapshot, game.config as BankerConfig, courseHcps)
+  }, [game, players, holeScores, playableSnapshot, courseHcps])
 
   const quotaResult = useMemo(() => {
-    if (!game || game.type !== 'quota' || !snapshot) return null
-    return calculateQuota(players, holeScores, snapshot, game.config as QuotaConfig, courseHcps)
-  }, [game, players, holeScores, snapshot, courseHcps])
+    if (!game || game.type !== 'quota' || !playableSnapshot) return null
+    return calculateQuota(players, holeScores, playableSnapshot, game.config as QuotaConfig, courseHcps)
+  }, [game, players, holeScores, playableSnapshot, courseHcps])
 
   const junkResult = useMemo((): JunkResult | null => {
     if (!round?.junkConfig || junkRecords.length === 0) return null
@@ -361,16 +368,16 @@ export function SettleUp({ roundId, userId, eventId, onDone, onContinue }: Props
 
   // Auto-resolve props that can be resolved from scores
   const resolvedPropBets = useMemo((): PropBet[] => {
-    if (!snapshot || propBets.length === 0) return propBets
-    return autoResolveProps(propBets, holeScores, snapshot, courseHcps)
-  }, [propBets, holeScores, snapshot, courseHcps])
+    if (!playableSnapshot || propBets.length === 0) return propBets
+    return autoResolveProps(propBets, holeScores, playableSnapshot, courseHcps)
+  }, [propBets, holeScores, playableSnapshot, courseHcps])
 
   const propSettlements = useMemo((): PropSettlement[] => {
     return calculatePropSettlements(resolvedPropBets, propWagers)
   }, [resolvedPropBets, propWagers])
 
   const payouts = useMemo((): PlayerPayout[] => {
-    if (!game || !snapshot) return []
+    if (!game || !playableSnapshot) return []
     if (game.type === 'skins' && skinsResult) {
       return calculateSkinsPayouts(skinsResult, game, players.length)
     }
@@ -378,7 +385,7 @@ export function SettleUp({ roundId, userId, eventId, onDone, onContinue }: Props
       return calculateBestBallPayouts(bestBallResult, game.config as BestBallConfig, game, players)
     }
     if (game.type === 'nassau' && nassauResult) {
-      return calculateNassauPayouts(nassauResult, game, players, holeScores, snapshot!, courseHcps)
+      return calculateNassauPayouts(nassauResult, game, players, holeScores, playableSnapshot!, courseHcps)
     }
     if (game.type === 'wolf' && wolfResult) {
       return calculateWolfPayouts(wolfResult, game, players)
@@ -405,7 +412,7 @@ export function SettleUp({ roundId, userId, eventId, onDone, onContinue }: Props
       return calculateQuotaPayouts(quotaResult, game, players)
     }
     return []
-  }, [game, players, snapshot, skinsResult, bestBallResult, nassauResult, wolfResult, bbbResult, hammerResult, vegasResult, stablefordResult, dotsResult, bankerResult, quotaResult])
+  }, [game, players, playableSnapshot, skinsResult, bestBallResult, nassauResult, wolfResult, bbbResult, hammerResult, vegasResult, stablefordResult, dotsResult, bankerResult, quotaResult])
 
   // Persist settlements: compute + insert on first view, or load from DB
   const persistSettlements = useCallback(async () => {
@@ -1097,14 +1104,15 @@ export function SettleUp({ roundId, userId, eventId, onDone, onContinue }: Props
         })()}
 
         {/* ── Scoreboard ── */}
-        {snapshot && players.length > 0 && holeScores.length > 0 && (() => {
-          const totalPar = snapshot.holes.reduce((s, h) => s + h.par, 0)
+        {playableSnapshot && players.length > 0 && holeScores.length > 0 && (() => {
+          const pSnap = playableSnapshot
+          const totalPar = pSnap.holes.reduce((s, h) => s + h.par, 0)
           const board = players.map(p => {
             const pScores = holeScores.filter(s => s.playerId === p.id)
             const gross = pScores.reduce((s, hs) => s + hs.grossScore, 0)
             const courseHcp = courseHcps[p.id] ?? 0
             const netStrokes = pScores.reduce((s, hs) => {
-              const hole = snapshot.holes.find(h => h.number === hs.holeNumber)
+              const hole = pSnap.holes.find(h => h.number === hs.holeNumber)
               return s + (hole ? strokesOnHole(courseHcp, hole.strokeIndex) : 0)
             }, 0)
             const net = gross - netStrokes
@@ -1572,13 +1580,14 @@ export function SettleUp({ roundId, userId, eventId, onDone, onContinue }: Props
 
         {/* ── Share Results ── */}
         {(() => {
-          const totalPar = snapshot.holes.reduce((s, h) => s + h.par, 0)
+          const sSnap = playableSnapshot ?? snapshot!
+          const totalPar = sSnap.holes.reduce((s, h) => s + h.par, 0)
           const shareBoard = players.map(p => {
             const pScores = holeScores.filter(s => s.playerId === p.id)
             const gross = pScores.reduce((s, hs) => s + hs.grossScore, 0)
             const courseHcp = courseHcps[p.id] ?? 0
             const netStrokes = pScores.reduce((s, hs) => {
-              const hole = snapshot.holes.find(h => h.number === hs.holeNumber)
+              const hole = sSnap.holes.find(h => h.number === hs.holeNumber)
               return s + (hole ? strokesOnHole(courseHcp, hole.strokeIndex) : 0)
             }, 0)
             return { player: p, gross, net: gross - netStrokes, vsPar: gross - totalPar }

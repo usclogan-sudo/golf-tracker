@@ -10,6 +10,7 @@ import { getCelebration, CelebrationToast, CelebrationFullscreen } from '../Cele
 import { Tooltip } from '../ui/Tooltip'
 import { ConfirmModal } from '../ConfirmModal'
 import { GameRulesModal } from '../GameRulesModal'
+import { InviteQRModal } from '../InviteQR'
 import { NumberPad } from './NumberPad'
 import { BuyInBanner } from './BuyInBanner'
 import { LeaderboardTab } from './LeaderboardTab'
@@ -32,6 +33,7 @@ import {
   fmtMoney,
   JUNK_LABELS,
 } from '../../lib/gameLogic'
+import { makePlayableSnapshot, getPlayableHoleNumbers, roundToHolesConfig } from '../../lib/holeUtils'
 import type {
   Round,
   RoundPlayer,
@@ -228,6 +230,7 @@ export function Scorecard({ userId, roundId, onEndRound, onHome, readOnly: readO
   })
   const [pendingPopover, setPendingPopover] = useState(false)
   const [showHeaderMenu, setShowHeaderMenu] = useState(false)
+  const [showQRModal, setShowQRModal] = useState(false)
   const headerMenuRef = useRef<HTMLDivElement>(null)
   const savingScoreRef = useRef(false)
   const scoreToastTimerRef = useRef<ReturnType<typeof setTimeout>>()
@@ -427,10 +430,28 @@ export function Scorecard({ userId, roundId, onEndRound, onHome, readOnly: readO
     if (btn) btn.scrollIntoView({ behavior: 'smooth', inline: 'center', block: 'nearest' })
   }, [currentHole, showHoleGrid])
 
+  // Determine which group this user belongs to (for shotgun start rotation)
+  const myGroupNumber = useMemo(() => {
+    if (!round?.groups) return undefined
+    const myPid = roundParticipants.find(rp => rp.userId === userId)?.playerId
+    return myPid ? round.groups[myPid] : undefined
+  }, [round?.groups, roundParticipants, userId])
+
+  // Build playable snapshot (filters/rotates holes for 9-hole or shotgun modes)
+  const playableSnapshot = useMemo(() => {
+    if (!snapshot || !round) return snapshot ?? null
+    return makePlayableSnapshot(snapshot, roundToHolesConfig(round, myGroupNumber))
+  }, [snapshot, round, myGroupNumber])
+
+  const playableHoleNums = useMemo(() => {
+    if (!snapshot || !round) return snapshot?.holes.map(h => h.number) ?? []
+    return getPlayableHoleNumbers(snapshot, roundToHolesConfig(round, myGroupNumber))
+  }, [snapshot, round, myGroupNumber])
+
   const courseHcps = useMemo(() => {
     if (!snapshot || !roundPlayers) return {}
-    return buildCourseHandicaps(players, roundPlayers, snapshot)
-  }, [players, roundPlayers, snapshot])
+    return buildCourseHandicaps(players, roundPlayers, snapshot, round?.holesMode)
+  }, [players, roundPlayers, snapshot, round?.holesMode])
 
   const hole = snapshot?.holes.find(h => h.number === currentHole)
   const par = hole?.par ?? 4
@@ -585,8 +606,8 @@ export function Scorecard({ userId, roundId, onEndRound, onHome, readOnly: readO
   }
 
   const confirmEndRound = () => {
-    const totalHoles = snapshot?.holes.length ?? 18
-    const holesWithAllScores = Array.from({ length: totalHoles }, (_, i) => i + 1)
+    const totalHoles = playableHoleNums.length
+    const holesWithAllScores = playableHoleNums
       .filter(n => players.every(p => holeScores.some(s => s.playerId === p.id && s.holeNumber === n)))
       .length
     const missing = totalHoles - holesWithAllScores
@@ -875,6 +896,8 @@ export function Scorecard({ userId, roundId, onEndRound, onHome, readOnly: readO
     selfEntryOnly,
     isEventManager,
     isGroupScorekeeper,
+    isScoreMaster,
+    groupHasActiveScorekeeper,
     canApproveScores,
     readOnly,
     myEventGroupNumber,
@@ -895,25 +918,26 @@ export function Scorecard({ userId, roundId, onEndRound, onHome, readOnly: readO
   }, [holeScores, isEventRound])
 
   // Game result calculations (all depend on approvedScores, must come after it)
+  // Use playableSnapshot so game logic only sees the holes being played
   const skinsResult = useMemo(() => {
-    if (!game || game.type !== 'skins' || !snapshot) return null
-    return calculateSkins(players, approvedScores, snapshot, game.config as SkinsConfig, courseHcps)
-  }, [game, players, approvedScores, snapshot, courseHcps])
+    if (!game || game.type !== 'skins' || !playableSnapshot) return null
+    return calculateSkins(players, approvedScores, playableSnapshot, game.config as SkinsConfig, courseHcps)
+  }, [game, players, approvedScores, playableSnapshot, courseHcps])
 
   const bestBallResult = useMemo(() => {
-    if (!game || game.type !== 'best_ball' || !snapshot) return null
-    return calculateBestBall(players, approvedScores, snapshot, game.config as BestBallConfig, courseHcps)
-  }, [game, players, approvedScores, snapshot, courseHcps])
+    if (!game || game.type !== 'best_ball' || !playableSnapshot) return null
+    return calculateBestBall(players, approvedScores, playableSnapshot, game.config as BestBallConfig, courseHcps)
+  }, [game, players, approvedScores, playableSnapshot, courseHcps])
 
   const nassauResult = useMemo(() => {
-    if (!game || game.type !== 'nassau' || !snapshot) return null
-    return calculateNassau(players, approvedScores, snapshot, game.config as NassauConfig, courseHcps)
-  }, [game, players, approvedScores, snapshot, courseHcps])
+    if (!game || game.type !== 'nassau' || !playableSnapshot) return null
+    return calculateNassau(players, approvedScores, playableSnapshot, game.config as NassauConfig, courseHcps)
+  }, [game, players, approvedScores, playableSnapshot, courseHcps])
 
   const wolfResult = useMemo(() => {
-    if (!game || game.type !== 'wolf' || !snapshot) return null
-    return calculateWolf(players, approvedScores, snapshot, game.config as WolfConfig, courseHcps)
-  }, [game, players, approvedScores, snapshot, courseHcps])
+    if (!game || game.type !== 'wolf' || !playableSnapshot) return null
+    return calculateWolf(players, approvedScores, playableSnapshot, game.config as WolfConfig, courseHcps)
+  }, [game, players, approvedScores, playableSnapshot, courseHcps])
 
   const bbbResult = useMemo(() => {
     if (!game || game.type !== 'bingo_bango_bongo') return null
@@ -925,78 +949,78 @@ export function Scorecard({ userId, roundId, onEndRound, onHome, readOnly: readO
   const hammerStates = hammerConfig?.hammerStates ?? {}
 
   const hammerResult = useMemo(() => {
-    if (!game || game.type !== 'hammer' || !snapshot || players.length !== 2) return null
-    return calculateHammer(players, approvedScores, snapshot, game.config as HammerConfig, courseHcps)
-  }, [game, players, approvedScores, snapshot, courseHcps])
+    if (!game || game.type !== 'hammer' || !playableSnapshot || players.length !== 2) return null
+    return calculateHammer(players, approvedScores, playableSnapshot, game.config as HammerConfig, courseHcps)
+  }, [game, players, approvedScores, playableSnapshot, courseHcps])
 
   const vegasResult = useMemo(() => {
-    if (!game || game.type !== 'vegas' || !snapshot) return null
-    return calculateVegas(players, approvedScores, snapshot, game.config as VegasConfig, courseHcps)
-  }, [game, players, approvedScores, snapshot, courseHcps])
+    if (!game || game.type !== 'vegas' || !playableSnapshot) return null
+    return calculateVegas(players, approvedScores, playableSnapshot, game.config as VegasConfig, courseHcps)
+  }, [game, players, approvedScores, playableSnapshot, courseHcps])
 
   const stablefordResult = useMemo(() => {
-    if (!game || game.type !== 'stableford' || !snapshot) return null
-    return calculateStableford(players, approvedScores, snapshot, game.config as StablefordConfig, courseHcps)
-  }, [game, players, approvedScores, snapshot, courseHcps])
+    if (!game || game.type !== 'stableford' || !playableSnapshot) return null
+    return calculateStableford(players, approvedScores, playableSnapshot, game.config as StablefordConfig, courseHcps)
+  }, [game, players, approvedScores, playableSnapshot, courseHcps])
 
   const bankerResult = useMemo(() => {
-    if (!game || game.type !== 'banker' || !snapshot) return null
-    return calculateBanker(players, approvedScores, snapshot, game.config as BankerConfig, courseHcps)
-  }, [game, players, approvedScores, snapshot, courseHcps])
+    if (!game || game.type !== 'banker' || !playableSnapshot) return null
+    return calculateBanker(players, approvedScores, playableSnapshot, game.config as BankerConfig, courseHcps)
+  }, [game, players, approvedScores, playableSnapshot, courseHcps])
 
   const quotaResult = useMemo(() => {
-    if (!game || game.type !== 'quota' || !snapshot) return null
-    return calculateQuota(players, approvedScores, snapshot, game.config as QuotaConfig, courseHcps)
-  }, [game, players, approvedScores, snapshot, courseHcps])
+    if (!game || game.type !== 'quota' || !playableSnapshot) return null
+    return calculateQuota(players, approvedScores, playableSnapshot, game.config as QuotaConfig, courseHcps)
+  }, [game, players, approvedScores, playableSnapshot, courseHcps])
 
   // Alt (opposite mode) results — compute the other mode for dual display
   const skinsResultAlt = useMemo(() => {
-    if (!game || game.type !== 'skins' || !snapshot) return null
+    if (!game || game.type !== 'skins' || !playableSnapshot) return null
     const cfg = game.config as SkinsConfig
-    return calculateSkins(players, approvedScores, snapshot, { ...cfg, mode: cfg.mode === 'net' ? 'gross' : 'net' }, courseHcps)
-  }, [game, players, approvedScores, snapshot, courseHcps])
+    return calculateSkins(players, approvedScores, playableSnapshot, { ...cfg, mode: cfg.mode === 'net' ? 'gross' : 'net' }, courseHcps)
+  }, [game, players, approvedScores, playableSnapshot, courseHcps])
 
   const bestBallResultAlt = useMemo(() => {
-    if (!game || game.type !== 'best_ball' || !snapshot) return null
+    if (!game || game.type !== 'best_ball' || !playableSnapshot) return null
     const cfg = game.config as BestBallConfig
-    return calculateBestBall(players, approvedScores, snapshot, { ...cfg, mode: cfg.mode === 'net' ? 'gross' : 'net' }, courseHcps)
-  }, [game, players, approvedScores, snapshot, courseHcps])
+    return calculateBestBall(players, approvedScores, playableSnapshot, { ...cfg, mode: cfg.mode === 'net' ? 'gross' : 'net' }, courseHcps)
+  }, [game, players, approvedScores, playableSnapshot, courseHcps])
 
   const nassauResultAlt = useMemo(() => {
-    if (!game || game.type !== 'nassau' || !snapshot) return null
+    if (!game || game.type !== 'nassau' || !playableSnapshot) return null
     const cfg = game.config as NassauConfig
-    return calculateNassau(players, approvedScores, snapshot, { ...cfg, mode: cfg.mode === 'net' ? 'gross' : 'net' }, courseHcps)
-  }, [game, players, approvedScores, snapshot, courseHcps])
+    return calculateNassau(players, approvedScores, playableSnapshot, { ...cfg, mode: cfg.mode === 'net' ? 'gross' : 'net' }, courseHcps)
+  }, [game, players, approvedScores, playableSnapshot, courseHcps])
 
   const wolfResultAlt = useMemo(() => {
-    if (!game || game.type !== 'wolf' || !snapshot) return null
+    if (!game || game.type !== 'wolf' || !playableSnapshot) return null
     const cfg = game.config as WolfConfig
-    return calculateWolf(players, approvedScores, snapshot, { ...cfg, mode: cfg.mode === 'net' ? 'gross' : 'net' }, courseHcps)
-  }, [game, players, approvedScores, snapshot, courseHcps])
+    return calculateWolf(players, approvedScores, playableSnapshot, { ...cfg, mode: cfg.mode === 'net' ? 'gross' : 'net' }, courseHcps)
+  }, [game, players, approvedScores, playableSnapshot, courseHcps])
 
   const vegasResultAlt = useMemo(() => {
-    if (!game || game.type !== 'vegas' || !snapshot) return null
+    if (!game || game.type !== 'vegas' || !playableSnapshot) return null
     const cfg = game.config as VegasConfig
-    return calculateVegas(players, approvedScores, snapshot, { ...cfg, mode: cfg.mode === 'net' ? 'gross' : 'net' }, courseHcps)
-  }, [game, players, approvedScores, snapshot, courseHcps])
+    return calculateVegas(players, approvedScores, playableSnapshot, { ...cfg, mode: cfg.mode === 'net' ? 'gross' : 'net' }, courseHcps)
+  }, [game, players, approvedScores, playableSnapshot, courseHcps])
 
   const stablefordResultAlt = useMemo(() => {
-    if (!game || game.type !== 'stableford' || !snapshot) return null
+    if (!game || game.type !== 'stableford' || !playableSnapshot) return null
     const cfg = game.config as StablefordConfig
-    return calculateStableford(players, approvedScores, snapshot, { ...cfg, mode: cfg.mode === 'net' ? 'gross' : 'net' }, courseHcps)
-  }, [game, players, approvedScores, snapshot, courseHcps])
+    return calculateStableford(players, approvedScores, playableSnapshot, { ...cfg, mode: cfg.mode === 'net' ? 'gross' : 'net' }, courseHcps)
+  }, [game, players, approvedScores, playableSnapshot, courseHcps])
 
   const bankerResultAlt = useMemo(() => {
-    if (!game || game.type !== 'banker' || !snapshot) return null
+    if (!game || game.type !== 'banker' || !playableSnapshot) return null
     const cfg = game.config as BankerConfig
-    return calculateBanker(players, approvedScores, snapshot, { ...cfg, mode: cfg.mode === 'net' ? 'gross' : 'net' }, courseHcps)
-  }, [game, players, approvedScores, snapshot, courseHcps])
+    return calculateBanker(players, approvedScores, playableSnapshot, { ...cfg, mode: cfg.mode === 'net' ? 'gross' : 'net' }, courseHcps)
+  }, [game, players, approvedScores, playableSnapshot, courseHcps])
 
   const quotaResultAlt = useMemo(() => {
-    if (!game || game.type !== 'quota' || !snapshot) return null
+    if (!game || game.type !== 'quota' || !playableSnapshot) return null
     const cfg = game.config as QuotaConfig
-    return calculateQuota(players, approvedScores, snapshot, { ...cfg, mode: cfg.mode === 'net' ? 'gross' : 'net' }, courseHcps)
-  }, [game, players, approvedScores, snapshot, courseHcps])
+    return calculateQuota(players, approvedScores, playableSnapshot, { ...cfg, mode: cfg.mode === 'net' ? 'gross' : 'net' }, courseHcps)
+  }, [game, players, approvedScores, playableSnapshot, courseHcps])
 
   const currentHammerState = hammerStates[currentHole] ?? null
 
@@ -1008,18 +1032,19 @@ export function Scorecard({ userId, roundId, onEndRound, onHome, readOnly: readO
   }, [skinsResult, currentHole])
 
   const miniBoard = useMemo(() => {
-    if (!snapshot) return []
+    if (!playableSnapshot) return []
+    const pSnap = playableSnapshot
     const board = players.map(p => {
-      const pScores = holeScores.filter(s => s.playerId === p.id)
+      const pScores = holeScores.filter(s => s.playerId === p.id && playableHoleNums.includes(s.holeNumber))
       const gross = pScores.reduce((s, hs) => s + hs.grossScore, 0)
       const courseHcp = courseHcps[p.id] ?? 0
       const netStrokes = pScores.reduce((s, hs) => {
-        const hole = snapshot.holes.find(h => h.number === hs.holeNumber)
-        return s + (hole ? strokesOnHole(courseHcp, hole.strokeIndex, snapshot.holes.length) : 0)
+        const hole = pSnap.holes.find(h => h.number === hs.holeNumber)
+        return s + (hole ? strokesOnHole(courseHcp, hole.strokeIndex, pSnap.holes.length) : 0)
       }, 0)
       const net = gross - netStrokes
       const scoredPar = pScores.reduce((s, hs) => {
-        const hole = snapshot.holes.find(h => h.number === hs.holeNumber)
+        const hole = pSnap.holes.find(h => h.number === hs.holeNumber)
         return s + (hole?.par ?? 0)
       }, 0)
       const vsPar = gross - scoredPar
@@ -1031,7 +1056,7 @@ export function Scorecard({ userId, roundId, onEndRound, onHome, readOnly: readO
       else positions.push(entry.net === board[idx - 1].net ? positions[idx - 1] : idx + 1)
     })
     return board.map((entry, idx) => ({ ...entry, pos: positions[idx] }))
-  }, [players, holeScores, snapshot, courseHcps])
+  }, [players, holeScores, playableSnapshot, playableHoleNums, courseHcps])
 
   const headerClass = game?.stakesMode === 'high_roller' ? 'hr-header' : 'app-header'
 
@@ -1114,7 +1139,7 @@ export function Scorecard({ userId, roundId, onEndRound, onHome, readOnly: readO
                 {event ? `${event.name} · ` : ''}{snapshot.courseName}
                 <span className="inline-flex items-center gap-1 text-[10px] bg-amber-500/30 px-1.5 py-0.5 rounded-full">
                   <span className="w-1.5 h-1.5 bg-amber-400 rounded-full animate-pulse" />
-                  {readOnly ? 'Spectating' : isEventRound ? (canApproveScores ? 'Scorekeeper' : 'Self-Entry') : selfEntryOnly ? 'Self-Entry' : 'Live'}
+                  {readOnly ? 'Spectating' : isEventRound ? (isScoreMaster ? 'Score Master' : isGroupScorekeeper ? `Scorekeeper · G${myEventGroupNumber}` : groupHasActiveScorekeeper ? 'View Only' : 'Self-Entry') : selfEntryOnly ? 'Self-Entry' : 'Live'}
                 </span>
               </p>
               <h1 className="text-xl font-bold flex items-center gap-2">
@@ -1171,6 +1196,27 @@ export function Scorecard({ userId, roundId, onEndRound, onHome, readOnly: readO
                     Invite Players
                   </button>
                 )}
+                {isScoremasterRole && (
+                  <button
+                    onClick={async () => {
+                      setShowHeaderMenu(false)
+                      let code = (event?.inviteCode) ?? round.inviteCode
+                      if (!code) {
+                        code = generateInviteCode()
+                        const { error } = await supabase.from('rounds').update({ invite_code: code }).eq('id', roundId)
+                        if (error) {
+                          const { data } = await supabase.from('rounds').select('invite_code').eq('id', roundId).single()
+                          code = data?.invite_code ?? code
+                        }
+                        setRound(prev => prev ? { ...prev, inviteCode: code! } : prev)
+                      }
+                      setShowQRModal(true)
+                    }}
+                    className="w-full px-4 py-3 text-left text-sm font-medium text-cyan-300 hover:bg-gray-700 active:bg-gray-700"
+                  >
+                    QR Code
+                  </button>
+                )}
                 {!readOnly && (
                   <button
                     onClick={async () => {
@@ -1209,7 +1255,7 @@ export function Scorecard({ userId, roundId, onEndRound, onHome, readOnly: readO
                     Rules
                   </button>
                 )}
-                {!readOnly && !selfEntryOnly && (
+                {!readOnly && (isEventRound ? isScoreMaster : !selfEntryOnly) && (
                   <button
                     onClick={() => { setShowHeaderMenu(false); confirmEndRound() }}
                     className="w-full px-4 py-3 text-left text-sm font-medium text-yellow-300 hover:bg-gray-700 active:bg-gray-700"
@@ -1223,8 +1269,11 @@ export function Scorecard({ userId, roundId, onEndRound, onHome, readOnly: readO
         </div>
         <div className="max-w-2xl mx-auto mt-2 flex items-center justify-center gap-3">
           <button
-            onClick={() => goToHole(Math.max(1, currentHole - 1))}
-            disabled={currentHole === 1}
+            onClick={() => {
+              const idx = playableHoleNums.indexOf(currentHole)
+              if (idx > 0) goToHole(playableHoleNums[idx - 1])
+            }}
+            disabled={playableHoleNums.indexOf(currentHole) <= 0}
             className="min-w-[44px] min-h-[44px] rounded-full bg-gray-700/40 text-gray-300 font-bold text-lg disabled:opacity-30"
           >‹</button>
           <button
@@ -1232,16 +1281,21 @@ export function Scorecard({ userId, roundId, onEndRound, onHome, readOnly: readO
             className="text-white font-bold text-sm px-3 py-1.5 rounded-lg active:bg-gray-600 transition-colors"
           >
             Hole {currentHole} · Par {par}
+            {round?.holesMode === 'front_9' ? ' · Front 9' : round?.holesMode === 'back_9' ? ' · Back 9' : ''}
+            {(round?.startingHole ?? 1) > 1 && round?.holesMode !== 'front_9' && round?.holesMode !== 'back_9' ? ` · Shotgun ${round?.startingHole}` : ''}
           </button>
           <button
-            onClick={() => goToHole(Math.min(snapshot?.holes.length ?? 18, currentHole + 1))}
-            disabled={currentHole === (snapshot?.holes.length ?? 18)}
+            onClick={() => {
+              const idx = playableHoleNums.indexOf(currentHole)
+              if (idx < playableHoleNums.length - 1) goToHole(playableHoleNums[idx + 1])
+            }}
+            disabled={playableHoleNums.indexOf(currentHole) >= playableHoleNums.length - 1}
             className="min-w-[44px] min-h-[44px] rounded-full bg-gray-700/40 text-gray-300 font-bold text-lg disabled:opacity-30"
           >›</button>
         </div>
         {showHoleGrid && (
           <div ref={holeNavRef} className="max-w-2xl mx-auto mt-2 flex gap-1.5 overflow-x-auto pb-1">
-            {Array.from({ length: snapshot?.holes.length ?? 18 }, (_, i) => i + 1).map(n => {
+            {playableHoleNums.map(n => {
               const hasScore = players.length > 0 && players.every(p => holeScores.some(s => s.playerId === p.id && s.holeNumber === n))
               return (
                 <button key={n} data-hole={n} onClick={() => { goToHole(n); setShowHoleGrid(false) }}
@@ -1536,7 +1590,7 @@ export function Scorecard({ userId, roundId, onEndRound, onHome, readOnly: readO
       {/* Leaderboard tab */}
       {scoreTab === 'leaderboard' && snapshot && (
         <LeaderboardTab
-          snapshot={snapshot}
+          snapshot={playableSnapshot!}
           players={players}
           holeScores={holeScores}
           courseHcps={courseHcps}
@@ -1594,16 +1648,22 @@ export function Scorecard({ userId, roundId, onEndRound, onHome, readOnly: readO
             </div>
           )
           if (isEventRound && showContextBanner) {
+            if (isScoreMaster) return (
+              <div className="bg-purple-50 border border-purple-200 rounded-lg px-3 py-2 flex items-center justify-between">
+                <p className="text-purple-800 text-sm font-semibold">Score Master · All Groups</p>
+                <button onClick={() => setShowContextBanner(false)} className="text-purple-400 font-bold ml-2">&times;</button>
+              </div>
+            )
             if (isGroupScorekeeper) return (
               <div className="bg-blue-50 border border-blue-200 rounded-lg px-3 py-2 flex items-center justify-between">
                 <p className="text-blue-800 text-sm font-semibold">Scorekeeper · Group {myEventGroupNumber}</p>
                 <button onClick={() => setShowContextBanner(false)} className="text-blue-400 font-bold ml-2">&times;</button>
               </div>
             )
-            if (isEventManager) return (
-              <div className="bg-green-50 border border-green-200 rounded-lg px-3 py-2 flex items-center justify-between">
-                <p className="text-green-800 text-sm font-semibold">Event Manager · Auto-approved</p>
-                <button onClick={() => setShowContextBanner(false)} className="text-green-400 font-bold ml-2">&times;</button>
+            if (groupHasActiveScorekeeper) return (
+              <div className="bg-gray-50 border border-gray-200 rounded-lg px-3 py-2 flex items-center justify-between">
+                <p className="text-gray-600 text-sm font-semibold">Your scorekeeper is entering scores for your group</p>
+                <button onClick={() => setShowContextBanner(false)} className="text-gray-400 font-bold ml-2">&times;</button>
               </div>
             )
             if (myEventParticipant && !canApproveScores) return (
@@ -1958,12 +2018,12 @@ export function Scorecard({ userId, roundId, onEndRound, onHome, readOnly: readO
 
         {/* Batch Entry Grid */}
         {showBatchEntry && !readOnly && snapshot && (() => {
-          const totalHoles = snapshot.holes.length
-          const half = Math.ceil(totalHoles / 2)
-          const isBack = currentHole > half
-          const rangeStart = isBack ? half + 1 : 1
-          const rangeEnd = isBack ? totalHoles : half
-          const holeRange = Array.from({ length: rangeEnd - rangeStart + 1 }, (_, i) => rangeStart + i)
+          const half = Math.ceil(playableHoleNums.length / 2)
+          const idx = playableHoleNums.indexOf(currentHole)
+          const isBack = idx >= half
+          const holeRange = isBack ? playableHoleNums.slice(half) : playableHoleNums.slice(0, half)
+          const rangeStart = holeRange[0]
+          const rangeEnd = holeRange[holeRange.length - 1]
 
           const getBatchValue = (playerId: string, holeNum: number): string => {
             const override = batchScores[playerId]?.[holeNum]
@@ -2084,7 +2144,27 @@ export function Scorecard({ userId, roundId, onEndRound, onHome, readOnly: readO
           const isInActiveGroup = !hasGroups || groupNums.length <= 1 || activeGroupTab === 'all' || activeGroupTab === playerGroup
           const isMyPlayer = selfEntryOnly && myParticipant?.playerId === player.id
           const isMyEventPlayer = isEventRound && myEventParticipant?.playerId === player.id
-          const isEditable = isMyPlayer || isMyEventPlayer || (!readOnly && !selfEntryOnly && isInActiveGroup && activeGroupTab !== 'all')
+
+          // Event editability: Score Master > Group Scorekeeper > self-entry fallback
+          let isEditable: boolean
+          if (isEventRound) {
+            const playerInMyGroup = playerGroup != null && playerGroup === myEventGroupNumber
+            if (isScoreMaster) {
+              // Score Master can edit any player in any active group tab (not 'all')
+              isEditable = isInActiveGroup && activeGroupTab !== 'all'
+            } else if (isGroupScorekeeper && playerInMyGroup) {
+              // Group Scorekeeper can edit any player in their group
+              isEditable = true
+            } else if (groupHasActiveScorekeeper) {
+              // Player with active scorekeeper is read-only
+              isEditable = false
+            } else {
+              // No active scorekeeper — fall back to self-entry
+              isEditable = isMyEventPlayer
+            }
+          } else {
+            isEditable = isMyPlayer || (!readOnly && !selfEntryOnly && isInActiveGroup && activeGroupTab !== 'all')
+          }
 
           // Score status for event rounds
           const currentScore = holeScores.find(s => s.playerId === player.id && s.holeNumber === currentHole)
@@ -2307,7 +2387,8 @@ export function Scorecard({ userId, roundId, onEndRound, onHome, readOnly: readO
                       }
                       setShowHoleConfirm(false)
                       setConfirmParFill(false)
-                      goToHole(currentHole + 1)
+                      const nextIdx = playableHoleNums.indexOf(currentHole) + 1
+                      goToHole(playableHoleNums[nextIdx] ?? currentHole)
                     }}
                     className="flex-1 h-12 bg-blue-600 text-white font-bold rounded-xl active:bg-blue-700 text-sm"
                   >
@@ -2325,14 +2406,15 @@ export function Scorecard({ userId, roundId, onEndRound, onHome, readOnly: readO
           )
         })()}
 
-        {!showBatchEntry && !showHoleConfirm && (currentHole < (snapshot?.holes.length ?? 18) ? (
+        {!showBatchEntry && !showHoleConfirm && (playableHoleNums.indexOf(currentHole) < playableHoleNums.length - 1 ? (
           <button onClick={() => {
             // Small groups (1-2 players) in non-event rounds: skip confirm
             const isSmallCasual = players.length <= 2 && !isEventRound
+            const nextIdx = playableHoleNums.indexOf(currentHole) + 1
             if (!readOnly && !selfEntryOnly && isScoremasterRole && !isSmallCasual) {
               setShowHoleConfirm(true)
             } else {
-              goToHole(currentHole + 1)
+              goToHole(playableHoleNums[nextIdx])
             }
           }}
             className="w-full h-14 bg-gray-800 text-white text-lg font-bold rounded-2xl active:bg-gray-900 transition-colors shadow-lg">Next Hole →</button>
@@ -2388,6 +2470,13 @@ export function Scorecard({ userId, roundId, onEndRound, onHome, readOnly: readO
 
       {/* Game rules modal */}
       {showRulesModal && game && <GameRulesModal gameType={game.type} onClose={() => setShowRulesModal(false)} />}
+
+      {/* QR Code modal */}
+      {showQRModal && (() => {
+        const qrCode = (event?.inviteCode) ?? round.inviteCode ?? ''
+        const qrUrl = `${window.location.origin}${window.location.pathname}?join=${qrCode}`
+        return <InviteQRModal url={qrUrl} code={qrCode} eventName={event?.name} onClose={() => setShowQRModal(false)} />
+      })()}
 
       {/* Number pad for quick score entry */}
       {numberPadTarget && (

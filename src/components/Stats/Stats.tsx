@@ -3,6 +3,7 @@ import { ConfirmModal } from '../ConfirmModal'
 import { ScoringDistribution } from '../ScoringDistribution'
 import { supabase, rowToRound, rowToHoleScore, rowToRoundPlayer, rowToJunkRecord } from '../../lib/supabase'
 import { buildCourseHandicaps, calculateSkinsPayouts, calculateSkins, calculateBestBallPayouts, calculateBestBall, calculateNassauPayouts, calculateNassau, calculateWolfPayouts, calculateWolf, calculateBBBPayouts, calculateBBB, calculateJunks } from '../../lib/gameLogic'
+import { makePlayableSnapshot, roundToHolesConfig } from '../../lib/holeUtils'
 import type { Round, HoleScore, RoundPlayer, Player, CourseSnapshot, SkinsConfig, BestBallConfig, NassauConfig, WolfConfig, BBBPoint, JunkRecord, GameType } from '../../types'
 
 interface Props {
@@ -85,6 +86,7 @@ export function Stats({ userId, onBack }: Props) {
       const snapshot: CourseSnapshot | undefined = round.courseSnapshot
       if (!players.length || !snapshot) continue
 
+      const pSnap = makePlayableSnapshot(snapshot, roundToHolesConfig(round))
       const roundScores = allScores.filter(s => s.roundId === round.id)
       const roundPlayers = allRoundPlayers.filter(rp => rp.roundId === round.id)
 
@@ -97,12 +99,12 @@ export function Stats({ userId, onBack }: Props) {
         }
         const entry = playerMap.get(player.id)!
         entry.roundsPlayed++
-        if (pScores.length >= snapshot.holes.length) {
+        if (pScores.length >= pSnap.holes.length) {
           entry.grossTotals.push(gross)
         }
 
         for (const sc of pScores) {
-          const hole = snapshot.holes.find(h => h.number === sc.holeNumber)
+          const hole = pSnap.holes.find(h => h.number === sc.holeNumber)
           if (!hole) continue
           const diff = sc.grossScore - hole.par
           if (sc.grossScore === 1 || diff <= -2) dist.eagles++
@@ -119,22 +121,22 @@ export function Stats({ userId, onBack }: Props) {
       }
 
       if (round.game && round.game.buyInCents > 0) {
-        const chm = buildCourseHandicaps(players, roundPlayers, snapshot)
+        const chm = buildCourseHandicaps(players, roundPlayers, snapshot, round.holesMode)
         let payouts: { playerId: string; amountCents: number }[] = []
 
         try {
           const game = round.game
           if (game.type === 'skins') {
-            const result = calculateSkins(players, roundScores, snapshot, game.config as SkinsConfig, chm)
+            const result = calculateSkins(players, roundScores, pSnap, game.config as SkinsConfig, chm)
             payouts = calculateSkinsPayouts(result, game, players.length)
           } else if (game.type === 'best_ball') {
-            const result = calculateBestBall(players, roundScores, snapshot, game.config as BestBallConfig, chm)
+            const result = calculateBestBall(players, roundScores, pSnap, game.config as BestBallConfig, chm)
             payouts = calculateBestBallPayouts(result, game.config as BestBallConfig, game, players)
           } else if (game.type === 'nassau') {
-            const result = calculateNassau(players, roundScores, snapshot, game.config as NassauConfig, chm)
-            payouts = calculateNassauPayouts(result, game, players, roundScores, snapshot, chm)
+            const result = calculateNassau(players, roundScores, pSnap, game.config as NassauConfig, chm)
+            payouts = calculateNassauPayouts(result, game, players, roundScores, pSnap, chm)
           } else if (game.type === 'wolf') {
-            const result = calculateWolf(players, roundScores, snapshot, game.config as WolfConfig, chm)
+            const result = calculateWolf(players, roundScores, pSnap, game.config as WolfConfig, chm)
             payouts = calculateWolfPayouts(result, game, players)
           } else if (game.type === 'bingo_bango_bongo') {
             const roundBbb = allBbbPoints.filter(b => b.roundId === round.id)

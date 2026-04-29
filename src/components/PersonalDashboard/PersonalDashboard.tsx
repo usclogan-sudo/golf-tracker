@@ -10,6 +10,7 @@ import {
   calculateBBB, calculateBBBPayouts,
   calculateJunks,
 } from '../../lib/gameLogic'
+import { makePlayableSnapshot, roundToHolesConfig } from '../../lib/holeUtils'
 import type {
   Round, HoleScore, RoundPlayer, Player,
   SkinsConfig, BestBallConfig, NassauConfig, WolfConfig,
@@ -155,6 +156,8 @@ export function PersonalDashboard({ userId, onBack }: { userId: string; onBack: 
       const snap = round.courseSnapshot
       if (!players.length || !snap) continue
 
+      const pSnap = makePlayableSnapshot(snap, roundToHolesConfig(round))
+
       let myId = players.find(p => p.id === userId)?.id
       if (!myId) myId = partMap.get(round.id)
       if (!myId || !players.find(p => p.id === myId)) continue
@@ -164,7 +167,7 @@ export function PersonalDashboard({ userId, onBack }: { userId: string; onBack: 
       const rPlayers = allRP.filter(rp => rp.roundId === round.id)
       const myScores = rScores.filter(s => s.playerId === myId)
       const gross = myScores.reduce((s, sc) => s + sc.grossScore, 0)
-      const complete = myScores.length >= snap.holes.length
+      const complete = myScores.length >= pSnap.holes.length
 
       if (complete) {
         totalGross += gross
@@ -178,7 +181,7 @@ export function PersonalDashboard({ userId, onBack }: { userId: string; onBack: 
 
       // Scoring distribution (user only)
       for (const sc of myScores) {
-        const hole = snap.holes.find(h => h.number === sc.holeNumber)
+        const hole = pSnap.holes.find(h => h.number === sc.holeNumber)
         if (!hole) continue
         const d = sc.grossScore - hole.par
         if (sc.grossScore === 1 || d <= -2) dist.eagles++
@@ -195,18 +198,18 @@ export function PersonalDashboard({ userId, onBack }: { userId: string; onBack: 
 
       if (round.game && round.game.buyInCents > 0) {
         roundsWithGame++
-        const chm = buildCourseHandicaps(players, rPlayers, snap)
+        const chm = buildCourseHandicaps(players, rPlayers, snap, round.holesMode)
         let payouts: { playerId: string; amountCents: number }[] = []
         try {
           const g = round.game
           if (g.type === 'skins') {
-            payouts = calculateSkinsPayouts(calculateSkins(players, rScores, snap, g.config as SkinsConfig, chm), g, players.length)
+            payouts = calculateSkinsPayouts(calculateSkins(players, rScores, pSnap, g.config as SkinsConfig, chm), g, players.length)
           } else if (g.type === 'best_ball') {
-            payouts = calculateBestBallPayouts(calculateBestBall(players, rScores, snap, g.config as BestBallConfig, chm), g.config as BestBallConfig, g, players)
+            payouts = calculateBestBallPayouts(calculateBestBall(players, rScores, pSnap, g.config as BestBallConfig, chm), g.config as BestBallConfig, g, players)
           } else if (g.type === 'nassau') {
-            payouts = calculateNassauPayouts(calculateNassau(players, rScores, snap, g.config as NassauConfig, chm), g, players, rScores, snap, chm)
+            payouts = calculateNassauPayouts(calculateNassau(players, rScores, pSnap, g.config as NassauConfig, chm), g, players, rScores, pSnap, chm)
           } else if (g.type === 'wolf') {
-            payouts = calculateWolfPayouts(calculateWolf(players, rScores, snap, g.config as WolfConfig, chm), g, players)
+            payouts = calculateWolfPayouts(calculateWolf(players, rScores, pSnap, g.config as WolfConfig, chm), g, players)
           } else if (g.type === 'bingo_bango_bongo') {
             payouts = calculateBBBPayouts(calculateBBB(players, allBbb.filter(b => b.roundId === round.id)), g, players)
           }
@@ -263,7 +266,7 @@ export function PersonalDashboard({ userId, onBack }: { userId: string; onBack: 
 
       // Recent form
       if (myScores.length > 0) {
-        const par = snap.holes.reduce((s, h) => s + h.par, 0)
+        const par = pSnap.holes.reduce((s, h) => s + h.par, 0)
         recent.push({ course: snap.courseName, date: round.date, gross, vsPar: complete ? gross - par : null, netCents: myNet })
       }
     }

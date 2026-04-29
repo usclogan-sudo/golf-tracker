@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { supabase, rowToRound, rowToRoundPlayer, rowToHoleScore, rowToEvent, rowToEventParticipant } from '../../lib/supabase'
 import { buildCourseHandicaps, strokesOnHole, calculateSkins, calculateBestBall, calculateNassau, calculateWolf, calculateBBB, fmtMoney } from '../../lib/gameLogic'
+import { makePlayableSnapshot, roundToHolesConfig } from '../../lib/holeUtils'
 import type { Round, RoundPlayer, HoleScore, GolfEvent, EventParticipant, SkinsConfig, BestBallConfig, NassauConfig, WolfConfig, Player, ScoreStatus } from '../../types'
 
 interface Props {
@@ -95,6 +96,12 @@ export function EventLeaderboard({ userId, eventId, onBack }: Props) {
   const game = round?.game
   const groups = round?.groups
 
+  // Build playable snapshot for 9-hole / shotgun modes
+  const playableSnapshot = useMemo(() => {
+    if (!snapshot || !round) return snapshot ?? null
+    return makePlayableSnapshot(snapshot, roundToHolesConfig(round))
+  }, [snapshot, round])
+
   // Only use approved scores for calculations
   const approvedScores = useMemo(() => {
     return holeScores.filter(s => s.scoreStatus !== 'rejected' && s.scoreStatus !== 'pending')
@@ -102,8 +109,8 @@ export function EventLeaderboard({ userId, eventId, onBack }: Props) {
 
   const courseHcps = useMemo(() => {
     if (!snapshot || !roundPlayers) return {}
-    return buildCourseHandicaps(players, roundPlayers, snapshot)
-  }, [players, roundPlayers, snapshot])
+    return buildCourseHandicaps(players, roundPlayers, snapshot, round?.holesMode)
+  }, [players, roundPlayers, snapshot, round?.holesMode])
 
   const groupNumbers = useMemo(() => {
     if (!groups) return [1]
@@ -112,18 +119,19 @@ export function EventLeaderboard({ userId, eventId, onBack }: Props) {
 
   // Build leaderboard data
   const leaderboard = useMemo(() => {
-    if (!snapshot) return []
+    if (!playableSnapshot) return []
+    const pSnap = playableSnapshot
     return players.map(p => {
       const pScores = approvedScores.filter(s => s.playerId === p.id)
       const gross = pScores.reduce((s, hs) => s + hs.grossScore, 0)
       const courseHcp = courseHcps[p.id] ?? 0
       const netStrokes = pScores.reduce((s, hs) => {
-        const hole = snapshot.holes.find(h => h.number === hs.holeNumber)
-        return s + (hole ? strokesOnHole(courseHcp, hole.strokeIndex, snapshot.holes.length) : 0)
+        const hole = pSnap.holes.find(h => h.number === hs.holeNumber)
+        return s + (hole ? strokesOnHole(courseHcp, hole.strokeIndex, pSnap.holes.length) : 0)
       }, 0)
       const net = gross - netStrokes
       const scoredPar = pScores.reduce((s, hs) => {
-        const hole = snapshot.holes.find(h => h.number === hs.holeNumber)
+        const hole = pSnap.holes.find(h => h.number === hs.holeNumber)
         return s + (hole?.par ?? 0)
       }, 0)
       const vsPar = gross - scoredPar
@@ -133,7 +141,7 @@ export function EventLeaderboard({ userId, eventId, onBack }: Props) {
 
       return { player: p, gross, net, vsPar, thru: pScores.length, groupNum, isOnline }
     }).sort((a, b) => a.net - b.net)
-  }, [players, approvedScores, snapshot, courseHcps, groups, eventParticipants, onlineUsers])
+  }, [players, approvedScores, playableSnapshot, courseHcps, groups, eventParticipants, onlineUsers])
 
   // Role detection
   const myParticipant = eventParticipants.find(ep => ep.userId === userId)
@@ -156,17 +164,18 @@ export function EventLeaderboard({ userId, eventId, onBack }: Props) {
 
   // Per-group progress: max hole where ALL group members have an approved score
   const groupProgress = useMemo(() => {
-    if (!groups || !snapshot) return {}
+    if (!groups || !playableSnapshot) return {}
+    const pHoleNums = playableSnapshot.holes.map(h => h.number)
     const progress: Record<number, number> = {}
     for (const gn of groupNumbers) {
       const groupPlayerIds = players.filter(p => groups[p.id] === gn).map(p => p.id)
       if (groupPlayerIds.length === 0) { progress[gn] = 0; continue }
       let maxComplete = 0
-      for (let h = 1; h <= snapshot.holes.length; h++) {
+      for (const h of pHoleNums) {
         const allHaveScore = groupPlayerIds.every(pid =>
           approvedScores.some(s => s.playerId === pid && s.holeNumber === h)
         )
-        if (allHaveScore) maxComplete = h
+        if (allHaveScore) maxComplete++
         else break
       }
       progress[gn] = maxComplete

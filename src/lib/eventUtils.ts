@@ -35,3 +35,20 @@ export function validateGroups(
   }
   return { valid: oversizedGroups.length === 0, oversizedGroups }
 }
+
+/**
+ * Auto-assign shotgun starting holes evenly across groups.
+ * E.g., 4 groups on 18 holes → starts at holes 1, 5, 10, 14
+ */
+export function autoAssignShotgunStarts(
+  numGroups: number,
+  totalHoles: number,
+): Record<number, number> {
+  const starts: Record<number, number> = {}
+  if (numGroups <= 1) return starts
+  const spacing = Math.floor(totalHoles / numGroups)
+  for (let i = 0; i < numGroups; i++) {
+    starts[i + 1] = (i * spacing) + 1
+  }
+  return starts
+}

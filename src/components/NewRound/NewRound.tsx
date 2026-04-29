@@ -30,6 +30,7 @@ import type {
   BuyIn,
   GameType,
   StakesMode,
+  HolesMode,
 } from '../../types'
 
 interface Props {
@@ -1788,12 +1789,13 @@ function TreasurerAndBuyIns({
     try {
       const roundId = uuidv4()
       const inviteCode = generateInviteCode()
+      const firstHole = holesMode === 'back_9' ? Math.ceil(course.holes.length / 2) + 1 : 1
       const round: Round = {
         id: roundId,
         courseId: course.id,
         date: new Date(),
         status: 'active',
-        currentHole: 1,
+        currentHole: firstHole,
         courseSnapshot: {
           courseId: course.id,
           courseName: course.name,
@@ -1807,6 +1809,7 @@ function TreasurerAndBuyIns({
         groups,
         gameMasterId,
         inviteCode,
+        holesMode: holesMode !== 'full_18' ? holesMode : undefined,
       }
 
       const buyIns: BuyIn[] = players.map(p => ({
@@ -2058,6 +2061,7 @@ export function NewRound({ userId, onStart, onCancel, onAddCourse, initialStakes
   const [game, setGame] = useState<Game | null>(null)
   const [junkConfig, setJunkConfig] = useState<JunkConfig | undefined>(templateRound?.junkConfig)
   const [playerTees, setPlayerTees] = useState<Record<string, string>>({})
+  const [holesMode, setHolesMode] = useState<HolesMode>(templateRound?.holesMode ?? 'full_18')
 
   const preSelectedPlayerIds = templateRound?.players?.map(p => p.id)
   const [creatingDirect, setCreatingDirect] = useState(false)
@@ -2085,12 +2089,13 @@ export function NewRound({ userId, onStart, onCancel, onAddCourse, initialStakes
       const roundId = uuidv4()
       const inviteCode = generateInviteCode()
       const gameMasterId = players.find(p => p.id === userId)?.id ?? players[0]?.id ?? userId
+      const firstHole = holesMode === 'back_9' ? Math.ceil(course.holes.length / 2) + 1 : 1
       const round: Round = {
         id: roundId,
         courseId: course.id,
         date: new Date(),
         status: 'active',
-        currentHole: 1,
+        currentHole: firstHole,
         courseSnapshot: {
           courseId: course.id,
           courseName: course.name,
@@ -2103,6 +2108,7 @@ export function NewRound({ userId, onStart, onCancel, onAddCourse, initialStakes
         groups,
         gameMasterId,
         inviteCode,
+        holesMode: holesMode !== 'full_18' ? holesMode : undefined,
       }
       const roundPlayers = players.map(p => ({
         id: uuidv4(),
@@ -2134,7 +2140,12 @@ export function NewRound({ userId, onStart, onCancel, onAddCourse, initialStakes
       <>
         <CoursePicker
           userId={userId}
-          onSelect={c => { setCourse(c); setStep('players') }}
+          onSelect={c => {
+            setCourse(c)
+            // Reset holesMode when course changes — only offer 9-hole modes for 18-hole courses
+            if (c.holes.length <= 9) setHolesMode('full_18')
+            setStep('players')
+          }}
           onAddCourse={onAddCourse}
           onCancel={onCancel}
           stakesMode={initialStakesMode}
@@ -2144,6 +2155,33 @@ export function NewRound({ userId, onStart, onCancel, onAddCourse, initialStakes
   }
 
   if (step === 'players' && course) {
+    const showHolesToggle = course.holes.length > 9
+    const holesModeBar = showHolesToggle ? (
+      <div className="px-4 pb-2">
+        <div className="max-w-2xl mx-auto">
+          <div className="flex rounded-xl overflow-hidden border border-gray-200 dark:border-gray-600">
+            {(['front_9', 'full_18', 'back_9'] as HolesMode[]).map(mode => {
+              const label = mode === 'front_9' ? 'Front 9' : mode === 'back_9' ? 'Back 9' : `Full ${course.holes.length}`
+              const active = holesMode === mode
+              return (
+                <button
+                  key={mode}
+                  onClick={() => setHolesMode(mode)}
+                  className={`flex-1 py-2 text-sm font-semibold transition-colors ${
+                    active
+                      ? 'bg-amber-500 text-white'
+                      : 'bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-300'
+                  }`}
+                >
+                  {label}
+                </button>
+              )
+            })}
+          </div>
+        </div>
+      </div>
+    ) : null
+
     return (
       <PlayerPicker
         userId={userId}
@@ -2152,7 +2190,7 @@ export function NewRound({ userId, onStart, onCancel, onAddCourse, initialStakes
         onBack={() => setStep('course')}
         stakesMode={initialStakesMode}
         preSelectedIds={preSelectedPlayerIds}
-        stepIndicator={stepBar}
+        stepIndicator={<>{stepBar}{holesModeBar}</>}
         playerTees={playerTees}
         onPlayerTeesChange={setPlayerTees}
       />

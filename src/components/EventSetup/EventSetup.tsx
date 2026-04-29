@@ -3,10 +3,11 @@ import { v4 as uuidv4 } from 'uuid'
 import { supabase, rowToCourse, rowToPlayer, rowToSharedCourse, roundToRow, roundPlayerToRow, buyInToRow, eventToRow, generateInviteCode, rowToUserProfile } from '../../lib/supabase'
 import { safeWrite } from '../../lib/safeWrite'
 import { fmtMoney } from '../../lib/gameLogic'
-import { autoAssignGroups, MAX_PER_GROUP } from '../../lib/eventUtils'
+import { autoAssignGroups, autoAssignShotgunStarts, MAX_PER_GROUP } from '../../lib/eventUtils'
 import { venturaCourses } from '../../data/venturaCourses'
 import { NearMeCourses } from '../NearMeCourses/NearMeCourses'
 import { GameRulesModal } from '../GameRulesModal'
+import { InviteQR } from '../InviteQR'
 import type {
   Course,
   Player,
@@ -24,6 +25,7 @@ import type {
   BuyIn,
   GameType,
   StakesMode,
+  HolesMode,
 } from '../../types'
 
 interface Props {
@@ -78,6 +80,9 @@ export function EventSetup({ userId, onStart, onCancel, onAddCourse }: Props) {
   const [customBuyIn, setCustomBuyIn] = useState('')
   const [gameError, setGameError] = useState<string | null>(null)
   const [rulesModalType, setRulesModalType] = useState<GameType | null>(null)
+  const [holesMode, setHolesMode] = useState<HolesMode>('full_18')
+  const [shotgunEnabled, setShotgunEnabled] = useState(false)
+  const [shotgunStarts, setShotgunStarts] = useState<Record<number, number>>({})
 
   // Load courses
   useEffect(() => {
@@ -194,12 +199,13 @@ export function EventSetup({ userId, onStart, onCancel, onAddCourse }: Props) {
       const game = buildGame()
 
       // Create the round
+      const firstHole = holesMode === 'back_9' ? Math.ceil(selectedCourse.holes.length / 2) + 1 : 1
       const round: Round = {
         id: roundId,
         courseId: selectedCourse.id,
         date: new Date(),
         status: 'active',
-        currentHole: 1,
+        currentHole: firstHole,
         courseSnapshot: {
           courseId: selectedCourse.id,
           courseName: selectedCourse.name,
@@ -212,6 +218,8 @@ export function EventSetup({ userId, onStart, onCancel, onAddCourse }: Props) {
         groups,
         eventId,
         inviteCode,
+        holesMode: holesMode !== 'full_18' ? holesMode : undefined,
+        shotgunStarts: shotgunEnabled && Object.keys(shotgunStarts).length > 0 ? shotgunStarts : undefined,
       }
 
       // Create the event
@@ -260,22 +268,6 @@ export function EventSetup({ userId, onStart, onCancel, onAddCourse }: Props) {
         role: 'manager',
         group_number: groups[selectedPlayers[0]?.id] ?? 1,
       }), 'insert event manager participant')
-
-      // Insert scorekeeper participants
-      for (const [gn, playerId] of Object.entries(groupScorekeepers)) {
-        // Find if this scorekeeper has a user profile match
-        const player = selectedPlayers.find(p => p.id === playerId)
-        if (player) {
-          safeWrite(supabase.from('event_participants').upsert({
-            id: uuidv4(),
-            event_id: eventId,
-            user_id: userId, // Placeholder - they'll claim via join flow
-            player_id: playerId,
-            role: 'scorekeeper',
-            group_number: parseInt(gn),
-          }, { onConflict: 'event_id,user_id', ignoreDuplicates: true }), 'insert scorekeeper participant')
-        }
-      }
 
       setCreatedRoundId(roundId)
       setCreatedEventId(eventId)
@@ -591,6 +583,74 @@ export function EventSetup({ userId, onStart, onCancel, onAddCourse }: Props) {
               </div>
             )
           })}
+
+          {/* Holes Mode toggle (only for 18-hole courses) */}
+          {selectedCourse && selectedCourse.holes.length > 9 && (
+            <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700 p-4 space-y-3">
+              <p className="font-bold text-gray-800 dark:text-gray-100 text-sm">Holes</p>
+              <div className="flex rounded-xl overflow-hidden border border-gray-200 dark:border-gray-600">
+                {(['front_9', 'full_18', 'back_9'] as HolesMode[]).map(mode => {
+                  const label = mode === 'front_9' ? 'Front 9' : mode === 'back_9' ? 'Back 9' : `Full ${selectedCourse!.holes.length}`
+                  const active = holesMode === mode
+                  return (
+                    <button
+                      key={mode}
+                      onClick={() => {
+                        setHolesMode(mode)
+                        if (mode !== 'full_18') { setShotgunEnabled(false); setShotgunStarts({}) }
+                      }}
+                      className={`flex-1 py-2 text-sm font-semibold transition-colors ${
+                        active ? 'bg-amber-500 text-white' : 'bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-300'
+                      }`}
+                    >
+                      {label}
+                    </button>
+                  )
+                })}
+              </div>
+
+              {/* Shotgun start toggle (only for full 18) */}
+              {holesMode === 'full_18' && numGroups > 1 && (
+                <div className="space-y-2">
+                  <label className="flex items-center gap-2 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={shotgunEnabled}
+                      onChange={e => {
+                        const on = e.target.checked
+                        setShotgunEnabled(on)
+                        if (on) {
+                          setShotgunStarts(autoAssignShotgunStarts(numGroups, selectedCourse!.holes.length))
+                        } else {
+                          setShotgunStarts({})
+                        }
+                      }}
+                      className="w-4 h-4 accent-amber-500"
+                    />
+                    <span className="text-sm font-medium text-gray-700 dark:text-gray-200">Shotgun Start</span>
+                  </label>
+                  {shotgunEnabled && (
+                    <div className="space-y-1.5 pl-6">
+                      {groupNumbers.map(gn => (
+                        <div key={gn} className="flex items-center gap-2">
+                          <span className="text-xs text-gray-500 w-16">Group {gn}:</span>
+                          <select
+                            value={shotgunStarts[gn] ?? 1}
+                            onChange={e => setShotgunStarts(prev => ({ ...prev, [gn]: Number(e.target.value) }))}
+                            className="text-xs border border-gray-200 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 rounded-lg px-2 py-1"
+                          >
+                            {selectedCourse!.holes.map(h => (
+                              <option key={h.number} value={h.number}>Hole {h.number}</option>
+                            ))}
+                          </select>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
         </div>
         <div className="fixed bottom-0 inset-x-0 p-4 bg-white/95 dark:bg-gray-800/95 backdrop-blur-sm border-t border-gray-200 safe-bottom">
           <div className="max-w-2xl mx-auto">
@@ -815,6 +875,7 @@ export function EventSetup({ userId, onStart, onCancel, onAddCourse }: Props) {
             <div className="bg-gray-100 dark:bg-gray-700 rounded-2xl py-6 px-4 space-y-3">
               <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Invite Code</p>
               <p className="text-4xl font-mono font-bold tracking-[0.3em] text-gray-900 dark:text-gray-100">{createdInviteCode}</p>
+              <InviteQR url={inviteUrl} code={createdInviteCode} />
               <button
                 onClick={copyCode}
                 className="text-xs text-amber-600 font-semibold underline active:text-amber-700"

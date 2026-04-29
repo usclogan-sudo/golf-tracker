@@ -72,6 +72,10 @@ export interface GamePreset {
   createdAt?: Date
 }
 
+// ─── Holes Mode ──────────────────────────────────────────────────────────────
+
+export type HolesMode = 'full_18' | 'front_9' | 'back_9'
+
 // ─── Course Snapshot (freezes course data at time of round) ──────────────────
 
 export interface CourseSnapshot {
@@ -280,6 +284,15 @@ export interface Round {
 
   // Event ID if this round is part of an event
   eventId?: string
+
+  // 9-hole mode: which holes to play (default full_18)
+  holesMode?: HolesMode
+
+  // Starting hole for the round (default 1)
+  startingHole?: number
+
+  // Shotgun starts: group number → starting hole (event only)
+  shotgunStarts?: Record<number, number>
 }
 
 // ─── Round Participant ──────────────────────────────────────────────────────

@@ -1,5 +1,5 @@
 import { createClient } from '@supabase/supabase-js'
-import type { Course, Player, Round, RoundPlayer, HoleScore, BuyIn, BBBPoint, JunkRecord, JunkType, UserProfile, GamePreset, GameType, StakesMode, PinnedFriend, RoundParticipant, SettlementRecord, SettlementStatus, AppNotification, NotificationType, SideBet, SideBetStatus, Tournament, TournamentFormat, TournamentStatus, TournamentRound, TournamentMatchup, MatchupStatus, GolfEvent, EventStatus, EventParticipant, EventRole, ScoreStatus, PropBet, PropCategory, PropWagerModel, PropStatus, PropResolveType, PropWager } from '../types'
+import type { Course, Player, Round, RoundPlayer, HoleScore, BuyIn, BBBPoint, JunkRecord, JunkType, UserProfile, GamePreset, GameType, StakesMode, PinnedFriend, RoundParticipant, SettlementRecord, SettlementStatus, AppNotification, NotificationType, SideBet, SideBetStatus, Tournament, TournamentFormat, TournamentStatus, TournamentRound, TournamentMatchup, MatchupStatus, GolfEvent, EventStatus, EventParticipant, EventRole, ScoreStatus, PropBet, PropCategory, PropWagerModel, PropStatus, PropResolveType, PropWager, HolesMode } from '../types'
 
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL
 const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY
@@ -59,6 +59,9 @@ export function rowToRound(row: any): Round {
     gameMasterId: row.game_master_id ?? undefined,
     inviteCode: row.invite_code ?? undefined,
     eventId: row.event_id ?? undefined,
+    holesMode: (row.holes_mode as HolesMode) ?? undefined,
+    startingHole: row.starting_hole ?? undefined,
+    shotgunStarts: row.shotgun_starts ?? undefined,
   }
 }
 
@@ -157,6 +160,9 @@ export function roundToRow(r: Round, userId: string) {
     game_master_id: r.gameMasterId ?? null,
     invite_code: r.inviteCode ?? null,
     event_id: r.eventId ?? null,
+    holes_mode: r.holesMode ?? null,
+    starting_hole: r.startingHole ?? null,
+    shotgun_starts: r.shotgunStarts ?? null,
   }
 }
 

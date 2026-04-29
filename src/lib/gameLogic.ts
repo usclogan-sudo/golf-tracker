@@ -24,7 +24,9 @@ import type {
   QuotaConfig,
   PropBet,
   PropWager,
+  HolesMode,
 } from '../types'
+import { getFrontBackSplit } from './holeUtils'
 
 // ─── Handicap math ────────────────────────────────────────────────────────────
 
@@ -46,21 +48,26 @@ export function strokesOnHole(courseHcp: number, strokeIndex: number, totalHoles
   return s
 }
 
-/** Build playerId → courseHandicap map for all players in a round */
+/** Build playerId → courseHandicap map for all players in a round.
+ *  When holesMode is front_9 or back_9, the course handicap is halved. */
 export function buildCourseHandicaps(
   players: Player[],
   roundPlayers: RoundPlayer[],
   snapshot: CourseSnapshot,
+  holesMode?: HolesMode,
 ): Record<string, number> {
   const par = snapshot.holes.reduce((s, h) => s + h.par, 0)
+  const is9 = holesMode === 'front_9' || holesMode === 'back_9'
   const map: Record<string, number> = {}
   for (const p of players) {
     const rp = roundPlayers.find(x => x.playerId === p.id)
     const teeName = rp?.teePlayed ?? p.tee
     const tee = snapshot.tees.find(t => t.name === teeName)
-    map[p.id] = tee
+    let hcp = tee
       ? calcCourseHandicap(p.handicapIndex, tee.slope, tee.rating, par)
       : Math.round(p.handicapIndex)
+    if (is9) hcp = Math.round(hcp / 2)
+    map[p.id] = hcp
   }
   return map
 }
@@ -334,16 +341,17 @@ export function calculateNassau(
   config: NassauConfig,
   courseHcps: Record<string, number>,
 ): NassauResult {
-  const totalHoles = snapshot.holes.length
-  const half = Math.ceil(totalHoles / 2)
-  const front = Array.from({ length: half }, (_, i) => i + 1)
-  const back = Array.from({ length: totalHoles - half }, (_, i) => i + half + 1)
-  const all = Array.from({ length: totalHoles }, (_, i) => i + 1)
+  const holeNums = snapshot.holes.map(h => h.number)
+  const half = Math.ceil(holeNums.length / 2)
+  const { frontHoles, backHoles } = getFrontBackSplit(snapshot.holes)
+  const frontLabel = `${frontHoles[0]}–${frontHoles[frontHoles.length - 1]}`
+  const backLabel = `${backHoles[0]}–${backHoles[backHoles.length - 1]}`
+  const allLabel = `${holeNums[0]}–${holeNums[holeNums.length - 1]}`
 
   return {
-    front: nassauSegment(players, holeScores, snapshot, config, courseHcps, front, `1–${half}`),
-    back: nassauSegment(players, holeScores, snapshot, config, courseHcps, back, `${half + 1}–${totalHoles}`),
-    total: nassauSegment(players, holeScores, snapshot, config, courseHcps, all, `1–${totalHoles}`),
+    front: nassauSegment(players, holeScores, snapshot, config, courseHcps, frontHoles, frontLabel),
+    back: nassauSegment(players, holeScores, snapshot, config, courseHcps, backHoles, backLabel),
+    total: nassauSegment(players, holeScores, snapshot, config, courseHcps, holeNums, allLabel),
   }
 }
 
@@ -386,11 +394,11 @@ export function calculateNassauPayouts(
   // Press bets: each press creates a sub-segment from press hole to end of nine
   // Worth the same as one original segment bet per player
   const pressPot = Math.floor(game.buyInCents * players.length / 3)
-  // Derive hole count from the result segments
-  const frontHoles = result.front.holeRange.split('–').map(Number)
-  const frontEnd = frontHoles[1] ?? 9
-  const backHoles = result.back.holeRange.split('–').map(Number)
-  const backEnd = backHoles[1] ?? 18
+  // Derive hole boundaries from the result segments
+  const frontParts = result.front.holeRange.split('–').map(Number)
+  const frontEnd = frontParts[1] ?? frontParts[0]
+  const backParts = result.back.holeRange.split('–').map(Number)
+  const backEnd = backParts[1] ?? backParts[0]
 
   for (const press of presses) {
     const inFront = press.holeNumber <= frontEnd
@@ -1685,10 +1693,9 @@ export function autoResolveProps(
 
     // Determine which holes to consider
     let holeNumbers: number[]
-    if (config.holeRange === 'front') {
-      holeNumbers = holes.filter(h => h.number <= 9).map(h => h.number)
-    } else if (config.holeRange === 'back') {
-      holeNumbers = holes.filter(h => h.number > 9).map(h => h.number)
+    if (config.holeRange === 'front' || config.holeRange === 'back') {
+      const { frontHoles, backHoles } = getFrontBackSplit(holes)
+      holeNumbers = config.holeRange === 'front' ? frontHoles : backHoles
     } else {
       holeNumbers = holes.map(h => h.number)
     }

@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { supabase, rowToRound, rowToHoleScore } from '../../lib/supabase'
 import { buildCourseHandicaps, fmtMoney, strokesOnHole } from '../../lib/gameLogic'
+import { makePlayableSnapshot, roundToHolesConfig } from '../../lib/holeUtils'
 import { ConfirmModal } from '../ConfirmModal'
 import type { Round, HoleScore, RoundPlayer, GameType } from '../../types'
 
@@ -179,16 +180,17 @@ export function RoundHistory({ userId, onBack, onViewSettlements, onPlayAgain }:
               {isExpanded && (
                 <div className="border-t border-gray-100 px-4 py-3 space-y-3">
                   {players.length > 0 && snapshot && (() => {
-                    const courseHcps = buildCourseHandicaps(players, expandedRoundPlayers, snapshot)
-                    const totalPar = snapshot.holes.reduce((s, h) => s + h.par, 0)
+                    const pSnap = makePlayableSnapshot(snapshot, roundToHolesConfig(round))
+                    const courseHcps = buildCourseHandicaps(players, expandedRoundPlayers, snapshot, round.holesMode)
+                    const totalPar = pSnap.holes.reduce((s, h) => s + h.par, 0)
 
                     const board = players.map(player => {
                       const playerScores = expandedScores.filter(s => s.playerId === player.id)
                       const gross = playerScores.reduce((s, hs) => s + hs.grossScore, 0)
                       const courseHcp = courseHcps[player.id] ?? 0
                       const netStrokes = playerScores.reduce((s, hs) => {
-                        const hole = snapshot.holes.find(h => h.number === hs.holeNumber)
-                        return s + (hole ? strokesOnHole(courseHcp, hole.strokeIndex, snapshot.holes.length) : 0)
+                        const hole = pSnap.holes.find(h => h.number === hs.holeNumber)
+                        return s + (hole ? strokesOnHole(courseHcp, hole.strokeIndex, pSnap.holes.length) : 0)
                       }, 0)
                       return { player, gross, net: gross - netStrokes, vsPar: gross - totalPar, hasScores: playerScores.length > 0 }
                     }).sort((a, b) => a.net - b.net)
