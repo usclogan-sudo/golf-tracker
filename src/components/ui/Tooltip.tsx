@@ -85,11 +85,13 @@ export function Tooltip({ term, children }: TooltipProps) {
       {children}
       <button
         onClick={handleToggle}
-        className="inline-flex items-center justify-center w-7 h-7 min-h-[44px] min-w-[44px] rounded-full bg-amber-100 text-amber-600 text-[10px] font-bold leading-none flex-shrink-0 active:bg-amber-200"
+        className="relative inline-flex items-center justify-center min-h-[44px] min-w-[44px] flex-shrink-0"
         style={{ padding: 0 }}
         aria-label={`What is ${term}?`}
       >
-        ?
+        <span className="w-5 h-5 rounded-full bg-amber-100 text-amber-600 text-[10px] font-bold leading-none inline-flex items-center justify-center active:bg-amber-200">
+          ?
+        </span>
       </button>
       {open && (
         <div
