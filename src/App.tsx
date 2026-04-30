@@ -37,6 +37,7 @@ const EventLeaderboard = lazy(() => import('./components/EventLeaderboard/EventL
 const Ledger = lazy(() => import('./components/Ledger/Ledger').then(m => ({ default: m.Ledger })))
 const LiveLeaderboard = lazy(() => import('./components/LiveLeaderboard/LiveLeaderboard').then(m => ({ default: m.LiveLeaderboard })))
 const PropBetsScreen = lazy(() => import('./components/PropBets/PropBetsScreen').then(m => ({ default: m.PropBetsScreen })))
+import { RouteErrorBoundary } from './components/RouteErrorBoundary'
 import type { AppNotification, Course, Round, HoleScore, UserProfile, GameType, StakesMode } from './types'
 
 type Screen = 'home' | 'course-catalog' | 'course-setup' | 'new-round' | 'scorecard' | 'settle-up' | 'round-history' | 'stats' | 'settings' | 'onboarding' | 'admin' | 'upgrade-account' | 'player-directory' | 'handicap-detail' | 'join-round' | 'tournament-list' | 'tournament-setup' | 'tournament-detail' | 'personal-dashboard' | 'event-setup' | 'event-leaderboard' | 'ledger' | 'spectate' | 'prop-bets'
@@ -192,45 +193,56 @@ function Home({
       if (error) { setFetchError('Failed to load data. Tap Retry to try again.'); return }
       if (data) setCourses(data.map(rowToCourse))
     })
-    // Fetch both owned active rounds and rounds joined as participant
-    Promise.all([
-      supabase.from('rounds').select('*').eq('status', 'active'),
-      supabase.from('round_participants').select('round_id').eq('user_id', userId),
-    ]).then(([roundsRes, partRes]) => {
-      if (roundsRes.error) { setFetchError('Failed to load data. Pull down to refresh.'); return }
-      if (roundsRes.data) {
-        const all = roundsRes.data.map(rowToRound)
-        const joinedRoundIds = new Set((partRes.data ?? []).map((p: any) => p.round_id))
-        setActiveRounds(all.filter(r => r.createdBy === userId))
-        setParticipantRounds(all.filter(r =>
-          r.createdBy !== userId && (
-            r.players?.some(p => p.id === userId) || joinedRoundIds.has(r.id)
-          )
-        ))
-      }
-    })
-    supabase.from('rounds').select('id', { count: 'exact', head: true }).then(({ count }) => {
-      setRoundCount(count ?? 0)
-    })
+    // Fetch participant rows first so all downstream queries scope to this user's rounds.
+    supabase.from('round_participants').select('round_id, player_id').eq('user_id', userId).then(async ({ data: partData }) => {
+      const partRoundIds = (partData ?? []).map((p: any) => p.round_id)
+      const myPlayerIds = new Set((partData ?? []).map((p: any) => p.player_id))
+      myPlayerIds.add(userId)
 
-    // Unsettled rounds count + total owed (limit to prevent unbounded fetch)
-    supabase.from('settlements').select('round_id,amount_cents,from_player_id,to_player_id').eq('status', 'owed').limit(1000).then(async ({ data }) => {
-      if (data) {
-        const uniqueRounds = new Set(data.map((d: any) => d.round_id))
-        setUnsettledCount(uniqueRounds.size)
+      const [ownedRes, partRoundsRes] = await Promise.all([
+        supabase.from('rounds').select('*').eq('status', 'active').eq('user_id', userId),
+        partRoundIds.length > 0
+          ? supabase.from('rounds').select('*').eq('status', 'active').in('id', partRoundIds)
+          : Promise.resolve({ data: [] as any[], error: null }),
+      ])
 
-        // Calculate how much the current user owes vs is owed
-        const { data: partData } = await supabase.from('round_participants').select('player_id').eq('user_id', userId)
-        const myPlayerIds = new Set((partData ?? []).map((p: any) => p.player_id))
-        myPlayerIds.add(userId)
-        let youOwe = 0
-        let owedToYou = 0
-        for (const s of data) {
-          if (myPlayerIds.has(s.from_player_id)) youOwe += s.amount_cents
-          if (myPlayerIds.has(s.to_player_id)) owedToYou += s.amount_cents
+      if (ownedRes.error) { setFetchError('Failed to load data. Pull down to refresh.'); return }
+
+      const ownedRows = ownedRes.data ?? []
+      const partRows = (partRoundsRes.data ?? []) as any[]
+      setActiveRounds(ownedRows.map(rowToRound))
+      // Participant list excludes rounds the user owns (already in activeRounds).
+      const ownedIds = new Set(ownedRows.map((r: any) => r.id))
+      setParticipantRounds(partRows.filter(r => !ownedIds.has(r.id)).map(rowToRound))
+
+      const allMyRoundIds = Array.from(new Set([...ownedRows.map((r: any) => r.id), ...partRoundIds]))
+
+      // Settlements scoped to this user's rounds only.
+      if (allMyRoundIds.length > 0) {
+        const { data: setData } = await supabase
+          .from('settlements')
+          .select('round_id,amount_cents,from_player_id,to_player_id')
+          .eq('status', 'owed')
+          .in('round_id', allMyRoundIds)
+        if (setData) {
+          const uniqueRounds = new Set(setData.map((d: any) => d.round_id))
+          setUnsettledCount(uniqueRounds.size)
+          let youOwe = 0
+          let owedToYou = 0
+          for (const s of setData) {
+            if (myPlayerIds.has(s.from_player_id)) youOwe += s.amount_cents
+            if (myPlayerIds.has(s.to_player_id)) owedToYou += s.amount_cents
+          }
+          setUnsettledAmounts({ youOwe, owedToYou })
         }
-        setUnsettledAmounts({ youOwe, owedToYou })
+      } else {
+        setUnsettledCount(0)
+        setUnsettledAmounts({ youOwe: 0, owedToYou: 0 })
       }
+    })
+
+    supabase.from('rounds').select('id', { count: 'exact', head: true }).eq('user_id', userId).then(({ count }) => {
+      setRoundCount(count ?? 0)
     })
 
     // Personal summary — only fetch recent completed rounds, not all
@@ -858,7 +870,13 @@ export default function App() {
 
   // Spectate mode — no auth required (read-only leaderboard)
   if (spectateCode) {
-    return <Suspense fallback={<div className="min-h-screen flex items-center justify-center"><div className="animate-spin h-8 w-8 border-2 border-emerald-500 border-t-transparent rounded-full" /></div>}><LiveLeaderboard inviteCode={spectateCode} onBack={() => { setSpectateCode(null); window.location.reload() }} /></Suspense>
+    return (
+      <RouteErrorBoundary onReset={() => { setSpectateCode(null); window.location.reload() }} screenLabel="spectate">
+        <Suspense fallback={<div className="min-h-screen flex items-center justify-center"><div className="animate-spin h-8 w-8 border-2 border-emerald-500 border-t-transparent rounded-full" /></div>}>
+          <LiveLeaderboard inviteCode={spectateCode} onBack={() => { setSpectateCode(null); window.location.reload() }} />
+        </Suspense>
+      </RouteErrorBoundary>
+    )
   }
 
   // Still checking auth state
@@ -1079,7 +1097,11 @@ export default function App() {
     ) : null
 
   if (screenContent) {
-    return <Suspense fallback={screenFallback}>{screenContent}</Suspense>
+    return (
+      <RouteErrorBoundary onReset={goHome} screenLabel={screen}>
+        <Suspense fallback={screenFallback}>{screenContent}</Suspense>
+      </RouteErrorBoundary>
+    )
   }
   const handleDeleteCourse = (courseId: string) => {
     setAppConfirmModal({

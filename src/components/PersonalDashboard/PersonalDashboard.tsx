@@ -117,7 +117,12 @@ export function PersonalDashboard({ userId, onBack }: { userId: string; onBack: 
 
   async function loadData() {
     setError(null)
-    const { data: roundRows, error: roundError } = await supabase.from('rounds').select('*').eq('status', 'complete')
+    // Bound the dashboard to the most recent 300 completed rounds. Casual golfers
+    // play ~50/yr, so 300 covers 6+ years; power users see recent history first
+    // and avoid pulling thousands of rows.
+    const { data: roundRows, error: roundError } = await supabase
+      .from('rounds').select('*').eq('status', 'complete')
+      .order('date', { ascending: false }).limit(300)
     if (roundError) { setError('Failed to load stats. Tap to retry.'); setLoading(false); return }
     if (!roundRows?.length) { setLoading(false); return }
 

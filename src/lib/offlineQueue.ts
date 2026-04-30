@@ -10,7 +10,7 @@ export interface QueuedOperation {
   /** For updates: column to match on */
   matchColumn?: string
   matchValue?: string
-  /** For hole_scores updates: expected updated_at for conflict detection */
+  /** For updates on tables with `updated_at`: expected updated_at for conflict detection. */
   _expectedUpdatedAt?: string
   timestamp: number
 }
@@ -73,13 +73,14 @@ export async function flush(): Promise<{ synced: number; failed: number }> {
         result = await supabase.from(op.table).insert(op.data)
       } else if (op.method === 'update' && op.matchColumn && op.matchValue) {
         const query = supabase.from(op.table).update(op.data).eq(op.matchColumn, op.matchValue)
-        // Conflict detection: if we have an expected updated_at, condition on it
-        if (op._expectedUpdatedAt && op.table === 'hole_scores') {
+        // Conflict detection: if we have an expected updated_at, condition on it.
+        // Applies to any table that carries an updated_at column.
+        if (op._expectedUpdatedAt) {
           query.eq('updated_at', op._expectedUpdatedAt)
         }
         result = await query.select()
         // If 0 rows updated on a conflict-checked write, someone else changed it — drop silently
-        // (Realtime subscription already pushed the correct value)
+        // (realtime subscription already pushed the correct value).
         if (op._expectedUpdatedAt && result?.data && Array.isArray(result.data) && result.data.length === 0) {
           synced++ // treat as resolved (not failed)
           continue

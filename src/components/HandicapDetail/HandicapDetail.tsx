@@ -28,7 +28,9 @@ export function HandicapDetail({ userId, userProfile, onBack }: Props) {
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    supabase.from('rounds').select('*').eq('status', 'complete').order('date', { ascending: false })
+    // Handicap calc only needs the recent 20 differentials, so 100 rounds is overkill
+    // already; cap to keep the join payload small at scale.
+    supabase.from('rounds').select('*').eq('status', 'complete').order('date', { ascending: false }).limit(100)
       .then(async (roundsRes) => {
         if (roundsRes.data) {
           const rounds = roundsRes.data.map(rowToRound)

@@ -218,16 +218,17 @@ describe('flush update operations', () => {
     expect(fromCalls[0].selectedCalled).toBe(true)
   })
 
-  it('does NOT add _expectedUpdatedAt eq for non-hole_scores tables', async () => {
+  it('adds _expectedUpdatedAt eq filter for any table that supplies it', async () => {
     enqueue({
       table: 'rounds', method: 'update', data: { status: 'complete' },
       matchColumn: 'id', matchValue: 'r-1', _expectedUpdatedAt: '2025-06-01T12:00:00Z',
     })
     mockResults = [{ data: [{ id: 'r-1' }], error: null }]
     await flush()
-    // Only one .eq() call — the matchColumn one, NOT the updated_at one
-    expect(fromCalls[0].eqCalls).toHaveLength(1)
+    // Two .eq() calls: matchColumn + updated_at — optimistic lock now applies to every table.
+    expect(fromCalls[0].eqCalls).toHaveLength(2)
     expect(fromCalls[0].eqCalls[0]).toEqual(['id', 'r-1'])
+    expect(fromCalls[0].eqCalls[1]).toEqual(['updated_at', '2025-06-01T12:00:00Z'])
   })
 
   it('adds _expectedUpdatedAt eq filter for hole_scores table', async () => {
@@ -237,10 +238,20 @@ describe('flush update operations', () => {
     })
     mockResults = [{ data: [{ id: 'hs-1' }], error: null }]
     await flush()
-    // Two .eq() calls: matchColumn + updated_at
     expect(fromCalls[0].eqCalls).toHaveLength(2)
     expect(fromCalls[0].eqCalls[0]).toEqual(['id', 'hs-1'])
     expect(fromCalls[0].eqCalls[1]).toEqual(['updated_at', '2025-06-01T12:00:00Z'])
+  })
+
+  it('omits the updated_at filter when no _expectedUpdatedAt is supplied', async () => {
+    enqueue({
+      table: 'rounds', method: 'update', data: { status: 'complete' },
+      matchColumn: 'id', matchValue: 'r-2',
+    })
+    mockResults = [{ data: [{ id: 'r-2' }], error: null }]
+    await flush()
+    expect(fromCalls[0].eqCalls).toHaveLength(1)
+    expect(fromCalls[0].eqCalls[0]).toEqual(['id', 'r-2'])
   })
 })
 

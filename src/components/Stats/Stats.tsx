@@ -42,10 +42,14 @@ export function Stats({ userId, onBack }: Props) {
   }, [userId])
 
   const loadStats = async () => {
+    // Bound to the most recent 300 completed rounds — keeps the stats payload
+    // sane for power users while covering a casual golfer's full history.
     const { data: roundRows, error: roundError } = await supabase
       .from('rounds')
       .select('*')
       .eq('status', 'complete')
+      .order('date', { ascending: false })
+      .limit(300)
 
     if (roundError) {
       setLoading(false)
