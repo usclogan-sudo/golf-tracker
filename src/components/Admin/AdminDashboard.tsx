@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { v4 as uuidv4 } from 'uuid'
 import { supabase, rowToSharedCourse, sharedCourseToRow, rowToGamePreset, gamePresetToRow } from '../../lib/supabase'
 import { fmtMoney } from '../../lib/gameLogic'
+import { parseDollarsToCents } from '../../lib/money'
 import { venturaCourses } from '../../data/venturaCourses'
 import { ConfirmModal } from '../ConfirmModal'
 import type { Course, Tee, Hole, GamePreset, GameType, StakesMode } from '../../types'
@@ -363,7 +364,7 @@ function GamePresetsTab({ userId }: { userId: string }) {
   const handleSave = async () => {
     if (!presetName.trim()) return
     setSaving(true)
-    const buyInCents = Math.max(0, Math.round(parseFloat(buyInDollars || '0') * 100))
+    const buyInCents = parseDollarsToCents(buyInDollars)
     const preset: GamePreset = {
       id: editingId ?? uuidv4(),
       createdBy: userId,

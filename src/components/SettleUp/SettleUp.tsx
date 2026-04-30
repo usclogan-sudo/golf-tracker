@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState, useCallback, useRef } from 'react'
+import { Sentry } from '../../lib/sentry'
 import { v4 as uuidv4 } from 'uuid'
 import { supabase, rowToRound, rowToRoundPlayer, rowToHoleScore, rowToBuyIn, rowToBBBPoint, rowToJunkRecord, rowToSideBet, rowToPropBet, rowToPropWager, rowToSettlementRecord, settlementRecordToRow, rowToUserProfile, rowToEvent, notificationToRow } from '../../lib/supabase'
 import type { AppNotification } from '../../types'
@@ -457,7 +458,14 @@ export function SettleUp({ roundId, userId, eventId, onDone, onContinue }: Props
       records.map(r => settlementRecordToRow(r, userId)),
       { onConflict: 'round_id,from_player_id,to_player_id,source' }
     )
-    if (error) console.error('Failed to persist settlements:', error)
+    if (error) {
+      console.error('Failed to persist settlements:', error)
+      Sentry.captureException(error, { tags: { area: 'settle-up', op: 'persist-settlements' } })
+      setMutationError(`Couldn't save settlements: ${error.message ?? 'unknown error'} — tap to retry`)
+      setSettlementsInitialized(false)
+      setCalculatingSettlements(false)
+      return
+    }
 
     // Auto-notify all debtors
     const debtorNotifications: AppNotification[] = []

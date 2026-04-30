@@ -5,6 +5,7 @@ import { enqueue, flush, getPending } from '../../lib/offlineQueue'
 import { supabase, rowToRound, rowToRoundPlayer, rowToHoleScore, rowToBuyIn, rowToBBBPoint, rowToJunkRecord, rowToSideBet, rowToRoundParticipant, rowToEvent, rowToEventParticipant, rowToUserProfile, holeScoreToRow, bbbPointToRow, junkRecordToRow, sideBetToRow, rowToPropBet, propBetToRow, rowToPropWager, propWagerToRow, generateInviteCode } from '../../lib/supabase'
 import { safeWrite } from '../../lib/safeWrite'
 import { computeScorecardPermissions } from '../../lib/permissions'
+import { parseDollarsToCents } from '../../lib/money'
 import { applyHoleScorePayload, applyBBBPointPayload, applyJunkRecordPayload, applySideBetPayload, applyRoundParticipantPayload, applyBuyInPayload, applyPropBetPayload, applyPropWagerPayload } from '../../lib/realtimeReducers'
 import { getCelebration, CelebrationToast, CelebrationFullscreen } from '../Celebrations'
 import { Tooltip } from '../ui/Tooltip'
@@ -233,6 +234,7 @@ export function Scorecard({ userId, roundId, onEndRound, onHome, readOnly: readO
   const [showQRModal, setShowQRModal] = useState(false)
   const headerMenuRef = useRef<HTMLDivElement>(null)
   const savingScoreRef = useRef(false)
+  const pendingScoreRef = useRef<{ playerId: string; grossScore: number } | null>(null)
   const scoreToastTimerRef = useRef<ReturnType<typeof setTimeout>>()
   const roundRef = useRef(round)
   roundRef.current = round
@@ -243,7 +245,8 @@ export function Scorecard({ userId, roundId, onEndRound, onHome, readOnly: readO
   const [batchScores, setBatchScores] = useState<Record<string, Record<number, string>>>({})
   const [numberPadTarget, setNumberPadTarget] = useState<{ playerId: string; playerName: string } | null>(null)
 
-  const loadScorecardData = () => {
+  const loadScorecardData = (isCancelled?: () => boolean) => {
+    const cancelled = () => isCancelled?.() ?? false
     setLoadError(false)
     setLoading(true)
     Promise.all([
@@ -258,6 +261,7 @@ export function Scorecard({ userId, roundId, onEndRound, onHome, readOnly: readO
       supabase.from('prop_bets').select('*').eq('round_id', roundId),
       supabase.from('prop_wagers').select('*').eq('round_id', roundId),
     ]).then(([roundRes, rpRes, hsRes, bbbRes, junkRes, sbRes, partRes, biRes, pbRes, pwRes]) => {
+      if (cancelled()) return
       if (roundRes.error || !roundRes.data) {
         setLoadError(true)
         setLoading(false)
@@ -275,25 +279,31 @@ export function Scorecard({ userId, roundId, onEndRound, onHome, readOnly: readO
       if (pwRes?.data) setPropWagers(pwRes.data.map(rowToPropWager))
       setLoading(false)
     }).catch(() => {
+      if (cancelled()) return
       setLoadError(true)
       setLoading(false)
     })
   }
 
   useEffect(() => {
-    loadScorecardData()
+    let cancelled = false
+    loadScorecardData(() => cancelled)
+    return () => { cancelled = true }
   }, [roundId])
 
   // ─── Fetch event data when round is part of an event ──────────────────────
   useEffect(() => {
     if (!round?.eventId) return
+    let cancelled = false
     Promise.all([
       supabase.from('events').select('*').eq('id', round.eventId).single(),
       supabase.from('event_participants').select('*').eq('event_id', round.eventId),
     ]).then(([eventRes, epRes]) => {
+      if (cancelled) return
       if (eventRes.data) setEvent(rowToEvent(eventRes.data))
       if (epRes.data) setEventParticipants(epRes.data.map(rowToEventParticipant))
     })
+    return () => { cancelled = true }
   }, [round?.eventId])
 
   // ─── Fetch treasurer payment info for BuyInBanner ──────────────────────────
@@ -301,11 +311,13 @@ export function Scorecard({ userId, roundId, onEndRound, onHome, readOnly: readO
     if (!round?.treasurerPlayerId || !round.players) return
     const treasurerPlayer = round.players.find(p => p.id === round.treasurerPlayerId)
     if (!treasurerPlayer) return
+    let cancelled = false
     // Try to get fresh payment info from user_profiles (treasurer's player ID = their user ID for registered users)
     const participantMap = new Map(roundParticipants.map(rp => [rp.playerId, rp.userId]))
     const linkedUserId = participantMap.get(round.treasurerPlayerId)
     if (linkedUserId) {
       supabase.from('user_profiles').select('*').eq('user_id', linkedUserId).single().then(({ data }) => {
+        if (cancelled) return
         if (data) {
           const profile = rowToUserProfile(data)
           setTreasurerProfile({
@@ -322,6 +334,7 @@ export function Scorecard({ userId, roundId, onEndRound, onHome, readOnly: readO
     } else {
       setTreasurerProfile(treasurerPlayer)
     }
+    return () => { cancelled = true }
   }, [round?.treasurerPlayerId, round?.players, roundParticipants])
 
   // ─── Realtime subscriptions for multi-device sync ──────────────────────────
@@ -469,7 +482,11 @@ export function Scorecard({ userId, roundId, onEndRound, onHome, readOnly: readO
   }
 
   const setScore = async (playerId: string, grossScore: number) => {
-    if (savingScoreRef.current) return
+    if (savingScoreRef.current) {
+      // A save is in flight — remember the latest tap so we can apply it after.
+      pendingScoreRef.current = { playerId, grossScore }
+      return
+    }
     savingScoreRef.current = true
     setSaveError(null)
     const existing = holeScores.find(s => s.playerId === playerId && s.holeNumber === currentHole)
@@ -584,6 +601,12 @@ export function Scorecard({ userId, roundId, onEndRound, onHome, readOnly: readO
       }
     } finally {
       savingScoreRef.current = false
+      const queued = pendingScoreRef.current
+      if (queued) {
+        pendingScoreRef.current = null
+        // Apply the latest queued tap. Recursion stops once no new taps land mid-flight.
+        void setScore(queued.playerId, queued.grossScore)
+      }
     }
   }
 
@@ -724,7 +747,7 @@ export function Scorecard({ userId, roundId, onEndRound, onHome, readOnly: readO
   // Side bet handlers
   const createSideBet = async () => {
     if (!sideBetDesc.trim() || sideBetParticipants.length < 2) return
-    const amountCents = Math.round(parseFloat(sideBetAmount) * 100) || 500
+    const amountCents = parseDollarsToCents(sideBetAmount) || 500
     const newBet: SideBet = {
       id: uuidv4(),
       roundId,
@@ -1361,7 +1384,8 @@ export function Scorecard({ userId, roundId, onEndRound, onHome, readOnly: readO
 
       {/* Round Complete Summary */}
       {showRoundSummary && (() => {
-        const totalHoles = snapshot?.holes.length ?? 18
+        if (!snapshot) return null
+        const totalHoles = snapshot.holes.length
         const allHolesScored = players.length > 0 && players.every(p =>
           Array.from({ length: totalHoles }, (_, i) => i + 1).every(n =>
             holeScores.some(s => s.playerId === p.id && s.holeNumber === n)
@@ -1375,15 +1399,15 @@ export function Scorecard({ userId, roundId, onEndRound, onHome, readOnly: readO
         }) ?? players[0]
         const myScores = holeScores.filter(s => s.playerId === myPlayer.id)
         const totalScore = myScores.reduce((sum, s) => sum + s.grossScore, 0)
-        const totalPar = snapshot!.holes.reduce((sum, h) => sum + h.par, 0)
+        const totalPar = snapshot.holes.reduce((sum, h) => sum + h.par, 0)
         const vsPar = totalScore - totalPar
         const bestHole = myScores.reduce((best, s) => {
-          const hole = snapshot!.holes.find(h => h.number === s.holeNumber)
+          const hole = snapshot.holes.find(h => h.number === s.holeNumber)
           const diff = s.grossScore - (hole?.par ?? 4)
           return diff < best.diff ? { holeNum: s.holeNumber, diff, score: s.grossScore, par: hole?.par ?? 4 } : best
         }, { holeNum: 0, diff: 99, score: 0, par: 0 })
         const worstHole = myScores.reduce((worst, s) => {
-          const hole = snapshot!.holes.find(h => h.number === s.holeNumber)
+          const hole = snapshot.holes.find(h => h.number === s.holeNumber)
           const diff = s.grossScore - (hole?.par ?? 4)
           return diff > worst.diff ? { holeNum: s.holeNumber, diff, score: s.grossScore, par: hole?.par ?? 4 } : worst
         }, { holeNum: 0, diff: -99, score: 0, par: 0 })
@@ -1396,7 +1420,7 @@ export function Scorecard({ userId, roundId, onEndRound, onHome, readOnly: readO
               >&times;</button>
               <div className="text-center">
                 <p className="text-2xl font-bold text-gray-900">Round Complete!</p>
-                <p className="text-amber-700 text-sm font-medium mt-1">{snapshot!.courseName}</p>
+                <p className="text-amber-700 text-sm font-medium mt-1">{snapshot.courseName}</p>
               </div>
               <div className="grid grid-cols-3 gap-2 text-center">
                 <div className="bg-white/70 rounded-xl p-2">
@@ -1690,17 +1714,17 @@ export function Scorecard({ userId, roundId, onEndRound, onHome, readOnly: readO
               </button>
             )}
 
-            {showGameStatus && skinsResult && (
+            {showGameStatus && skinsResult && game && (
               <div className="flex items-center gap-2">
                 <div className="flex-1">
-                  <SkinsStatus carry={currentCarry} potCents={game!.buyInCents * players.length * (1 + ((game!.config as any).presses?.length ?? 0))} />
+                  <SkinsStatus carry={currentCarry} potCents={game.buyInCents * players.length * (1 + ((game.config as any).presses?.length ?? 0))} />
                 </div>
                 {!readOnly && (
                   <button
                     onClick={handlePress}
                     className="px-3 py-2 bg-orange-500 text-white text-xs font-bold rounded-xl active:bg-orange-600 flex-shrink-0"
                   >
-                    Press{(game!.config as any).presses?.length ? ` (${(game!.config as any).presses.length})` : ''}
+                    Press{(game.config as any).presses?.length ? ` (${(game.config as any).presses.length})` : ''}
                   </button>
                 )}
               </div>
@@ -1708,9 +1732,9 @@ export function Scorecard({ userId, roundId, onEndRound, onHome, readOnly: readO
             {showGameStatus && bestBallResult && <BestBallStatus holesWon={bestBallResult.holesWon} />}
 
             {/* Nassau status */}
-            {showGameStatus && nassauResult && (() => {
+            {showGameStatus && nassauResult && game && (() => {
               const getName = (id: string | null) => id ? (players.find(p => p.id === id)?.name ?? '?') : null
-              const pressCount = (game!.config as any).presses?.length ?? 0
+              const pressCount = (game.config as any).presses?.length ?? 0
               const totalHoles = snapshot?.holes.length ?? 18
               const half = Math.ceil(totalHoles / 2)
               const segs = [

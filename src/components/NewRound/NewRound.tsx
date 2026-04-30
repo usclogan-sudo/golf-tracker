@@ -3,6 +3,7 @@ import { v4 as uuidv4 } from 'uuid'
 import { supabase, courseToRow, playerToRow, roundToRow, roundPlayerToRow, buyInToRow, rowToCourse, rowToPlayer, rowToSharedCourse, rowToGamePreset, rowToUserProfile, generateInviteCode } from '../../lib/supabase'
 import { safeWrite } from '../../lib/safeWrite'
 import { fmtMoney, JUNK_LABELS } from '../../lib/gameLogic'
+import { parseDollarsToCents, parsePointsValue } from '../../lib/money'
 import { venturaCourses } from '../../data/venturaCourses'
 import { NearMeCourses } from '../NearMeCourses/NearMeCourses'
 import { GameRulesModal } from '../GameRulesModal'
@@ -982,8 +983,8 @@ function GameSetup({
 
   // In points mode, buyInCents stores raw point value; in money mode, stores cents
   const buyInCents = stakesMode === 'points'
-    ? Math.max(0, Math.round(parseFloat(buyInDollars || '0')))
-    : Math.max(0, Math.round(parseFloat(buyInDollars || '0') * 100))
+    ? parsePointsValue(buyInDollars)
+    : parseDollarsToCents(buyInDollars)
 
   const bestBallAllowed = players.length >= 2 && players.length % 2 === 0
   const wolfAllowed = players.length >= 3
@@ -1060,7 +1061,7 @@ function GameSetup({
       return { id, type: 'wolf', buyInCents, stakesMode, config }
     }
     if (type === 'hammer') {
-      const baseValueCents = Math.max(1, Math.round(parseFloat(hammerBaseValueDollars || '1') * 100))
+      const baseValueCents = Math.max(1, parseDollarsToCents(hammerBaseValueDollars))
       const config: HammerConfig = { baseValueCents, maxPresses: hammerMaxPresses }
       return { id, type: 'hammer', buyInCents: 0, stakesMode, config }
     }
@@ -1073,7 +1074,7 @@ function GameSetup({
       return { id, type: 'stableford', buyInCents, stakesMode, config }
     }
     if (type === 'dots') {
-      const valueCentsPerDot = Math.max(1, Math.round(parseFloat(dotsValueDollars || '1') * 100))
+      const valueCentsPerDot = Math.max(1, parseDollarsToCents(dotsValueDollars))
       const activeDots: DotType[] = Array.from(junkTypes) as DotType[]
       const config: DotsConfig = { activeDots, valueCentsPerDot }
       return { id, type: 'dots', buyInCents: 0, stakesMode, config }
@@ -1554,7 +1555,7 @@ function GameSetup({
             </div>
             <div className="bg-orange-50 rounded-xl p-3 text-sm text-orange-700 space-y-1">
               <p className="font-semibold">How Hammer works:</p>
-              <p>• Each hole starts at {fmtMoney(Math.round(parseFloat(hammerBaseValueDollars || '1') * 100))}</p>
+              <p>• Each hole starts at {fmtMoney(Math.max(1, parseDollarsToCents(hammerBaseValueDollars)))}</p>
               <p>• The hammer holder can "throw" the hammer to double the stakes</p>
               <p>• Opponent must accept (value doubles) or decline (lose current value)</p>
               <p>• After accepting, the hammer passes to the accepter</p>
@@ -1722,7 +1723,7 @@ function GameSetup({
           <button
             onClick={() => {
               const jc = junksEnabled && junkTypes.size > 0
-                ? { valueCents: Math.max(0, Math.round(parseFloat(junkValueDollars || '0') * 100)), types: Array.from(junkTypes) }
+                ? { valueCents: parseDollarsToCents(junkValueDollars), types: Array.from(junkTypes) }
                 : undefined
               onNext(makeGame(), jc)
             }}

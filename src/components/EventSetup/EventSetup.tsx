@@ -4,6 +4,7 @@ import { supabase, rowToCourse, rowToPlayer, rowToSharedCourse, roundToRow, roun
 import { safeWrite } from '../../lib/safeWrite'
 import { fmtMoney } from '../../lib/gameLogic'
 import { autoAssignGroups, autoAssignShotgunStarts, MAX_PER_GROUP } from '../../lib/eventUtils'
+import { parseDollarsToCents } from '../../lib/money'
 import { venturaCourses } from '../../data/venturaCourses'
 import { NearMeCourses } from '../NearMeCourses/NearMeCourses'
 import { GameRulesModal } from '../GameRulesModal'
@@ -762,8 +763,8 @@ export function EventSetup({ userId, onStart, onCancel, onAddCourse }: Props) {
                   value={customBuyIn}
                   onChange={e => {
                     setCustomBuyIn(e.target.value)
-                    const v = Math.round(parseFloat(e.target.value) * 100)
-                    if (!isNaN(v) && v > 0) setBuyInCents(v)
+                    const v = parseDollarsToCents(e.target.value, { allowZero: false })
+                    if (v > 0) setBuyInCents(v)
                   }}
                   className="w-full h-10 pl-7 pr-3 rounded-xl border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 text-sm focus:outline-none focus:ring-2 focus:ring-amber-500"
                 />

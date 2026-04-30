@@ -320,6 +320,10 @@ function nassauSegment(
     return { holeRange, scores, winner: null, tiedPlayers: [], incomplete: true }
   }
 
+  if (Object.keys(scores).length === 0) {
+    return { holeRange, scores, winner: null, tiedPlayers: [], incomplete: true }
+  }
+
   const min = Math.min(...Object.values(scores))
   const tiedPlayers = Object.entries(scores)
     .filter(([, s]) => s === min)
@@ -436,6 +440,7 @@ export function calculateNassauPayouts(
 
 /** Which player is wolf on a given hole (1-based) */
 export function wolfForHole(wolfOrder: string[], holeNumber: number): string {
+  if (wolfOrder.length === 0) return ''
   return wolfOrder[(holeNumber - 1) % wolfOrder.length]
 }
 
@@ -901,6 +906,10 @@ export function calculateStableford(
     }
   }
 
+  if (Object.keys(points).length === 0) {
+    return { points, holePoints, winner: null }
+  }
+
   const maxPts = Math.max(...Object.values(points))
   const leaders = Object.entries(points).filter(([, p]) => p === maxPts)
   const winner = leaders.length === 1 ? leaders[0][0] : null
@@ -1037,6 +1046,10 @@ export function calculateBanker(
   players.forEach(p => (netCents[p.id] = 0))
   const totalHoles = snapshot.holes.length
 
+  if (config.bankerOrder.length === 0) {
+    return { holeResults, netCents }
+  }
+
   for (let holeNum = 1; holeNum <= totalHoles; holeNum++) {
     const hole = snapshot.holes.find(h => h.number === holeNum)
     if (!hole) continue
@@ -1139,6 +1152,15 @@ export function calculateQuota(
   for (const p of players) {
     const quota = config.quotas[p.id] ?? 0
     netPoints[p.id] = stablefordResult.points[p.id] - quota
+  }
+
+  if (Object.keys(netPoints).length === 0) {
+    return {
+      stablefordPoints: stablefordResult.points,
+      quotas: config.quotas,
+      netPoints,
+      winner: null,
+    }
   }
 
   const maxNet = Math.max(...Object.values(netPoints))

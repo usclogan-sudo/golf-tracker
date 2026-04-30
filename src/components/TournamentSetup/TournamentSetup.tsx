@@ -3,6 +3,7 @@ import { v4 as uuidv4 } from 'uuid'
 import { supabase, rowToCourse, tournamentToRow, tournamentMatchupToRow } from '../../lib/supabase'
 import { safeWrite } from '../../lib/safeWrite'
 import { generateBracket } from '../../lib/tournamentLogic'
+import { parseDollarsToCents } from '../../lib/money'
 import type { Course, Tournament, TournamentFormat, Player } from '../../types'
 
 interface Props {
@@ -77,7 +78,7 @@ export function TournamentSetup({ userId, onCreated, onCancel }: Props) {
       config: {
         handicapMode,
         roundsCount: format === 'stroke_play' ? roundsCount : undefined,
-        buyInCents: Math.round(parseFloat(buyInAmount) * 100) || 2000,
+        buyInCents: parseDollarsToCents(buyInAmount) || 2000,
       },
       createdAt: new Date(),
     }
