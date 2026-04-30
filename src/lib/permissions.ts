@@ -9,6 +9,8 @@ export interface ScorecardPermissions {
   myEventParticipant: EventParticipant | undefined
   isEventManager: boolean
   isGroupScorekeeper: boolean
+  isScoreMaster: boolean
+  groupHasActiveScorekeeper: boolean
   canApproveScores: boolean
   readOnly: boolean
   myEventGroupNumber: number | undefined
@@ -34,6 +36,18 @@ export function computeScorecardPermissions(
   const canApproveScores = isEventRound && (isEventManager || isGroupScorekeeper || isScoremasterRole)
   const myEventGroupNumber = myEventParticipant?.groupNumber
 
+  // Score Master = event manager or creator in event context (cross-group edit access)
+  const isScoreMaster = isEventRound && (isEventManager || isScoremasterRole)
+
+  // Does the current player's group have an active (joined) scorekeeper?
+  // True when a scorekeeper EventParticipant exists for this group and it's not the player themselves
+  const groupHasActiveScorekeeper = isEventRound && myEventGroupNumber != null &&
+    eventParticipants.some(ep =>
+      ep.role === 'scorekeeper' &&
+      ep.groupNumber === myEventGroupNumber &&
+      ep.userId !== userId
+    )
+
   const readOnly = readOnlyProp || (!isScoremasterRole && !myParticipant && !myEventParticipant)
 
   return {
@@ -45,6 +59,8 @@ export function computeScorecardPermissions(
     myEventParticipant,
     isEventManager,
     isGroupScorekeeper,
+    isScoreMaster,
+    groupHasActiveScorekeeper,
     canApproveScores,
     readOnly,
     myEventGroupNumber,

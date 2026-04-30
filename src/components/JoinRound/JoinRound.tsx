@@ -43,10 +43,14 @@ export function JoinRound({ userId, initialCode, onJoined, onCancel }: Props) {
 
   // Auto-lookup if initialCode provided
   useEffect(() => {
-    if (initialCode) lookupRound(initialCode)
+    if (!initialCode) return
+    let cancelled = false
+    lookupRound(initialCode, () => cancelled)
+    return () => { cancelled = true }
   }, [initialCode])
 
-  const lookupRound = async (inviteCode: string) => {
+  const lookupRound = async (inviteCode: string, isCancelled?: () => boolean) => {
+    const cancelled = () => isCancelled?.() ?? false
     setLoading(true)
     setError(null)
     setPreview(null)
@@ -56,6 +60,7 @@ export function JoinRound({ userId, initialCode, onJoined, onCancel }: Props) {
       const { data: eventData, error: eventErr } = await supabase.rpc('get_event_by_invite', {
         p_invite_code: inviteCode.toUpperCase().trim(),
       })
+      if (cancelled()) return
 
       if (eventData && !eventErr) {
         const ed = eventData as any
@@ -86,6 +91,7 @@ export function JoinRound({ userId, initialCode, onJoined, onCancel }: Props) {
       const { data, error: rpcError } = await supabase.rpc('get_round_by_invite', {
         p_invite_code: inviteCode.toUpperCase().trim(),
       })
+      if (cancelled()) return
       if (rpcError) throw rpcError
       if (!data) throw new Error('Round not found')
 
@@ -104,11 +110,12 @@ export function JoinRound({ userId, initialCode, onJoined, onCancel }: Props) {
       })
       setStep('pick')
     } catch (err: any) {
+      if (cancelled()) return
       setError(err.message?.includes('not found') || err.message?.includes('no longer active')
         ? 'Invalid or expired invite code'
         : err.message ?? 'Failed to look up round')
     } finally {
-      setLoading(false)
+      if (!cancelled()) setLoading(false)
     }
   }
 
@@ -387,8 +394,10 @@ export function JoinRound({ userId, initialCode, onJoined, onCancel }: Props) {
                     <p className="text-xs text-gray-400 uppercase tracking-wide font-semibold">Scoring</p>
                     <p className="text-sm text-gray-600 dark:text-gray-400">
                       {isScorekeeper
-                        ? 'You are the scorekeeper — your scores are auto-approved'
-                        : 'Your scores will be submitted for approval'}
+                        ? `You are the scorekeeper for Group ${groupNum} — you'll enter scores for all players in your group`
+                        : scorekeeperName
+                          ? `Your scorekeeper (${scorekeeperName}) will enter your scores`
+                          : 'Your scores will be submitted for approval'}
                     </p>
                   </div>
                 </div>

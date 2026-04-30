@@ -136,6 +136,8 @@ DECLARE
   v_score_id text;
   v_existing_id text;
   v_caller uuid := auth.uid();
+  v_caller_group int;
+  v_target_group int;
 BEGIN
   -- C5: Auth check
   IF v_caller IS NULL THEN
@@ -156,7 +158,7 @@ BEGIN
   END IF;
 
   -- Determine the user's role in the event
-  SELECT role INTO v_role
+  SELECT role, group_number INTO v_role, v_caller_group
   FROM event_participants
   WHERE event_id = v_event_id AND user_id = v_caller;
 
@@ -172,6 +174,17 @@ BEGIN
       WHERE event_id = v_event_id AND user_id = v_caller AND player_id = p_player_id
     ) THEN
       RAISE EXCEPTION 'Players can only submit their own scores';
+    END IF;
+  END IF;
+
+  -- H10: Scorekeepers can only submit scores for players in their group
+  IF v_role = 'scorekeeper' THEN
+    SELECT group_number INTO v_target_group
+    FROM event_participants
+    WHERE event_id = v_event_id AND player_id = p_player_id;
+
+    IF v_target_group IS DISTINCT FROM v_caller_group THEN
+      RAISE EXCEPTION 'Scorekeepers can only submit scores for players in their group';
     END IF;
   END IF;
 
@@ -357,6 +370,8 @@ DECLARE
   v_group_number int;
   v_participant_id text;
   v_caller uuid := auth.uid();
+  v_role text := 'player';
+  v_sk_player_id text;
 BEGIN
   IF v_caller IS NULL THEN
     RAISE EXCEPTION 'Not authenticated';
@@ -389,15 +404,23 @@ BEGIN
   SELECT r.groups->p_player_id INTO v_group_number
   FROM rounds r WHERE r.id = v_event.round_id;
 
+  -- Check if this player is designated as scorekeeper for their group
+  IF v_event.group_scorekeepers IS NOT NULL AND v_group_number IS NOT NULL THEN
+    v_sk_player_id := v_event.group_scorekeepers->>v_group_number::text;
+    IF v_sk_player_id = p_player_id THEN
+      v_role := 'scorekeeper';
+    END IF;
+  END IF;
+
   v_participant_id := gen_random_uuid()::text;
   INSERT INTO event_participants (id, event_id, user_id, player_id, role, group_number)
-  VALUES (v_participant_id, v_event.id, v_caller, p_player_id, 'player', v_group_number);
+  VALUES (v_participant_id, v_event.id, v_caller, p_player_id, v_role, v_group_number);
 
   INSERT INTO round_participants (id, user_id, round_id, player_id)
   VALUES (gen_random_uuid()::text, v_caller, v_event.round_id, p_player_id)
   ON CONFLICT (round_id, user_id) DO NOTHING;
 
-  RETURN jsonb_build_object('event_id', v_event.id, 'round_id', v_event.round_id, 'participant_id', v_participant_id);
+  RETURN jsonb_build_object('event_id', v_event.id, 'round_id', v_event.round_id, 'participant_id', v_participant_id, 'role', v_role);
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
