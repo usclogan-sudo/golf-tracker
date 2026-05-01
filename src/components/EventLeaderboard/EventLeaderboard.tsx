@@ -22,9 +22,11 @@ export function EventLeaderboard({ userId, eventId, onBack }: Props) {
   const [showApproval, setShowApproval] = useState(false)
   const [approvingId, setApprovingId] = useState<string | null>(null)
 
-  // Load data
-  useEffect(() => {
+  // Load data — extracted so the visibility-resume path can refetch on demand.
+  const loadData = (isCancelled?: () => boolean) => {
+    const cancelled = () => isCancelled?.() ?? false
     supabase.from('events').select('*').eq('id', eventId).single().then(({ data }) => {
+      if (cancelled()) return
       if (!data) return
       const ev = rowToEvent(data)
       setEvent(ev)
@@ -36,6 +38,7 @@ export function EventLeaderboard({ userId, eventId, onBack }: Props) {
         supabase.from('hole_scores').select('*').eq('round_id', ev.roundId),
         supabase.from('event_participants').select('*').eq('event_id', eventId),
       ]).then(([roundRes, rpRes, hsRes, epRes]) => {
+        if (cancelled()) return
         if (roundRes.data) setRound(rowToRound(roundRes.data))
         if (rpRes.data) setRoundPlayers(rpRes.data.map(rowToRoundPlayer))
         if (hsRes.data) setHoleScores(hsRes.data.map(rowToHoleScore))
@@ -43,53 +46,95 @@ export function EventLeaderboard({ userId, eventId, onBack }: Props) {
         setLoading(false)
       })
     })
+  }
+
+  useEffect(() => {
+    let cancelled = false
+    loadData(() => cancelled)
+    return () => { cancelled = true }
   }, [eventId])
 
-  // Realtime subscriptions for live score updates
+  // Realtime + presence subscriptions, gated by tab visibility — backgrounded
+  // tabs drop their channels after a 5s grace window so they don't count
+  // against the realtime cap. On resume we refetch state and resubscribe.
   useEffect(() => {
-    if (!round) return
-    const channel = supabase
-      .channel(`event-${eventId}`)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'hole_scores', filter: `round_id=eq.${round.id}` }, (payload) => {
-        if (payload.eventType === 'INSERT') {
-          const row = payload.new as any
-          setHoleScores(prev => prev.some(s => s.id === row.id) ? prev : [...prev, rowToHoleScore(row)])
-        } else if (payload.eventType === 'UPDATE') {
-          const row = payload.new as any
-          setHoleScores(prev => prev.map(s => s.id === row.id ? rowToHoleScore(row) : s))
-        } else if (payload.eventType === 'DELETE') {
-          const row = payload.old as any
-          setHoleScores(prev => prev.filter(s => s.id !== row.id))
-        }
-      })
-      .subscribe()
+    if (!round || !event) return
+    let cancelled = false
+    let dataChannel: ReturnType<typeof supabase.channel> | null = null
+    let presenceChannel: ReturnType<typeof supabase.channel> | null = null
+    let hiddenTimer: ReturnType<typeof setTimeout> | null = null
+    const HIDDEN_GRACE_MS = 5000
 
-    return () => { supabase.removeChannel(channel) }
-  }, [round?.id, eventId])
-
-  // Presence channel for online indicators
-  useEffect(() => {
-    if (!event) return
-    const presenceChannel = supabase.channel(`presence-event-${eventId}`)
-    presenceChannel
-      .on('presence', { event: 'sync' }, () => {
-        const state = presenceChannel.presenceState()
-        const userIds = new Set<string>()
-        for (const entries of Object.values(state)) {
-          for (const entry of entries as any[]) {
-            if (entry.user_id) userIds.add(entry.user_id)
+    const subscribe = () => {
+      if (cancelled) return
+      if (!dataChannel) {
+        dataChannel = supabase
+          .channel(`event-${eventId}`)
+          .on('postgres_changes', { event: '*', schema: 'public', table: 'hole_scores', filter: `round_id=eq.${round.id}` }, (payload) => {
+            if (payload.eventType === 'INSERT') {
+              const row = payload.new as any
+              setHoleScores(prev => prev.some(s => s.id === row.id) ? prev : [...prev, rowToHoleScore(row)])
+            } else if (payload.eventType === 'UPDATE') {
+              const row = payload.new as any
+              setHoleScores(prev => prev.map(s => s.id === row.id ? rowToHoleScore(row) : s))
+            } else if (payload.eventType === 'DELETE') {
+              const row = payload.old as any
+              setHoleScores(prev => prev.filter(s => s.id !== row.id))
+            }
+          })
+          .subscribe()
+      }
+      if (!presenceChannel) {
+        const ch = supabase.channel(`presence-event-${eventId}`)
+        ch.on('presence', { event: 'sync' }, () => {
+          const state = ch.presenceState()
+          const userIds = new Set<string>()
+          for (const entries of Object.values(state)) {
+            for (const entry of entries as any[]) {
+              if (entry.user_id) userIds.add(entry.user_id)
+            }
           }
-        }
-        setOnlineUsers(userIds)
-      })
-      .subscribe(async (status) => {
-        if (status === 'SUBSCRIBED') {
-          await presenceChannel.track({ user_id: userId })
-        }
-      })
+          setOnlineUsers(userIds)
+        }).subscribe(async (status) => {
+          if (status === 'SUBSCRIBED' && !cancelled) {
+            await ch.track({ user_id: userId })
+          }
+        })
+        presenceChannel = ch
+      }
+    }
 
-    return () => { supabase.removeChannel(presenceChannel) }
-  }, [event?.id, userId])
+    const unsubscribe = () => {
+      if (dataChannel) { supabase.removeChannel(dataChannel); dataChannel = null }
+      if (presenceChannel) { supabase.removeChannel(presenceChannel); presenceChannel = null }
+    }
+
+    const onVisibilityChange = () => {
+      if (cancelled) return
+      if (document.visibilityState === 'hidden') {
+        if (hiddenTimer) clearTimeout(hiddenTimer)
+        hiddenTimer = setTimeout(() => {
+          if (!cancelled && document.visibilityState === 'hidden') unsubscribe()
+        }, HIDDEN_GRACE_MS)
+      } else {
+        if (hiddenTimer) { clearTimeout(hiddenTimer); hiddenTimer = null }
+        if (!dataChannel || !presenceChannel) {
+          loadData(() => cancelled)
+          subscribe()
+        }
+      }
+    }
+
+    document.addEventListener('visibilitychange', onVisibilityChange)
+    if (document.visibilityState !== 'hidden') subscribe()
+
+    return () => {
+      cancelled = true
+      if (hiddenTimer) clearTimeout(hiddenTimer)
+      document.removeEventListener('visibilitychange', onVisibilityChange)
+      unsubscribe()
+    }
+  }, [round?.id, event?.id, eventId, userId])
 
   const players = round?.players ?? []
   const snapshot = round?.courseSnapshot

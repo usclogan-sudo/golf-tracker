@@ -344,8 +344,16 @@ export function Scorecard({ userId, roundId, onEndRound, onHome, readOnly: readO
   }, [round?.treasurerPlayerId, round?.players, roundParticipants])
 
   // ─── Realtime subscriptions for multi-device sync ──────────────────────────
+  // Channel is opened only while the tab is visible. On a >5s hidden window
+  // we drop the channel so backgrounded tabs don't count against the project's
+  // realtime channel cap; on return we refetch state + resubscribe.
   useEffect(() => {
-    const channel = supabase
+    let channel: ReturnType<typeof supabase.channel> | null = null
+    let cancelled = false
+    let hiddenTimer: ReturnType<typeof setTimeout> | null = null
+    const HIDDEN_GRACE_MS = 5000
+
+    const buildChannel = () => supabase
       .channel(`round-${roundId}`)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'hole_scores', filter: `round_id=eq.${roundId}` }, (payload) => {
         if (payload.eventType === 'UPDATE') {
@@ -388,7 +396,46 @@ export function Scorecard({ userId, roundId, onEndRound, onHome, readOnly: readO
       })
       .subscribe()
 
-    return () => { supabase.removeChannel(channel) }
+    const subscribe = () => {
+      if (channel || cancelled) return
+      channel = buildChannel()
+    }
+
+    const unsubscribe = () => {
+      if (!channel) return
+      supabase.removeChannel(channel)
+      channel = null
+    }
+
+    const onVisibilityChange = () => {
+      if (cancelled) return
+      if (document.visibilityState === 'hidden') {
+        // Only drop the channel after a grace period — short tab-switches
+        // shouldn't cause subscribe/unsubscribe thrash.
+        if (hiddenTimer) clearTimeout(hiddenTimer)
+        hiddenTimer = setTimeout(() => {
+          if (!cancelled && document.visibilityState === 'hidden') unsubscribe()
+        }, HIDDEN_GRACE_MS)
+      } else {
+        if (hiddenTimer) { clearTimeout(hiddenTimer); hiddenTimer = null }
+        // If we dropped the channel while hidden, refetch state to catch up
+        // on writes that landed during the gap, then resubscribe.
+        if (!channel) {
+          loadScorecardData(() => cancelled)
+          subscribe()
+        }
+      }
+    }
+
+    document.addEventListener('visibilitychange', onVisibilityChange)
+    if (document.visibilityState !== 'hidden') subscribe()
+
+    return () => {
+      cancelled = true
+      if (hiddenTimer) clearTimeout(hiddenTimer)
+      document.removeEventListener('visibilitychange', onVisibilityChange)
+      unsubscribe()
+    }
   }, [roundId])
 
   // Flush offline queue when coming back online
