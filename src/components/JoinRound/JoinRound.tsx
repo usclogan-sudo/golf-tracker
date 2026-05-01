@@ -111,9 +111,18 @@ export function JoinRound({ userId, initialCode, onJoined, onCancel }: Props) {
       setStep('pick')
     } catch (err: any) {
       if (cancelled()) return
-      setError(err.message?.includes('not found') || err.message?.includes('no longer active')
-        ? 'Invalid or expired invite code'
-        : err.message ?? 'Failed to look up round')
+      const msg: string = err.message ?? ''
+      let friendly: string
+      if (msg.includes('rate_limit_minute')) {
+        friendly = "You're trying invites too fast — wait a minute and try again."
+      } else if (msg.includes('rate_limit_hour')) {
+        friendly = "Too many invite lookups in the last hour — try again later."
+      } else if (msg.includes('not found') || msg.includes('no longer active')) {
+        friendly = 'Invalid or expired invite code'
+      } else {
+        friendly = msg || 'Failed to look up round'
+      }
+      setError(friendly)
     } finally {
       if (!cancelled()) setLoading(false)
     }
