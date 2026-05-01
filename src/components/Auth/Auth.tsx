@@ -5,9 +5,11 @@ type AuthMode = 'splash' | 'sign-in' | 'sign-up' | 'forgot-password'
 
 interface AuthProps {
   inviteCode?: string
+  /** True when the user was signed in earlier this session and got logged out — show a "session expired" banner instead of a generic welcome. */
+  sessionExpired?: boolean
 }
 
-export function Auth({ inviteCode }: AuthProps = {}) {
+export function Auth({ inviteCode, sessionExpired }: AuthProps = {}) {
   const [mode, setMode] = useState<AuthMode>('splash')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
@@ -129,6 +131,13 @@ export function Auth({ inviteCode }: AuthProps = {}) {
             <div className="bg-blue-50 border border-blue-200 rounded-2xl px-4 py-3 text-center">
               <p className="text-blue-800 font-semibold text-sm">You've been invited to a round!</p>
               <p className="text-blue-600 text-xs mt-0.5">Sign in or create an account to join.</p>
+            </div>
+          )}
+
+          {!inviteCode && sessionExpired && (
+            <div className="bg-amber-50 border border-amber-200 rounded-2xl px-4 py-3 text-center">
+              <p className="text-amber-800 font-semibold text-sm">Session expired</p>
+              <p className="text-amber-600 text-xs mt-0.5">Sign back in to resume — any unsaved scores are preserved and will sync automatically.</p>
             </div>
           )}
 

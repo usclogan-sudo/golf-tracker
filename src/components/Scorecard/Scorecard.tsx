@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState, useCallback, useRef } from 'react'
 import { v4 as uuidv4 } from 'uuid'
 import { useOnlineStatus } from '../../hooks/useOnlineStatus'
+import { useUnsavedChangesPrompt } from '../../hooks/useUnsavedChangesPrompt'
 import { enqueue, flush, getPending } from '../../lib/offlineQueue'
 import { supabase, rowToRound, rowToRoundPlayer, rowToHoleScore, rowToBuyIn, rowToBBBPoint, rowToJunkRecord, rowToSideBet, rowToRoundParticipant, rowToEvent, rowToEventParticipant, rowToUserProfile, holeScoreToRow, bbbPointToRow, junkRecordToRow, sideBetToRow, rowToPropBet, propBetToRow, rowToPropWager, propWagerToRow, generateInviteCode } from '../../lib/supabase'
 import { safeWrite } from '../../lib/safeWrite'
@@ -214,6 +215,9 @@ export function Scorecard({ userId, roundId, onEndRound, onHome, readOnly: readO
   const { isOnline } = useOnlineStatus()
   const [syncing, setSyncing] = useState(false)
   const [pendingCount, setPendingCount] = useState(getPending())
+  // Warn before navigating away (back button, tab close) if there are unsaved
+  // offline writes — prevents losing taps that haven't synced yet.
+  useUnsavedChangesPrompt(pendingCount > 0)
   const holeNavRef = useRef<HTMLDivElement>(null)
   const [showHoleGrid, setShowHoleGrid] = useState(false)
 
@@ -1728,6 +1732,16 @@ export function Scorecard({ userId, roundId, onEndRound, onHome, readOnly: readO
 
       {scoreTab === 'scores' && (
       <div className="px-4 py-4 max-w-2xl mx-auto space-y-4">
+        {/* BBB unknown-player warning — stale player ids referenced by bbb_points
+            rows that aren't in the current player list (player removed mid-round). */}
+        {bbbResult && bbbResult.unknownPlayerIds.length > 0 && (
+          <div className="bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
+            <p className="text-amber-800 text-sm font-semibold">⚠ BBB has stale player references</p>
+            <p className="text-amber-700 text-xs mt-0.5">
+              {bbbResult.unknownPlayerIds.length} BBB point{bbbResult.unknownPlayerIds.length > 1 ? 's' : ''} reference{bbbResult.unknownPlayerIds.length > 1 ? '' : 's'} a player no longer in this round. Re-assign on the affected hole or those points will be ignored.
+            </p>
+          </div>
+        )}
         {/* Single priority status line — highest priority: save error > offline > syncing > context */}
         {(() => {
           if (saveError) return (

@@ -681,6 +681,10 @@ function Home({
 
 export default function App() {
   const [session, setSession] = useState<Session | null | undefined>(undefined)
+  // Becomes true once we've ever held a session this tab — used to distinguish
+  // "first visit" from "session expired mid-use" so the Auth screen can show
+  // an appropriate banner.
+  const hasEverHadSessionRef = useRef(false)
   const [screen, setScreen] = useState<Screen>('home')
   const [afterCourseSetup, setAfterCourseSetup] = useState<Screen>('home')
   const [activeRoundId, setActiveRoundId] = useState<string | null>(null)
@@ -762,6 +766,7 @@ export default function App() {
   useEffect(() => {
     // Set up auth listener FIRST so it catches events from code exchange
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      if (session) hasEverHadSessionRef.current = true
       setSession(session)
       if (event === 'PASSWORD_RECOVERY') {
         setShowResetPassword(true)
@@ -895,7 +900,7 @@ export default function App() {
 
   // Not signed in
   if (session === null) {
-    return <Auth inviteCode={pendingJoinCode ?? undefined} />
+    return <Auth inviteCode={pendingJoinCode ?? undefined} sessionExpired={hasEverHadSessionRef.current} />
   }
 
   // Loading profile

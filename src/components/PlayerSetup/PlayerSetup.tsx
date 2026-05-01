@@ -29,6 +29,7 @@ export function PlayerSetup({ userId, player, onSave, onCancel, onDelete }: Prop
   const validate = () => {
     const errs: Record<string, string> = {}
     if (!name.trim()) errs.name = 'Name is required'
+    if (name.trim().length > 64) errs.name = 'Name must be 64 characters or fewer'
     const hcp = handicapIndex === '' ? 0 : parseFloat(handicapIndex)
     if (isNaN(hcp) || hcp < -10 || hcp > 54) {
       errs.handicap = 'Must be between -10 and 54'
@@ -93,6 +94,7 @@ export function PlayerSetup({ userId, player, onSave, onCancel, onDelete }: Prop
               type="text"
               placeholder="e.g. John Smith"
               value={name}
+              maxLength={64}
               onChange={e => setName(e.target.value)}
               className={`w-full h-12 px-4 rounded-xl border text-base focus:outline-none focus:ring-2 focus:ring-amber-500 ${
                 errors.name ? 'border-red-400 bg-red-50' : 'border-gray-300'
@@ -163,6 +165,7 @@ export function PlayerSetup({ userId, player, onSave, onCancel, onDelete }: Prop
               type="text"
               placeholder="e.g. @username"
               value={venmo}
+              maxLength={64}
               onChange={e => setVenmo(e.target.value)}
               className="w-full h-12 px-4 rounded-xl border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 text-base focus:outline-none focus:ring-2 focus:ring-amber-500"
             />
@@ -174,6 +177,7 @@ export function PlayerSetup({ userId, player, onSave, onCancel, onDelete }: Prop
               type="text"
               placeholder="e.g. john@email.com or 555-1234"
               value={zelle}
+              maxLength={128}
               onChange={e => setZelle(e.target.value)}
               className="w-full h-12 px-4 rounded-xl border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 text-base focus:outline-none focus:ring-2 focus:ring-amber-500"
             />
@@ -185,6 +189,7 @@ export function PlayerSetup({ userId, player, onSave, onCancel, onDelete }: Prop
               type="text"
               placeholder="e.g. $username"
               value={cashApp}
+              maxLength={64}
               onChange={e => setCashApp(e.target.value)}
               className="w-full h-12 px-4 rounded-xl border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 text-base focus:outline-none focus:ring-2 focus:ring-amber-500"
             />
@@ -196,6 +201,7 @@ export function PlayerSetup({ userId, player, onSave, onCancel, onDelete }: Prop
               type="text"
               placeholder="e.g. john@email.com"
               value={paypal}
+              maxLength={128}
               onChange={e => setPaypal(e.target.value)}
               className="w-full h-12 px-4 rounded-xl border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 text-base focus:outline-none focus:ring-2 focus:ring-amber-500"
             />

@@ -585,6 +585,10 @@ export function calculateWolfPayouts(
 export interface BBBResult {
   pointsWon: Record<string, number>  // playerId → total points earned
   totalPoints: number
+  /** Player ids referenced by stored BBB rows that aren't in the current
+   *  player list (e.g. a player was removed mid-round). Surface these to
+   *  the user so they can clean up the stale entries. */
+  unknownPlayerIds: string[]
 }
 
 export function calculateBBB(
@@ -594,14 +598,18 @@ export function calculateBBB(
   const pointsWon: Record<string, number> = {}
   players.forEach(p => (pointsWon[p.id] = 0))
 
+  const unknown = new Set<string>()
+  const tally = (id: string | undefined | null) => {
+    if (!id) return
+    if (pointsWon[id] !== undefined) pointsWon[id]++
+    else unknown.add(id)
+  }
   for (const pt of bbbPoints) {
-    if (pt.bingo) { if (pointsWon[pt.bingo] !== undefined) pointsWon[pt.bingo]++; else console.warn(`BBB: unknown player ${pt.bingo}`) }
-    if (pt.bango) { if (pointsWon[pt.bango] !== undefined) pointsWon[pt.bango]++; else console.warn(`BBB: unknown player ${pt.bango}`) }
-    if (pt.bongo) { if (pointsWon[pt.bongo] !== undefined) pointsWon[pt.bongo]++; else console.warn(`BBB: unknown player ${pt.bongo}`) }
+    tally(pt.bingo); tally(pt.bango); tally(pt.bongo)
   }
 
   const totalPoints = Object.values(pointsWon).reduce((s, p) => s + p, 0)
-  return { pointsWon, totalPoints }
+  return { pointsWon, totalPoints, unknownPlayerIds: Array.from(unknown) }
 }
 
 export function calculateBBBPayouts(

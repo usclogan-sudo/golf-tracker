@@ -73,6 +73,14 @@ export function CourseSetup({ userId, course: editCourse, onSave, onCancel, init
     const sis = holes.map(h => h.strokeIndex)
     if (new Set(sis).size !== holes.length || sis.some(si => si < 1 || si > holes.length))
       errs.si = `Each stroke index 1–${holes.length} must be used exactly once`
+    if (holes.length !== 9 && holes.length !== 18) {
+      errs.holeCount = 'Hole count must be 9 or 18'
+    }
+    holes.forEach(h => {
+      if (!Number.isFinite(h.par) || h.par < 3 || h.par > 6) {
+        errs[`par${h.number}`] = `Hole ${h.number} par must be between 3 and 6`
+      }
+    })
     setErrors(errs)
     return Object.keys(errs).length === 0
   }
@@ -201,6 +209,12 @@ export function CourseSetup({ userId, course: editCourse, onSave, onCancel, init
             ))}
           </div>
           {errors.si && <div className="bg-red-50 border border-red-200 rounded-xl p-3 mb-3"><p className="text-red-600 text-sm">{errors.si}</p></div>}
+          {errors.holeCount && <div className="bg-red-50 border border-red-200 rounded-xl p-3 mb-3"><p className="text-red-600 text-sm">{errors.holeCount}</p></div>}
+          {(() => {
+            const parErrors = Object.entries(errors).filter(([k]) => k.startsWith('par')).map(([, v]) => v)
+            if (parErrors.length === 0) return null
+            return <div className="bg-red-50 border border-red-200 rounded-xl p-3 mb-3"><p className="text-red-600 text-sm">{parErrors[0]}{parErrors.length > 1 ? ` (and ${parErrors.length - 1} more)` : ''}</p></div>
+          })()}
           <div className="overflow-x-auto -mx-4 px-4">
             <table className="w-full text-sm border-collapse">
               <thead>
