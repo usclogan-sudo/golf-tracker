@@ -233,8 +233,14 @@ export function Scorecard({ userId, roundId, onEndRound, onHome, readOnly: readO
   const [showHeaderMenu, setShowHeaderMenu] = useState(false)
   const [showQRModal, setShowQRModal] = useState(false)
   const headerMenuRef = useRef<HTMLDivElement>(null)
-  const savingScoreRef = useRef(false)
-  const pendingScoreRef = useRef<{ playerId: string; grossScore: number } | null>(null)
+  // Per-cell debounce for score writes — coalesces rapid taps on the same
+  // (player, hole) into one server write 250ms after the last tap. Map keyed
+  // by `${playerId}-${holeNumber}`. Each entry tracks the pending payload so
+  // we can flush on unmount.
+  const pendingScoreWritesRef = useRef<Map<string, { timer: ReturnType<typeof setTimeout>; data: { playerId: string; holeNumber: number; grossScore: number } }>>(new Map())
+  // Ref to the latest persistScore so timers fire with current closure state
+  // (latest holeScores etc.) regardless of when the timer was scheduled.
+  const persistScoreRef = useRef<((playerId: string, holeNumber: number, grossScore: number) => Promise<void>) | null>(null)
   const scoreToastTimerRef = useRef<ReturnType<typeof setTimeout>>()
   const roundRef = useRef(round)
   roundRef.current = round
@@ -481,67 +487,57 @@ export function Scorecard({ userId, roundId, onEndRound, onHome, readOnly: readO
     scoreToastTimerRef.current = setTimeout(() => setScoreToast(null), type === 'error' ? 3000 : 2000)
   }
 
-  const setScore = async (playerId: string, grossScore: number) => {
-    if (savingScoreRef.current) {
-      // A save is in flight — remember the latest tap so we can apply it after.
-      pendingScoreRef.current = { playerId, grossScore }
-      return
-    }
-    savingScoreRef.current = true
+  // Server write — invoked by the debounced setScore wrapper after 250ms of
+  // tap idle on a given (playerId, holeNumber). Uses `holeNumber` from the
+  // tap rather than `currentHole` so writes for cells the user has navigated
+  // away from still land on the right hole.
+  const persistScore = async (playerId: string, holeNumber: number, grossScore: number) => {
     setSaveError(null)
-    const existing = holeScores.find(s => s.playerId === playerId && s.holeNumber === currentHole)
-    const previousScore = existing?.grossScore ?? par
-    const playerName = players.find(p => p.id === playerId)?.name ?? ''
-    // Trigger celebration
-    const celeb = getCelebration(grossScore, par)
-    if (celeb) {
-      const playerName = players.find(p => p.id === playerId)?.name ?? ''
-      setCelebration({ ...celeb, playerName })
-    }
+    const existing = holeScores.find(s => s.playerId === playerId && s.holeNumber === holeNumber)
 
     try {
-      // Event self-scoring: use event RPC which auto-sets pending/approved status
       if (isEventRound && myEventParticipant) {
         const scoreStatus: ScoreStatus = canApproveScores ? 'approved' : 'pending'
         if (existing) {
           setHoleScores(prev => prev.map(s => s.id === existing.id ? { ...s, grossScore, scoreStatus } : s))
         } else {
           const tempId = uuidv4()
-          setHoleScores(prev => [...prev, { id: tempId, roundId, playerId, holeNumber: currentHole, grossScore, scoreStatus, submittedBy: userId }])
+          setHoleScores(prev => prev.find(s => s.playerId === playerId && s.holeNumber === holeNumber)
+            ? prev
+            : [...prev, { id: tempId, roundId, playerId, holeNumber, grossScore, scoreStatus, submittedBy: userId }])
         }
         const { data, error } = await supabase.rpc('submit_event_score', {
           p_round_id: roundId,
           p_player_id: playerId,
-          p_hole_number: currentHole,
+          p_hole_number: holeNumber,
           p_gross_score: grossScore,
         })
         if (error) throw error
-        // Update with actual status from server
         if (data) {
           const actualStatus = (data as any).status as ScoreStatus
           const actualId = (data as any).id as string
           setHoleScores(prev => prev.map(s =>
-            (s.playerId === playerId && s.holeNumber === currentHole)
+            (s.playerId === playerId && s.holeNumber === holeNumber)
               ? { ...s, id: actualId, scoreStatus: actualStatus }
               : s
           ))
-          // Show toast for pending submissions (not auto-approved)
           if (actualStatus === 'pending') {
             showScoreToast('Score submitted · Pending approval', 'info')
           }
         }
-      // Participant self-entry: use RPC so scores are stored with creator's user_id
       } else if (selfEntryOnly && myParticipant && playerId === myParticipant.playerId) {
         if (existing) {
           setHoleScores(prev => prev.map(s => s.id === existing.id ? { ...s, grossScore } : s))
         } else {
           const tempId = uuidv4()
-          setHoleScores(prev => [...prev, { id: tempId, roundId, playerId, holeNumber: currentHole, grossScore }])
+          setHoleScores(prev => prev.find(s => s.playerId === playerId && s.holeNumber === holeNumber)
+            ? prev
+            : [...prev, { id: tempId, roundId, playerId, holeNumber, grossScore }])
         }
         const { error } = await supabase.rpc('submit_participant_score', {
           p_round_id: roundId,
           p_player_id: playerId,
-          p_hole_number: currentHole,
+          p_hole_number: holeNumber,
           p_gross_score: grossScore,
         })
         if (error) throw error
@@ -549,48 +545,45 @@ export function Scorecard({ userId, roundId, onEndRound, onHome, readOnly: readO
       } else if (existing) {
         setHoleScores(prev => prev.map(s => s.id === existing.id ? { ...s, grossScore } : s))
         const query = supabase.from('hole_scores').update({ gross_score: grossScore }).eq('id', existing.id)
-        // Conflict detection: only update if row hasn't changed since we last read it
         if (existing.updatedAt) query.eq('updated_at', existing.updatedAt)
         const { data, error } = await query.select()
         if (error) throw error
         if (!data || data.length === 0) {
-          // Someone else updated this score — revert optimistic update from realtime state
+          // Someone else updated this score — revert to whatever realtime pushed.
           setHoleScores(prev => {
-            const current = prev.find(s => s.playerId === playerId && s.holeNumber === currentHole)
+            const current = prev.find(s => s.playerId === playerId && s.holeNumber === holeNumber)
             return current ? prev.map(s => s.id === existing.id ? current : s) : prev
           })
           showScoreToast('Score was updated by someone else', 'error')
           return
         }
-        // Update local state with fresh updated_at for subsequent saves
         const updated = rowToHoleScore(data[0])
         setHoleScores(prev => prev.map(s => s.id === existing.id ? { ...s, grossScore, updatedAt: updated.updatedAt } : s))
         showScoreToast('Score saved', 'success')
       } else {
-        const newScore: HoleScore = { id: uuidv4(), roundId, playerId, holeNumber: currentHole, grossScore }
-        setHoleScores(prev => [...prev, newScore])
+        const newScore: HoleScore = { id: uuidv4(), roundId, playerId, holeNumber, grossScore }
+        setHoleScores(prev => prev.find(s => s.playerId === playerId && s.holeNumber === holeNumber) ? prev : [...prev, newScore])
         const { error } = await supabase.from('hole_scores').insert(holeScoreToRow(newScore, userId))
         if (error) throw error
         showScoreToast('Score saved', 'success')
       }
     } catch {
       if (!isOnline) {
-        // Queue for offline sync — local state is already updated optimistically
-        const existing = holeScores.find(s => s.playerId === playerId && s.holeNumber === currentHole)
-        if (existing) {
+        const live = holeScores.find(s => s.playerId === playerId && s.holeNumber === holeNumber)
+        if (live) {
           enqueue({
             table: 'hole_scores',
             method: 'update',
             data: { gross_score: grossScore },
             matchColumn: 'id',
-            matchValue: existing.id,
-            _expectedUpdatedAt: existing.updatedAt,
+            matchValue: live.id,
+            _expectedUpdatedAt: live.updatedAt,
           })
         } else {
           enqueue({
             table: 'hole_scores',
             method: 'insert',
-            data: holeScoreToRow({ id: uuidv4(), roundId, playerId, holeNumber: currentHole, grossScore }, userId),
+            data: holeScoreToRow({ id: uuidv4(), roundId, playerId, holeNumber, grossScore }, userId),
           })
         }
         setPendingCount(getPending())
@@ -599,16 +592,57 @@ export function Scorecard({ userId, roundId, onEndRound, onHome, readOnly: readO
         setSaveError('Score failed to save — check your connection')
         setLastFailedSave({ playerId, grossScore })
       }
-    } finally {
-      savingScoreRef.current = false
-      const queued = pendingScoreRef.current
-      if (queued) {
-        pendingScoreRef.current = null
-        // Apply the latest queued tap. Recursion stops once no new taps land mid-flight.
-        void setScore(queued.playerId, queued.grossScore)
-      }
     }
   }
+  persistScoreRef.current = persistScore
+
+  // Public entry point — instant optimistic UI + celebration, server write
+  // coalesced 250ms after the last tap on the same cell.
+  const setScore = (playerId: string, grossScore: number) => {
+    const holeNumber = currentHole
+
+    // Optimistic local update so the score input feels instant.
+    const existing = holeScores.find(s => s.playerId === playerId && s.holeNumber === holeNumber)
+    if (existing) {
+      setHoleScores(prev => prev.map(s => s.id === existing.id ? { ...s, grossScore } : s))
+    } else {
+      const tempId = `temp-${playerId}-${holeNumber}`
+      setHoleScores(prev => prev.find(s => s.id === tempId)
+        ? prev.map(s => s.id === tempId ? { ...s, grossScore } : s)
+        : [...prev, { id: tempId, roundId, playerId, holeNumber, grossScore }])
+    }
+
+    // Celebration fires on each tap (UX) — never debounced.
+    const celeb = getCelebration(grossScore, par)
+    if (celeb) {
+      const playerName = players.find(p => p.id === playerId)?.name ?? ''
+      setCelebration({ ...celeb, playerName })
+    }
+
+    // Reset the per-cell debounce timer.
+    const key = `${playerId}-${holeNumber}`
+    const map = pendingScoreWritesRef.current
+    const prev = map.get(key)
+    if (prev) clearTimeout(prev.timer)
+    const timer = setTimeout(() => {
+      map.delete(key)
+      void persistScoreRef.current?.(playerId, holeNumber, grossScore)
+    }, 250)
+    map.set(key, { timer, data: { playerId, holeNumber, grossScore } })
+  }
+
+  // On unmount or roundId change, flush any pending debounced writes immediately
+  // so we don't lose taps that landed within the last 250ms.
+  useEffect(() => {
+    const map = pendingScoreWritesRef.current
+    return () => {
+      for (const [, entry] of map) {
+        clearTimeout(entry.timer)
+        void persistScoreRef.current?.(entry.data.playerId, entry.data.holeNumber, entry.data.grossScore)
+      }
+      map.clear()
+    }
+  }, [roundId])
 
   const goToHole = async (holeNum: number) => {
     setSaveError(null)
