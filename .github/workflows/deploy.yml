@@ -30,7 +30,10 @@ jobs:
           cache: npm
 
       - name: Install dependencies
-        run: npm ci
+        # npm install (not ci) — tolerates the optional-platform-binary
+        # serialization mismatch between the lockfile authored under npm 11
+        # and CI's installer. Slightly less hermetic, but stable.
+        run: npm install --no-audit --no-fund
 
       - name: Build
         run: |
