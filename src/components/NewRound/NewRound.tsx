@@ -1759,6 +1759,8 @@ function TreasurerAndBuyIns({
   game,
   junkConfig,
   groups,
+  holesMode,
+  startingHole,
   onCreateRound,
   onBack,
   stepIndicator,
@@ -1769,6 +1771,8 @@ function TreasurerAndBuyIns({
   game: Game
   junkConfig?: JunkConfig
   groups?: Record<string, number>
+  holesMode: HolesMode
+  startingHole: number
   onCreateRound: (roundId: string) => void
   onBack: () => void
   stepIndicator?: React.ReactNode
@@ -1801,7 +1805,9 @@ function TreasurerAndBuyIns({
     try {
       const roundId = uuidv4()
       const inviteCode = generateInviteCode()
-      const firstHole = holesMode === 'back_9' ? Math.ceil(course.holes.length / 2) + 1 : 1
+      const firstHole = holesMode === 'back_9'
+        ? Math.ceil(course.holes.length / 2) + 1
+        : (holesMode === 'full_18' && startingHole > 1 ? startingHole : 1)
       const round: Round = {
         id: roundId,
         courseId: course.id,
@@ -1822,6 +1828,7 @@ function TreasurerAndBuyIns({
         gameMasterId,
         inviteCode,
         holesMode: holesMode !== 'full_18' ? holesMode : undefined,
+        startingHole: holesMode === 'full_18' && startingHole > 1 ? startingHole : undefined,
       }
 
       const buyIns: BuyIn[] = players.map(p => ({
@@ -2074,6 +2081,7 @@ export function NewRound({ userId, onStart, onCancel, onAddCourse, initialStakes
   const [junkConfig, setJunkConfig] = useState<JunkConfig | undefined>(templateRound?.junkConfig)
   const [playerTees, setPlayerTees] = useState<Record<string, string>>({})
   const [holesMode, setHolesMode] = useState<HolesMode>(templateRound?.holesMode ?? 'full_18')
+  const [startingHole, setStartingHole] = useState<number>(templateRound?.startingHole ?? 1)
 
   const preSelectedPlayerIds = templateRound?.players?.map(p => p.id)
   const [creatingDirect, setCreatingDirect] = useState(false)
@@ -2101,7 +2109,9 @@ export function NewRound({ userId, onStart, onCancel, onAddCourse, initialStakes
       const roundId = uuidv4()
       const inviteCode = generateInviteCode()
       const gameMasterId = players.find(p => p.id === userId)?.id ?? players[0]?.id ?? userId
-      const firstHole = holesMode === 'back_9' ? Math.ceil(course.holes.length / 2) + 1 : 1
+      const firstHole = holesMode === 'back_9'
+        ? Math.ceil(course.holes.length / 2) + 1
+        : (holesMode === 'full_18' && startingHole > 1 ? startingHole : 1)
       const round: Round = {
         id: roundId,
         courseId: course.id,
@@ -2121,6 +2131,7 @@ export function NewRound({ userId, onStart, onCancel, onAddCourse, initialStakes
         gameMasterId,
         inviteCode,
         holesMode: holesMode !== 'full_18' ? holesMode : undefined,
+        startingHole: holesMode === 'full_18' && startingHole > 1 ? startingHole : undefined,
       }
       const roundPlayers = players.map(p => ({
         id: uuidv4(),
@@ -2156,6 +2167,9 @@ export function NewRound({ userId, onStart, onCancel, onAddCourse, initialStakes
             setCourse(c)
             // Reset holesMode when course changes — only offer 9-hole modes for 18-hole courses
             if (c.holes.length <= 9) setHolesMode('full_18')
+            // Reset starting hole on course change so we don't carry over an
+            // invalid number from a longer course.
+            setStartingHole(1)
             setStep('players')
           }}
           onAddCourse={onAddCourse}
@@ -2168,28 +2182,59 @@ export function NewRound({ userId, onStart, onCancel, onAddCourse, initialStakes
 
   if (step === 'players' && course) {
     const showHolesToggle = course.holes.length > 9
-    const holesModeBar = showHolesToggle ? (
-      <div className="px-4 pb-2">
-        <div className="max-w-2xl mx-auto">
-          <div className="flex rounded-xl overflow-hidden border border-gray-200 dark:border-gray-600">
-            {(['front_9', 'full_18', 'back_9'] as HolesMode[]).map(mode => {
-              const label = mode === 'front_9' ? 'Front 9' : mode === 'back_9' ? 'Back 9' : `Full ${course.holes.length}`
-              const active = holesMode === mode
-              return (
-                <button
-                  key={mode}
-                  onClick={() => setHolesMode(mode)}
-                  className={`flex-1 py-2 text-sm font-semibold transition-colors ${
-                    active
-                      ? 'bg-amber-500 text-white'
-                      : 'bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-300'
-                  }`}
-                >
-                  {label}
-                </button>
-              )
-            })}
-          </div>
+    // Starting-hole picker is only meaningful in full_18 mode (the rotation
+    // helpers ignore it for front_9 / back_9). For 9-hole courses we still
+    // allow it since they default to full_18 implicitly.
+    const showStartingHolePicker = holesMode === 'full_18'
+    const holesModeBar = (showHolesToggle || showStartingHolePicker) ? (
+      <div className="px-4 pb-2 space-y-2">
+        <div className="max-w-2xl mx-auto space-y-2">
+          {showHolesToggle && (
+            <div className="flex rounded-xl overflow-hidden border border-gray-200 dark:border-gray-600">
+              {(['front_9', 'full_18', 'back_9'] as HolesMode[]).map(mode => {
+                const label = mode === 'front_9' ? 'Front 9' : mode === 'back_9' ? 'Back 9' : `Full ${course.holes.length}`
+                const active = holesMode === mode
+                return (
+                  <button
+                    key={mode}
+                    onClick={() => {
+                      setHolesMode(mode)
+                      // Reset starting hole when leaving full_18 — the rotation
+                      // helpers ignore it anyway, but clean state is clearer.
+                      if (mode !== 'full_18') setStartingHole(1)
+                    }}
+                    className={`flex-1 py-2 text-sm font-semibold transition-colors ${
+                      active
+                        ? 'bg-amber-500 text-white'
+                        : 'bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-300'
+                    }`}
+                  >
+                    {label}
+                  </button>
+                )
+              })}
+            </div>
+          )}
+          {showStartingHolePicker && (
+            <div className="flex items-center gap-2 px-1">
+              <label htmlFor="startingHole" className="text-xs font-semibold text-gray-500 uppercase tracking-wide">
+                Start at
+              </label>
+              <select
+                id="startingHole"
+                value={startingHole}
+                onChange={e => setStartingHole(parseInt(e.target.value, 10) || 1)}
+                className="h-9 px-3 rounded-lg border border-gray-300 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100 text-sm focus:outline-none focus:ring-2 focus:ring-amber-500"
+              >
+                {Array.from({ length: course.holes.length }, (_, i) => i + 1).map(n => (
+                  <option key={n} value={n}>Hole {n}</option>
+                ))}
+              </select>
+              {startingHole > 1 && (
+                <span className="text-xs text-amber-600 font-semibold">⛳ Shotgun</span>
+              )}
+            </div>
+          )}
         </div>
       </div>
     ) : null
@@ -2260,6 +2305,8 @@ export function NewRound({ userId, onStart, onCancel, onAddCourse, initialStakes
         game={game}
         junkConfig={junkConfig}
         groups={groups}
+        holesMode={holesMode}
+        startingHole={startingHole}
         onBack={() => setStep('game')}
         onCreateRound={rid => onStart(rid)}
         stepIndicator={stepBar}
