@@ -43,6 +43,12 @@ interface Props {
   templateRound?: Round | null
 }
 
+// Feature flag: hide alternate stakes modes from the choose-game screen.
+// All rounds default to "standard" while this is false. Code paths for
+// 'high_roller' and 'points' stay intact so we can re-enable by flipping
+// this constant — no other changes needed.
+const SHOW_ALT_STAKES_MODES = false
+
 const STEP_ORDER = ['course', 'players', 'groups', 'game', 'money'] as const
 const STEP_LABELS: Record<string, string> = {
   course: 'Course',
@@ -494,6 +500,60 @@ function PlayerPicker({
       {stepIndicator}
 
       <div className="px-4 py-4 max-w-2xl mx-auto space-y-3">
+        {showAddForm ? (
+          <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700 p-4 space-y-3">
+            <p className="font-semibold text-gray-700 text-sm">Quick Add Guest Player</p>
+            <input
+              type="text"
+              placeholder="Name"
+              value={newName}
+              onChange={e => setNewName(e.target.value)}
+              className="w-full h-11 px-3 rounded-xl border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 text-base focus:outline-none focus:ring-2 focus:ring-amber-500"
+            />
+            <input
+              type="number"
+              inputMode="decimal"
+              placeholder="Handicap (optional)"
+              value={newHcp}
+              onChange={e => setNewHcp(e.target.value)}
+              className="w-full h-11 px-3 rounded-xl border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 text-base focus:outline-none focus:ring-2 focus:ring-amber-500"
+            />
+            <select
+              value={newTee}
+              onChange={e => setNewTee(e.target.value)}
+              className="w-full h-11 px-3 rounded-xl border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 text-base focus:outline-none focus:ring-2 focus:ring-amber-500"
+            >
+              {course.tees.map(t => (
+                <option key={t.name} value={t.name}>{t.name}</option>
+              ))}
+            </select>
+            {addError && <p className="text-red-500 text-sm">{addError}</p>}
+            <div className="flex gap-2">
+              <button
+                onClick={() => { setShowAddForm(false); setNewName(''); setNewHcp(''); setAddError('') }}
+                className="flex-1 h-11 border border-gray-300 rounded-xl text-gray-600 font-semibold"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleAddPlayer}
+                disabled={saving}
+                className="flex-1 h-11 bg-gray-800 text-white rounded-xl font-semibold disabled:opacity-60"
+              >
+                {saving ? 'Saving…' : 'Add'}
+              </button>
+            </div>
+          </div>
+        ) : (
+          <button
+            onClick={() => setShowAddForm(true)}
+            disabled={selectedIds.size >= MAX_PLAYERS}
+            className="w-full h-12 border-2 border-dashed border-amber-300 text-amber-600 font-semibold rounded-2xl active:bg-amber-50 disabled:opacity-40"
+          >
+            + Add Guest Player
+          </button>
+        )}
+
         <input
           type="text"
           placeholder="Search players…"
@@ -625,60 +685,6 @@ function PlayerPicker({
             </div>
           )
         })()}
-
-        {showAddForm ? (
-          <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700 p-4 space-y-3">
-            <p className="font-semibold text-gray-700 text-sm">Quick Add Guest Player</p>
-            <input
-              type="text"
-              placeholder="Name"
-              value={newName}
-              onChange={e => setNewName(e.target.value)}
-              className="w-full h-11 px-3 rounded-xl border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 text-base focus:outline-none focus:ring-2 focus:ring-amber-500"
-            />
-            <input
-              type="number"
-              inputMode="decimal"
-              placeholder="Handicap (optional)"
-              value={newHcp}
-              onChange={e => setNewHcp(e.target.value)}
-              className="w-full h-11 px-3 rounded-xl border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 text-base focus:outline-none focus:ring-2 focus:ring-amber-500"
-            />
-            <select
-              value={newTee}
-              onChange={e => setNewTee(e.target.value)}
-              className="w-full h-11 px-3 rounded-xl border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 text-base focus:outline-none focus:ring-2 focus:ring-amber-500"
-            >
-              {course.tees.map(t => (
-                <option key={t.name} value={t.name}>{t.name}</option>
-              ))}
-            </select>
-            {addError && <p className="text-red-500 text-sm">{addError}</p>}
-            <div className="flex gap-2">
-              <button
-                onClick={() => { setShowAddForm(false); setNewName(''); setNewHcp(''); setAddError('') }}
-                className="flex-1 h-11 border border-gray-300 rounded-xl text-gray-600 font-semibold"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={handleAddPlayer}
-                disabled={saving}
-                className="flex-1 h-11 bg-gray-800 text-white rounded-xl font-semibold disabled:opacity-60"
-              >
-                {saving ? 'Saving…' : 'Add'}
-              </button>
-            </div>
-          </div>
-        ) : (
-          <button
-            onClick={() => setShowAddForm(true)}
-            disabled={selectedIds.size >= MAX_PLAYERS}
-            className="w-full h-12 border-2 border-dashed border-amber-300 text-amber-600 font-semibold rounded-2xl active:bg-amber-50 disabled:opacity-40"
-          >
-            + Add Guest Player
-          </button>
-        )}
       </div>
 
       <div className="fixed bottom-0 inset-x-0 p-4 bg-white/95 dark:bg-gray-800/95 backdrop-blur-sm border-t border-gray-200 dark:border-gray-700">
@@ -1182,39 +1188,44 @@ function GameSetup({
           </section>
         )}
 
-        {/* Stakes Mode */}
-        <section className="bg-white dark:bg-gray-800 rounded-2xl shadow-sm p-4 space-y-3">
-          <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Stakes</p>
-          <div className="grid grid-cols-3 gap-2">
-            <button
-              onClick={() => handleStakesChange('standard')}
-              className={`h-14 rounded-xl font-semibold ${
-                stakesMode === 'standard' ? 'bg-gray-800 text-white' : 'bg-gray-100 text-gray-700'
-              }`}
-            >
-              🎯 Standard
-            </button>
-            <button
-              onClick={() => handleStakesChange('high_roller')}
-              className={`h-14 rounded-xl font-bold ${
-                stakesMode === 'high_roller' ? 'text-black' : 'bg-gray-100 text-gray-700'
-              }`}
-              style={stakesMode === 'high_roller'
-                ? { background: 'linear-gradient(135deg,#d97706,#fbbf24)' }
-                : undefined}
-            >
-              💎 High Roller
-            </button>
-            <button
-              onClick={() => handleStakesChange('points')}
-              className={`h-14 rounded-xl font-semibold ${
-                stakesMode === 'points' ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-700'
-              }`}
-            >
-              🏆 Points
-            </button>
-          </div>
-        </section>
+        {/* Stakes Mode — alt modes (High Roller, Points) hidden behind
+            SHOW_ALT_STAKES_MODES flag. Section disappears entirely when
+            only "standard" is available since picking from one option
+            isn't useful. Flip the flag to bring back. */}
+        {SHOW_ALT_STAKES_MODES && (
+          <section className="bg-white dark:bg-gray-800 rounded-2xl shadow-sm p-4 space-y-3">
+            <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Stakes</p>
+            <div className="grid grid-cols-3 gap-2">
+              <button
+                onClick={() => handleStakesChange('standard')}
+                className={`h-14 rounded-xl font-semibold ${
+                  stakesMode === 'standard' ? 'bg-gray-800 text-white' : 'bg-gray-100 text-gray-700'
+                }`}
+              >
+                🎯 Standard
+              </button>
+              <button
+                onClick={() => handleStakesChange('high_roller')}
+                className={`h-14 rounded-xl font-bold ${
+                  stakesMode === 'high_roller' ? 'text-black' : 'bg-gray-100 text-gray-700'
+                }`}
+                style={stakesMode === 'high_roller'
+                  ? { background: 'linear-gradient(135deg,#d97706,#fbbf24)' }
+                  : undefined}
+              >
+                💎 High Roller
+              </button>
+              <button
+                onClick={() => handleStakesChange('points')}
+                className={`h-14 rounded-xl font-semibold ${
+                  stakesMode === 'points' ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-700'
+                }`}
+              >
+                🏆 Points
+              </button>
+            </div>
+          </section>
+        )}
 
         {/* Game Type */}
         <section className="bg-white dark:bg-gray-800 rounded-2xl shadow-sm p-4 space-y-3">
