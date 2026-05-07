@@ -13,6 +13,9 @@ import { Tooltip } from '../ui/Tooltip'
 import { ConfirmModal } from '../ConfirmModal'
 import { GameRulesModal } from '../GameRulesModal'
 import { InviteQRModal } from '../InviteQR'
+import { usePhotoImport } from './PhotoImportButton'
+import { PhotoImportConfirmGrid } from './PhotoImportConfirmGrid'
+import type { ExtractionResult } from '../../lib/photoImport'
 import { NumberPad } from './NumberPad'
 import { BuyInBanner } from './BuyInBanner'
 import { LeaderboardTab } from './LeaderboardTab'
@@ -254,6 +257,7 @@ export function Scorecard({ userId, roundId, onEndRound, onHome, readOnly: readO
   const [showBatchEntry, setShowBatchEntry] = useState(false)
   const [batchScores, setBatchScores] = useState<Record<string, Record<number, string>>>({})
   const [numberPadTarget, setNumberPadTarget] = useState<{ playerId: string; playerName: string } | null>(null)
+  const [photoExtraction, setPhotoExtraction] = useState<ExtractionResult | null>(null)
 
   const loadScorecardData = (isCancelled?: () => boolean) => {
     const cancelled = () => isCancelled?.() ?? false
@@ -463,6 +467,15 @@ export function Scorecard({ userId, roundId, onEndRound, onHome, readOnly: readO
   const snapshot = round?.courseSnapshot
   const game = round?.game
   const isEventRound = !!round?.eventId
+
+  // Photo-import flow — hook is mounted always; the confirm grid renders
+  // only when an extraction result is in hand.
+  const photoImport = usePhotoImport({
+    roundId,
+    players,
+    snapshot: snapshot ?? { courseId: '', courseName: '', tees: [], holes: [] },
+    onExtracted: (result) => setPhotoExtraction(result),
+  })
   // For event rounds, use local hole navigation; for regular rounds, use DB-synced hole
   const currentHole = (isEventRound && localHole !== null) ? localHole : (round?.currentHole ?? 1)
 
@@ -1353,6 +1366,14 @@ export function Scorecard({ userId, roundId, onEndRound, onHome, readOnly: readO
                     className="w-full px-4 py-3 text-left text-sm font-medium text-green-300 hover:bg-gray-700 active:bg-gray-700"
                   >
                     📡 Live Spectator Link
+                  </button>
+                )}
+                {!readOnly && snapshot && players.length > 0 && (
+                  <button
+                    onClick={() => { setShowHeaderMenu(false); photoImport.open() }}
+                    className="w-full px-4 py-3 text-left text-sm font-medium text-amber-300 hover:bg-gray-700 active:bg-gray-700"
+                  >
+                    📸 Import scores from photo
                   </button>
                 )}
                 {game && (
@@ -2596,6 +2617,31 @@ export function Scorecard({ userId, roundId, onEndRound, onHome, readOnly: readO
         const qrUrl = `${window.location.origin}${window.location.pathname}?join=${qrCode}`
         return <InviteQRModal url={qrUrl} code={qrCode} eventName={event?.name} onClose={() => setShowQRModal(false)} />
       })()}
+
+      {/* Photo import flow — capture overlays always mounted; confirmation
+          grid renders only when an extraction is in hand. */}
+      {photoImport.overlays}
+      {photoExtraction && snapshot && (
+        <PhotoImportConfirmGrid
+          roundId={roundId}
+          userId={userId}
+          players={players}
+          snapshot={snapshot}
+          existing={holeScores}
+          extraction={photoExtraction}
+          onCancel={() => setPhotoExtraction(null)}
+          onSaved={({ updated, inserted }) => {
+            setPhotoExtraction(null)
+            setScoreToast({
+              message: `Imported ${updated + inserted} score${updated + inserted === 1 ? '' : 's'}`,
+              type: 'success',
+            })
+            setTimeout(() => setScoreToast(null), 3000)
+            // Refresh from server so the local state reflects what we just wrote.
+            loadScorecardData()
+          }}
+        />
+      )}
 
       {/* Number pad for quick score entry */}
       {numberPadTarget && (
