@@ -1,0 +1,8 @@
+# Test scorecard photos and answer keys contain real player names; never commit.
+# Only the README, this .gitignore, and the sample/ folder ship.
+*
+!.gitignore
+!README.md
+!sample/
+sample/*
+!sample/answer.json
