@@ -8,6 +8,10 @@ export default {
   theme: {
     extend: {
       colors: {
+        navy:  '#16263B',
+        cream: '#F2ECDD',
+        brass: '#C2A24C',
+        slate: { brand: '#2E4257' },
         forest: {
           50:  '#f0faf3',
           100: '#d8f0de',
@@ -34,7 +38,8 @@ export default {
         },
       },
       fontFamily: {
-        display: ['Outfit', 'system-ui', 'sans-serif'],
+        display: ['"Playfair Display"', 'Georgia', 'serif'],
+        serif:   ['"Playfair Display"', 'Georgia', 'serif'],
         sans:    ['Inter',  'system-ui', 'sans-serif'],
       },
     },

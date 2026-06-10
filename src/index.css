@@ -2,6 +2,14 @@
 @tailwind components;
 @tailwind utilities;
 
+:root {
+  /* Brand tokens — Gimme Brand Update v1.0 (May 31, 2026) */
+  --navy:  #16263B;  /* primary base */
+  --cream: #F2ECDD;  /* primary light, text on navy */
+  --brass: #C2A24C;  /* metallic accent */
+  --slate: #2E4257;  /* secondary/support, hairlines */
+}
+
 @layer base {
   input[type='text'],
   input[type='number'],
@@ -17,13 +25,13 @@
     font-family: 'Inter', system-ui, sans-serif;
   }
   h1, h2, h3 {
-    font-family: 'Outfit', system-ui, sans-serif;
+    font-family: 'Playfair Display', Georgia, serif;
   }
 }
 
 @layer utilities {
   .app-header {
-    background: linear-gradient(160deg, #111827 0%, #1f2937 55%, #374151 100%);
+    background: linear-gradient(160deg, var(--navy) 0%, var(--slate) 100%);
     padding-top: env(safe-area-inset-top, 0px);
   }
   .hr-header {

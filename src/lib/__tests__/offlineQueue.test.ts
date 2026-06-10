@@ -64,7 +64,7 @@ vi.mock('../supabase', () => ({
 
 import { enqueue, getPending, flush, clearQueue } from '../offlineQueue'
 
-const QUEUE_KEY = 'fore-skins-offline-queue'
+const QUEUE_KEY = 'gimme-offline-queue'
 
 beforeEach(() => {
   localStorage.clear()

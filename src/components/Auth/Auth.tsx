@@ -124,7 +124,7 @@ export function Auth({ inviteCode, sessionExpired }: AuthProps = {}) {
           <div className="text-center">
             <div className="text-7xl mb-4">&#9971;</div>
             <h1 className="font-display text-4xl font-800 tracking-tight text-gray-900 dark:text-gray-100">Gimme</h1>
-            <p className="text-amber-600 text-sm font-medium mt-2 tracking-widest uppercase">Golf &middot; Side Games &middot; Money</p>
+            <p className="text-[#C2A24C] text-sm font-medium mt-2 tracking-widest uppercase">Side Games &middot; Scores &middot; Settled</p>
           </div>
 
           {inviteCode && (
@@ -136,8 +136,8 @@ export function Auth({ inviteCode, sessionExpired }: AuthProps = {}) {
 
           {!inviteCode && sessionExpired && (
             <div className="bg-amber-50 border border-amber-200 rounded-2xl px-4 py-3 text-center">
-              <p className="text-amber-800 font-semibold text-sm">Session expired</p>
-              <p className="text-amber-600 text-xs mt-0.5">Sign back in to resume — any unsaved scores are preserved and will sync automatically.</p>
+              <p className="text-amber-800 font-semibold text-sm">Welcome back.</p>
+              <p className="text-amber-600 text-xs mt-0.5">Everything's right where you left it. Sign in to pick up.</p>
             </div>
           )}
 
@@ -205,7 +205,7 @@ export function Auth({ inviteCode, sessionExpired }: AuthProps = {}) {
         <div className="text-center">
           <div className="text-6xl mb-4">&#9971;</div>
           <h1 className="font-display text-3xl font-800 tracking-tight text-gray-900 dark:text-gray-100">Gimme</h1>
-          <p className="text-amber-600 text-sm font-medium mt-1 tracking-wide">GOLF &middot; SIDE GAMES &middot; MONEY</p>
+          <p className="text-[#C2A24C] text-sm font-medium mt-1 tracking-wide">SIDE GAMES &middot; SCORES &middot; SETTLED</p>
         </div>
 
         {message ? (

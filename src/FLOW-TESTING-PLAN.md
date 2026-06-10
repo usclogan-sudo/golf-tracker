@@ -1,12 +1,12 @@
-# Flow Testing Plan: Start Game → Add Users → Money Collection
+# Flow Testing Plan: Start a Round → Add Players → Settle Up
 
 ## Flows Under Test
 
-1. **NewRound** — casual game creation (1–6 players, single group or auto-grouped)
+1. **NewRound** — casual side-game setup (1–6 players, single group or auto-grouped)
 2. **EventSetup** — organized event (multi-group, scorekeepers, invite code sharing)
 3. **JoinRound** — joining via invite code (URL, notification, or manual entry)
-4. **BuyInBanner** — in-round payment prompt for non-treasurer players
-5. **SettleUp** — post-round money settlement and confirmation
+4. **BuyInBanner** — in-round buy-in confirmation for non-treasurer players
+5. **SettleUp** — post-round settlement and confirmation
 
 ---
 
@@ -174,7 +174,7 @@
 - Guest players (not linked to accounts) have no account-linking flow
 - No "wrong code" → "try again" is fine, but no "round has ended" messaging
 
-### Money Collection (BuyIn + SettleUp)
+### Settling Up (BuyIn + SettleUp)
 
 **Pros:**
 - Payment method links (Venmo/Zelle/CashApp/PayPal) are deep-linked — one tap to pay
@@ -206,5 +206,5 @@
 4. **No push/in-app nudge** — Pat has no way to remind people to pay from within the app.
 5. **Player list unsorted/unsearchable at 16+ players** — JoinRound becomes a scroll-hunt.
 6. **Guest player account-linking gap** — Stan's recurring pain: guest history disconnected from account.
-7. **Lazy settlement computation** — if nobody opens SettleUp, money data doesn't exist.
+7. **Lazy settlement computation** — if nobody opens SettleUp, settlement data doesn't exist.
 8. **No "undo" or "are you sure" on Mark Paid** — Pat could fat-finger and lose track.

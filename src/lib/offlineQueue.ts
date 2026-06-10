@@ -1,6 +1,7 @@
 import { supabase } from './supabase'
 
-const QUEUE_KEY = 'fore-skins-offline-queue'
+const QUEUE_KEY = 'gimme-offline-queue'
+const LEGACY_QUEUE_KEY = 'fore-skins-offline-queue'
 
 export interface QueuedOperation {
   id: string
@@ -17,7 +18,15 @@ export interface QueuedOperation {
 
 function getQueue(): QueuedOperation[] {
   try {
-    const raw = localStorage.getItem(QUEUE_KEY)
+    let raw = localStorage.getItem(QUEUE_KEY)
+    if (!raw) {
+      const legacy = localStorage.getItem(LEGACY_QUEUE_KEY)
+      if (legacy) {
+        localStorage.setItem(QUEUE_KEY, legacy)
+        localStorage.removeItem(LEGACY_QUEUE_KEY)
+        raw = legacy
+      }
+    }
     return raw ? JSON.parse(raw) : []
   } catch {
     return []

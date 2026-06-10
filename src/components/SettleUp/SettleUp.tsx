@@ -787,8 +787,8 @@ export function SettleUp({ roundId, userId, eventId, onDone, onContinue }: Props
       )}
       <header className={`${headerClass} text-white px-4 py-5 sticky top-0 z-10 shadow-xl`}>
         <div className="max-w-2xl mx-auto">
-          <h1 className="text-2xl font-bold flex items-center gap-2">
-            Settle Up 💰
+          <h1 className="font-display text-3xl font-semibold tracking-tight flex items-center gap-2">
+            That's good.
             {isHighRoller && (
               <span className="text-sm font-bold px-2 py-0.5 rounded-full"
                 style={{ background: 'linear-gradient(135deg,#d97706,#fbbf24)', color: '#000' }}>
@@ -796,7 +796,8 @@ export function SettleUp({ roundId, userId, eventId, onDone, onContinue }: Props
               </span>
             )}
           </h1>
-          <p className="text-gray-300 text-sm mt-0.5">
+          <p className="text-cream/90 text-sm mt-1">Here's where everyone landed.</p>
+          <p className="text-gray-300 text-xs mt-0.5 tracking-wide">
             {eventData ? `${eventData.name} · ` : ''}{snapshot.courseName} · {gameLabel}
           </p>
         </div>

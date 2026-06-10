@@ -1,15 +1,15 @@
 {
   "name": "Gimme Golf",
   "short_name": "Gimme",
-  "description": "Golf side games, money, and scores — all in one place.",
+  "description": "Golf side games and scores, settled automatically — all in one place.",
   "id": "/golf-tracker/",
   "start_url": "/golf-tracker/",
   "scope": "/golf-tracker/",
   "display": "standalone",
   "orientation": "portrait",
   "categories": ["sports", "utilities"],
-  "theme_color": "#051a0e",
-  "background_color": "#051a0e",
+  "theme_color": "#16263B",
+  "background_color": "#16263B",
   "icons": [
     {
       "src": "icon-192.png",

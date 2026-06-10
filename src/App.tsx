@@ -171,7 +171,7 @@ function Home({
   const [unsettledAmounts, setUnsettledAmounts] = useState<{ youOwe: number; owedToYou: number }>({ youOwe: 0, owedToYou: 0 })
   const [fetchError, setFetchError] = useState<string | null>(null)
   const [showAnonBlock, setShowAnonBlock] = useState(false)
-  const [betaDismissed, setBetaDismissed] = useState(() => localStorage.getItem('foreskins_beta_dismissed') === '1')
+  const [betaDismissed, setBetaDismissed] = useState(() => localStorage.getItem('gimme_beta_dismissed') === '1')
   const [retryKey, setRetryKey] = useState(0)
 
   const guardAnon = (action: () => void) => {
@@ -309,7 +309,7 @@ function Home({
         <div className="max-w-2xl mx-auto flex items-center justify-between gap-2">
           <div className="min-w-0">
             <h1 className="font-display text-2xl font-800 tracking-tight leading-none">Gimme</h1>
-            <p className="text-amber-400 text-[11px] font-medium mt-0.5 tracking-wide">GOLF · SIDE GAMES · MONEY</p>
+            <p className="text-[#C2A24C] text-[11px] font-medium mt-0.5 tracking-wide">SIDE GAMES · SCORES · SETTLED</p>
           </div>
           <div className="flex items-center gap-2 flex-shrink-0">
             {isAdmin && (
@@ -340,7 +340,7 @@ function Home({
         {!betaDismissed && (
           <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-2xl px-4 py-3 flex items-center justify-between">
             <p className="text-blue-700 dark:text-blue-300 text-sm font-medium">Welcome to the Gimme beta! We're actively building and would love <a href="https://docs.google.com/forms/d/e/1FAIpQLScC3xN8rQcoCBHSPQAG8k1tqiwoB1pz3IFytV2Mvmlikr9w4Q/viewform" target="_blank" rel="noopener noreferrer" className="underline">your feedback</a>.</p>
-            <button onClick={() => { setBetaDismissed(true); localStorage.setItem('foreskins_beta_dismissed', '1') }} className="text-blue-400 text-lg leading-none ml-2">&times;</button>
+            <button onClick={() => { setBetaDismissed(true); localStorage.setItem('gimme_beta_dismissed', '1') }} className="text-blue-400 text-lg leading-none ml-2">&times;</button>
           </div>
         )}
 
@@ -641,7 +641,7 @@ function Home({
 
         {/* Send Feedback — at the bottom */}
         <a
-          href="mailto:usclogan@gmail.com?subject=Fore%20Skins%20Beta%20Feedback"
+          href="mailto:usclogan@gmail.com?subject=Gimme%20Beta%20Feedback"
           className="block w-full bg-white dark:bg-gray-800 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700 p-4 text-left active:bg-gray-50 dark:active:bg-gray-700 transition-colors"
         >
           <div className="flex items-center gap-3">

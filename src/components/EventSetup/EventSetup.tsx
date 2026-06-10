@@ -325,7 +325,7 @@ export function EventSetup({ userId, onStart, onCancel, onAddCourse }: Props) {
             </div>
             <input
               type="text"
-              placeholder="e.g. Saturday Scramble, Guys Trip 2026..."
+              placeholder="e.g. Saturday Scramble, Annual Trip 2026..."
               value={eventName}
               onChange={e => setEventName(e.target.value)}
               className="w-full h-14 px-4 text-lg rounded-xl border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-amber-500"

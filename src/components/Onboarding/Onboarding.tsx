@@ -70,7 +70,7 @@ export function Onboarding({ userId, onComplete }: Props) {
       <header className="app-header text-white px-4 pt-6 pb-5 shadow-xl">
         <div className="max-w-2xl mx-auto text-center">
           <h1 className="font-display text-3xl font-800 tracking-tight">Gimme</h1>
-          <p className="text-amber-400 text-sm font-medium mt-0.5 tracking-wide">GOLF · SIDE GAMES · MONEY</p>
+          <p className="text-[#C2A24C] text-sm font-medium mt-0.5 tracking-wide">SIDE GAMES · SCORES · SETTLED</p>
         </div>
       </header>
 
@@ -85,7 +85,7 @@ export function Onboarding({ userId, onComplete }: Props) {
           <div className="text-center space-y-6 w-full">
             <div className="text-7xl">&#9971;</div>
             <h2 className="font-display text-3xl font-bold text-gray-900 dark:text-gray-100">Welcome to Gimme</h2>
-            <p className="text-gray-500 dark:text-gray-400 text-lg">Track golf side games, collect buy-ins, and settle up — all in one place.</p>
+            <p className="text-gray-500 dark:text-gray-400 text-lg">Track your side games, keep score, and settle up clean — all in one place.</p>
 
             <div className="space-y-3 text-left">
               <div>
@@ -125,7 +125,7 @@ export function Onboarding({ userId, onComplete }: Props) {
           <div className="text-center space-y-6 w-full">
             <div className="text-5xl">💰</div>
             <h2 className="font-display text-2xl font-bold text-gray-900 dark:text-gray-100">Payment Info</h2>
-            <p className="text-gray-500 dark:text-gray-400">So your buddies can pay you when you win. Optional — you can add this later.</p>
+            <p className="text-gray-500 dark:text-gray-400">So your group can settle up after the round. Optional — add it anytime.</p>
 
             <div className="space-y-3 text-left">
               <div>

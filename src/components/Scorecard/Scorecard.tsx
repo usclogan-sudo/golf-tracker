@@ -586,7 +586,7 @@ export function Scorecard({ userId, roundId, onEndRound, onHome, readOnly: readO
               : s
           ))
           if (actualStatus === 'pending') {
-            showScoreToast('Score submitted · Pending approval', 'info')
+            showScoreToast("Hang tight — the scorekeeper's confirming. You're in.", 'info')
           }
         }
       } else if (selfEntryOnly && myParticipant && playerId === myParticipant.playerId) {
@@ -605,7 +605,7 @@ export function Scorecard({ userId, roundId, onEndRound, onHome, readOnly: readO
           p_gross_score: grossScore,
         })
         if (error) throw error
-        showScoreToast('Score saved', 'success')
+        showScoreToast("Saved. You're good.", 'success')
       } else if (existing) {
         setHoleScores(prev => prev.map(s => s.id === existing.id ? { ...s, grossScore } : s))
         const query = supabase.from('hole_scores').update({ gross_score: grossScore }).eq('id', existing.id)
@@ -623,13 +623,13 @@ export function Scorecard({ userId, roundId, onEndRound, onHome, readOnly: readO
         }
         const updated = rowToHoleScore(data[0])
         setHoleScores(prev => prev.map(s => s.id === existing.id ? { ...s, grossScore, updatedAt: updated.updatedAt } : s))
-        showScoreToast('Score saved', 'success')
+        showScoreToast("Saved. You're good.", 'success')
       } else {
         const newScore: HoleScore = { id: uuidv4(), roundId, playerId, holeNumber, grossScore }
         setHoleScores(prev => prev.find(s => s.playerId === playerId && s.holeNumber === holeNumber) ? prev : [...prev, newScore])
         const { error } = await supabase.from('hole_scores').insert(holeScoreToRow(newScore, userId))
         if (error) throw error
-        showScoreToast('Score saved', 'success')
+        showScoreToast("Saved. You're good.", 'success')
       }
     } catch {
       if (!isOnline) {

@@ -310,7 +310,7 @@ export function Settings({ userId, email, onBack, onSignOut, isAdmin, onAdmin, i
         {!isAnonymous && !adminOnly && profile && (
           <section className="bg-white dark:bg-gray-800 rounded-2xl shadow-sm p-4 space-y-3">
             <p className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">Payment Info</p>
-            <p className="text-sm text-gray-500">So your buddies can pay you when you win.</p>
+            <p className="text-sm text-gray-500">So your group can settle up after the round.</p>
             <div>
               <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Venmo Username</label>
               <input type="text" placeholder="@username" value={venmo} onChange={e => setVenmo(e.target.value)}
