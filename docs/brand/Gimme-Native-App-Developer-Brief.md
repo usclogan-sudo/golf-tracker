@@ -32,7 +32,7 @@ There is an existing PWA (React) and backend (auth, cloud sync, scoring, settlem
 
 ## 3. Out of scope for MVP
 
-- **Money movement / payments.** No in-app transfer, escrow, or processing. (Future: optional deep-links to Venmo/PayPal/etc. to *hand off* a pre-filled amount — a later phase, behind counsel review.)
+- **Escrow, betting facilitation, or pooled-funds management.** Gimme is a settlement tracker — the app does not hold funds, intermediate bets, or distribute payouts on behalf of a wager. Settlement-payment integrations *are* in scope: deep links to Venmo / Zelle / Cash App / PayPal are already shipping on web, and **Apple Pay / Google Pay are a desired native add** for one-tap settlement (see `docs/NATIVE-APP-REQUIREMENTS.md` §9). Across all of these, the user — not the app — initiates and authorizes each payment.
 - Anything that would make the app a wagering/gambling product (see §5).
 
 ---
@@ -50,10 +50,10 @@ There is an existing PWA (React) and backend (auth, cloud sync, scoring, settlem
 
 The category leader ships as "Gambling Golfer LLC" with an **18+ "Contains Gambling"** rating, which caps mainstream distribution. **Gimme must not inherit that.** Build and describe the app as a **scorekeeping + settlement utility**, targeting a mainstream age rating.
 
-- **No money flows through the app** in MVP — this is what keeps it a tracker, not a gambling product.
+- **Settlement-payment integrations are user-initiated, not app-held.** Venmo / Zelle / Cash App / PayPal deep links (already live) and Apple Pay / Google Pay (desired native add) all hand the user to their own payment app, pre-filled. Gimme never holds, escrows, or distributes funds on behalf of a bet — and that's what keeps it a tracker, not a gambling product.
 - **Store listing & in-app copy:** minimize "bet / wager / gamble / winnings / money." Use "side games / scores / settle up / the result." Lead with *settlement tracking*, not betting.
 - Follow Apple App Store and Google Play **real-money-gaming policies**; this app should fall outside them by design, but confirm during review prep.
-- **Legal gating:** a trademark clearance opinion on "Gimme" is in progress (a live "GIMME" software mark and an active "Gimme" golf company exist) — confirm name status with the founder before store submission. Any future money-movement feature requires gaming counsel before build.
+- **Legal gating:** a trademark clearance opinion on "Gimme" is in progress (a live "GIMME" software mark and an active "Gimme" golf company exist) — confirm name status with the founder before store submission. Features that would have the app pool, escrow, or distribute funds on behalf of a wager (treasurer-managed pots held by the app, payout disbursement, etc.) remain out of scope without gaming-counsel review.
 
 ---
 
