@@ -5,6 +5,9 @@ import { readFileSync, writeFileSync } from 'fs'
 import { resolve } from 'path'
 import type { Plugin } from 'vite'
 
+const pkg = JSON.parse(readFileSync(resolve(__dirname, 'package.json'), 'utf-8'))
+const APP_VERSION = pkg.version as string
+
 function stampServiceWorker(): Plugin {
   return {
     name: 'stamp-sw-build-hash',
@@ -13,7 +16,7 @@ function stampServiceWorker(): Plugin {
       const swPath = resolve(outDir, 'sw.js')
       try {
         const content = readFileSync(swPath, 'utf-8')
-        const hash = `fore-skins-${Date.now().toString(36)}`
+        const hash = `gimme-${Date.now().toString(36)}`
         writeFileSync(swPath, content.replace('__BUILD_HASH__', hash))
       } catch {}
     },
@@ -24,6 +27,10 @@ function stampServiceWorker(): Plugin {
 export default defineConfig({
   plugins: [react(), stampServiceWorker()],
   base: '/golf-tracker/',
+  define: {
+    __APP_VERSION__: JSON.stringify(APP_VERSION),
+    __APP_PLATFORM__: JSON.stringify('web'),
+  },
   test: {
     globals: true,
   },

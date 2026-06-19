@@ -4,6 +4,8 @@ import { supabase, rowToCourse, rowToRound, rowToHoleScore, fetchOrCreateProfile
 import { useNotifications } from './hooks/useNotifications'
 import { flush as flushOfflineQueue, getPending as getOfflinePending } from './lib/offlineQueue'
 import { safeWrite } from './lib/safeWrite'
+import { setSentryUser, clearSentryUser } from './lib/sentry'
+import { checkAppVersion } from './lib/appVersion'
 import { NotificationToast } from './components/NotificationToast'
 import { NotificationBadge } from './components/NotificationBadge'
 import { Auth } from './components/Auth/Auth'
@@ -768,10 +770,18 @@ export default function App() {
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
       if (session) hasEverHadSessionRef.current = true
       setSession(session)
+      if (session?.user) {
+        setSentryUser(session.user.id, session.user.is_anonymous === true)
+      } else {
+        clearSentryUser()
+      }
       if (event === 'PASSWORD_RECOVERY') {
         setShowResetPassword(true)
       }
     })
+
+    // Fire-and-forget compatibility check. Web no-ops; native will gate the UI.
+    checkAppVersion()
 
     // Handle PKCE code exchange from email links (password reset, signup confirm)
     const code = new URLSearchParams(window.location.search).get('code')
