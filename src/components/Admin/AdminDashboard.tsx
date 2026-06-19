@@ -5,6 +5,7 @@ import { fmtMoney } from '../../lib/gameLogic'
 import { parseDollarsToCents } from '../../lib/money'
 import { venturaCourses } from '../../data/venturaCourses'
 import { ConfirmModal } from '../ConfirmModal'
+import { logAdminAction } from '../../lib/adminAudit'
 import type { Course, Tee, Hole, GamePreset, GameType, StakesMode } from '../../types'
 
 interface Props {
@@ -97,8 +98,15 @@ function SharedCoursesTab({ userId }: { userId: string }) {
 
   const handleDelete = async (id: string) => {
     if (!window.confirm('Delete this shared course?')) return
+    const course = courses.find(c => c.id === id)
     await supabase.from('shared_courses').delete().eq('id', id)
     setCourses(prev => prev.filter(c => c.id !== id))
+    logAdminAction({
+      action: 'delete_shared_course',
+      target_type: 'shared_course',
+      target_id: id,
+      target_label: course?.name ?? id,
+    })
   }
 
   const handleImport = async (template: typeof venturaCourses[number]) => {
@@ -391,8 +399,15 @@ function GamePresetsTab({ userId }: { userId: string }) {
 
   const handleDelete = async (id: string) => {
     if (!window.confirm('Delete this preset?')) return
+    const preset = presets.find(p => p.id === id)
     await supabase.from('game_presets').delete().eq('id', id)
     setPresets(prev => prev.filter(p => p.id !== id))
+    logAdminAction({
+      action: 'delete_game_preset',
+      target_type: 'game_preset',
+      target_id: id,
+      target_label: preset?.name ?? id,
+    })
   }
 
   const movePreset = async (index: number, dir: -1 | 1) => {
@@ -739,6 +754,7 @@ function UsersTab({ currentUserId }: { currentUserId: string }) {
 
   const toggleAdmin = async (targetUserId: string, currentlyAdmin: boolean) => {
     setToggling(targetUserId)
+    const target = users.find(u => u.user_id === targetUserId)
     const { error } = await supabase.rpc('admin_set_user_admin', {
       target_user_id: targetUserId,
       make_admin: !currentlyAdmin,
@@ -750,18 +766,32 @@ function UsersTab({ currentUserId }: { currentUserId: string }) {
       setUsers(prev => prev.map(u =>
         u.user_id === targetUserId ? { ...u, is_admin: !currentlyAdmin } : u
       ))
+      logAdminAction({
+        action: 'toggle_admin',
+        target_type: 'user',
+        target_id: targetUserId,
+        target_label: target?.display_name ?? targetUserId,
+        metadata: { granted: !currentlyAdmin },
+      })
     }
     setToggling(null)
   }
 
   const deleteUser = async (targetUserId: string) => {
     setDeleting(true)
+    const target = users.find(u => u.user_id === targetUserId)
     const { error } = await supabase.rpc('admin_delete_user', { target_user_id: targetUserId })
     if (error) {
       console.error('Delete user error:', error)
       alert('Failed to delete user. Make sure the admin_delete_user RPC is deployed.')
     } else {
       setUsers(prev => prev.filter(u => u.user_id !== targetUserId))
+      logAdminAction({
+        action: 'delete_user_profile',
+        target_type: 'user',
+        target_id: targetUserId,
+        target_label: target?.display_name ?? targetUserId,
+      })
     }
     setDeleting(false)
     setDeleteTarget(null)
@@ -1093,12 +1123,19 @@ function RoundsTab() {
 
   const deleteRound = async (roundId: string) => {
     setDeleting(true)
+    const targetLabel = deleteTarget?.name ?? roundId
     const { error } = await supabase.rpc('admin_delete_round', { target_round_id: roundId })
     if (error) {
       console.error('Delete round error:', error)
       alert('Failed to delete round. Make sure the admin_delete_round RPC is deployed.')
     } else {
       setRounds(prev => prev.filter(r => r.id !== roundId))
+      logAdminAction({
+        action: 'delete_round',
+        target_type: 'round',
+        target_id: roundId,
+        target_label: targetLabel,
+      })
     }
     setDeleting(false)
     setDeleteTarget(null)
