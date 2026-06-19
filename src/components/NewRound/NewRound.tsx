@@ -433,14 +433,15 @@ function PlayerPicker({
 
   // When searching, show all players flat (no tiers)
   const isSearching = query.trim().length > 0
+  const byName = (a: Player, b: Player) => a.name.localeCompare(b.name)
   const filtered = isSearching
-    ? allPlayers.filter(p => p.name.toLowerCase().includes(query.toLowerCase()))
+    ? allPlayers.filter(p => p.name.toLowerCase().includes(query.toLowerCase())).sort(byName)
     : allPlayers
 
-  // Tier the players for non-search display
+  // Tier the players for non-search display; sort within each tier so 16+ rosters scan cleanly.
   const me = allPlayers.find(p => p.id === userId)
-  const friends = allPlayers.filter(p => p.id !== userId && recentFriendIds.has(p.id)).slice(0, 10)
-  const others = allPlayers.filter(p => p.id !== userId && !recentFriendIds.has(p.id))
+  const friends = allPlayers.filter(p => p.id !== userId && recentFriendIds.has(p.id)).sort(byName).slice(0, 10)
+  const others = allPlayers.filter(p => p.id !== userId && !recentFriendIds.has(p.id)).sort(byName)
 
   const toggle = (id: string) => {
     setSelectedIds(prev => {

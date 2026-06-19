@@ -146,6 +146,15 @@ export function EventSetup({ userId, onStart, onCancel, onAddCourse }: Props) {
     setGroupError(null)
   }, [playerIdKey])
 
+  // Default the treasurer to the round creator once they appear in the selected list.
+  // Only sets when treasurerId is still null so a manual pick is never overwritten.
+  useEffect(() => {
+    if (treasurerId) return
+    if (selectedPlayers.some(p => p.id === userId)) {
+      setTreasurerId(userId)
+    }
+  }, [playerIdKey, treasurerId, userId])
+
   const togglePlayer = (player: Player) => {
     setSelectedPlayers(prev =>
       prev.some(p => p.id === player.id)
@@ -287,10 +296,12 @@ export function EventSetup({ userId, onStart, onCancel, onAddCourse }: Props) {
     c.name.toLowerCase().includes(courseSearch.toLowerCase())
   )
 
-  const filteredPlayers = availablePlayers.filter(p =>
-    p.name.toLowerCase().includes(playerSearch.toLowerCase()) &&
-    !selectedPlayers.some(sp => sp.id === p.id)
-  )
+  const filteredPlayers = availablePlayers
+    .filter(p =>
+      p.name.toLowerCase().includes(playerSearch.toLowerCase()) &&
+      !selectedPlayers.some(sp => sp.id === p.id)
+    )
+    .sort((a, b) => a.name.localeCompare(b.name))
 
   const GAME_OPTIONS: { type: GameType; label: string; emoji: string }[] = [
     { type: 'skins', label: 'Skins', emoji: '🎰' },

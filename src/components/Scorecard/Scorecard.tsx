@@ -252,7 +252,11 @@ export function Scorecard({ userId, roundId, onEndRound, onHome, readOnly: readO
   const roundRef = useRef(round)
   roundRef.current = round
   const { shareRef, sharing, shareImage } = useShareImage('gimme-leaderboard')
-  const [scoreToast, setScoreToast] = useState<{ message: string; type: 'info' | 'success' | 'error' } | null>(null)
+  const [scoreToast, setScoreToast] = useState<{
+    message: string
+    type: 'info' | 'success' | 'error'
+    undo?: { previousScore: number; playerId: string; holeNumber: number }
+  } | null>(null)
   const [showRoundSummary, setShowRoundSummary] = useState(true)
   const [showBatchEntry, setShowBatchEntry] = useState(false)
   const [batchScores, setBatchScores] = useState<Record<string, Record<number, string>>>({})
@@ -545,10 +549,28 @@ export function Scorecard({ userId, roundId, onEndRound, onHome, readOnly: readO
     return hs?.grossScore ?? par
   }
 
-  const showScoreToast = (message: string, type: 'success' | 'error' | 'info') => {
+  const showScoreToast = (
+    message: string,
+    type: 'success' | 'error' | 'info',
+    undo?: { previousScore: number; playerId: string; holeNumber: number },
+  ) => {
     if (scoreToastTimerRef.current) clearTimeout(scoreToastTimerRef.current)
-    setScoreToast({ message, type })
-    scoreToastTimerRef.current = setTimeout(() => setScoreToast(null), type === 'error' ? 3000 : 2000)
+    setScoreToast({ message, type, undo })
+    const duration = undo ? 4000 : type === 'error' ? 3000 : 2000
+    scoreToastTimerRef.current = setTimeout(() => setScoreToast(null), duration)
+  }
+
+  const performScoreUndo = () => {
+    const undo = scoreToast?.undo
+    if (!undo) return
+    if (scoreToastTimerRef.current) clearTimeout(scoreToastTimerRef.current)
+    setScoreToast(null)
+    setHoleScores(prev => prev.map(s =>
+      s.playerId === undo.playerId && s.holeNumber === undo.holeNumber
+        ? { ...s, grossScore: undo.previousScore }
+        : s
+    ))
+    void persistScoreRef.current?.(undo.playerId, undo.holeNumber, undo.previousScore)
   }
 
   // Server write — invoked by the debounced setScore wrapper after 250ms of
@@ -590,6 +612,7 @@ export function Scorecard({ userId, roundId, onEndRound, onHome, readOnly: readO
           }
         }
       } else if (selfEntryOnly && myParticipant && playerId === myParticipant.playerId) {
+        const prevScore = existing?.grossScore
         if (existing) {
           setHoleScores(prev => prev.map(s => s.id === existing.id ? { ...s, grossScore } : s))
         } else {
@@ -605,8 +628,15 @@ export function Scorecard({ userId, roundId, onEndRound, onHome, readOnly: readO
           p_gross_score: grossScore,
         })
         if (error) throw error
-        showScoreToast("Saved. You're good.", 'success')
+        showScoreToast(
+          "Saved. You're good.",
+          'success',
+          prevScore !== undefined && prevScore !== grossScore
+            ? { previousScore: prevScore, playerId, holeNumber }
+            : undefined,
+        )
       } else if (existing) {
+        const prevScore = existing.grossScore
         setHoleScores(prev => prev.map(s => s.id === existing.id ? { ...s, grossScore } : s))
         const query = supabase.from('hole_scores').update({ gross_score: grossScore }).eq('id', existing.id)
         if (existing.updatedAt) query.eq('updated_at', existing.updatedAt)
@@ -623,7 +653,13 @@ export function Scorecard({ userId, roundId, onEndRound, onHome, readOnly: readO
         }
         const updated = rowToHoleScore(data[0])
         setHoleScores(prev => prev.map(s => s.id === existing.id ? { ...s, grossScore, updatedAt: updated.updatedAt } : s))
-        showScoreToast("Saved. You're good.", 'success')
+        showScoreToast(
+          "Saved. You're good.",
+          'success',
+          prevScore !== grossScore
+            ? { previousScore: prevScore, playerId, holeNumber }
+            : undefined,
+        )
       } else {
         const newScore: HoleScore = { id: uuidv4(), roundId, playerId, holeNumber, grossScore }
         setHoleScores(prev => prev.find(s => s.playerId === playerId && s.holeNumber === holeNumber) ? prev : [...prev, newScore])
@@ -1300,10 +1336,10 @@ export function Scorecard({ userId, roundId, onEndRound, onHome, readOnly: readO
                         setRound(prev => prev ? { ...prev, inviteCode: code! } : prev)
                       }
                       const title = event ? `Join ${event.name}!` : 'Join my round!'
-                      const text = event
-                        ? `Join ${event.name} on Gimme Golf! Code: ${code}`
-                        : `Join my round on Gimme Golf! Code: ${code}`
                       const url = `${window.location.origin}${window.location.pathname}?join=${code}`
+                      const text = event
+                        ? `Join ${event.name} on Gimme Golf! Code: ${code}\n${url}`
+                        : `Join my round on Gimme Golf! Code: ${code}\n${url}`
                       if (navigator.share) {
                         try { await navigator.share({ title, text, url }) } catch {}
                       } else {
@@ -1354,7 +1390,7 @@ export function Scorecard({ userId, roundId, onEndRound, onHome, readOnly: readO
                       }
                       const url = `${window.location.origin}${window.location.pathname}?spectate=${code}`
                       const title = 'Watch live leaderboard!'
-                      const text = `Follow the round live on Gimme Golf!`
+                      const text = `Follow the round live on Gimme Golf!\n${url}`
                       if (navigator.share) {
                         try { await navigator.share({ title, text, url }) } catch {}
                       } else {
@@ -2580,12 +2616,20 @@ export function Scorecard({ userId, roundId, onEndRound, onHome, readOnly: readO
       {/* Score status toast */}
       {scoreToast && (
         <div className="fixed top-20 inset-x-0 z-50 flex justify-center pointer-events-none">
-          <div className={`px-4 py-2 rounded-xl shadow-lg text-sm font-semibold ${
+          <div className={`px-4 py-2 rounded-xl shadow-lg text-sm font-semibold flex items-center gap-3 ${
             scoreToast.type === 'success' ? 'bg-green-600 text-white' :
             scoreToast.type === 'error' ? 'bg-red-600 text-white' :
             'bg-blue-600 text-white'
           }`}>
-            {scoreToast.message}
+            <span>{scoreToast.message}</span>
+            {scoreToast.undo && (
+              <button
+                onClick={performScoreUndo}
+                className="underline font-bold pointer-events-auto active:opacity-70"
+              >
+                Undo
+              </button>
+            )}
           </div>
         </div>
       )}
