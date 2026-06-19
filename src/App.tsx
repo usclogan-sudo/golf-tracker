@@ -10,6 +10,7 @@ import { NotificationToast } from './components/NotificationToast'
 import { NotificationBadge } from './components/NotificationBadge'
 import { Auth } from './components/Auth/Auth'
 import { ResetPassword } from './components/Auth/ResetPassword'
+import { FeedbackModal } from './components/FeedbackModal'
 import { GuestBanner } from './components/GuestBanner/GuestBanner'
 import { ConfirmModal } from './components/ConfirmModal'
 import { UserAvatar } from './components/AvatarPicker'
@@ -173,6 +174,7 @@ function Home({
   const [unsettledAmounts, setUnsettledAmounts] = useState<{ youOwe: number; owedToYou: number }>({ youOwe: 0, owedToYou: 0 })
   const [fetchError, setFetchError] = useState<string | null>(null)
   const [showAnonBlock, setShowAnonBlock] = useState(false)
+  const [feedbackOpen, setFeedbackOpen] = useState(false)
   const [betaDismissed, setBetaDismissed] = useState(() => localStorage.getItem('gimme_beta_dismissed') === '1')
   const [retryKey, setRetryKey] = useState(0)
 
@@ -642,8 +644,8 @@ function Home({
         </section>
 
         {/* Send Feedback — at the bottom */}
-        <a
-          href="mailto:usclogan@gmail.com?subject=Gimme%20Beta%20Feedback"
+        <button
+          onClick={() => setFeedbackOpen(true)}
           className="block w-full bg-white dark:bg-gray-800 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700 p-4 text-left active:bg-gray-50 dark:active:bg-gray-700 transition-colors"
         >
           <div className="flex items-center gap-3">
@@ -653,7 +655,7 @@ function Home({
               <p className="text-xs text-gray-500 dark:text-gray-400">Help us improve the beta</p>
             </div>
           </div>
-        </a>
+        </button>
 
         <p className="text-center text-xs text-gray-400 pb-8">Gimme Golf · Beta</p>
       </main>
@@ -676,6 +678,13 @@ function Home({
             </div>
           </div>
         </div>
+      )}
+
+      {feedbackOpen && (
+        <FeedbackModal
+          userId={isAnonymous ? null : userId}
+          onClose={() => setFeedbackOpen(false)}
+        />
       )}
     </div>
   )
