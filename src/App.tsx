@@ -6,6 +6,7 @@ import { flush as flushOfflineQueue, getPending as getOfflinePending } from './l
 import { safeWrite } from './lib/safeWrite'
 import { setSentryUser, clearSentryUser } from './lib/sentry'
 import { checkAppVersion } from './lib/appVersion'
+import { SHOW_PROP_BETS } from './lib/featureFlags'
 import { NotificationToast } from './components/NotificationToast'
 import { NotificationBadge } from './components/NotificationBadge'
 import { Auth } from './components/Auth/Auth'
@@ -462,12 +463,16 @@ function Home({
                   </div>
                 </button>
                 <div className="bg-amber-100 px-5 py-2 flex justify-between">
-                  <button
-                    onClick={(e) => { e.stopPropagation(); onViewProps?.(round.id) }}
-                    className="text-purple-600 text-sm font-semibold hover:text-purple-800 transition-colors"
-                  >
-                    Props
-                  </button>
+                  {SHOW_PROP_BETS ? (
+                    <button
+                      onClick={(e) => { e.stopPropagation(); onViewProps?.(round.id) }}
+                      className="text-purple-600 text-sm font-semibold hover:text-purple-800 transition-colors"
+                    >
+                      Props
+                    </button>
+                  ) : (
+                    <span />
+                  )}
                   {onEndRound && (
                     <button
                       onClick={(e) => { e.stopPropagation(); onEndRound(round.id) }}

@@ -68,6 +68,7 @@ import type {
 } from '../../types'
 import { useShareImage } from '../ShareCard'
 import { reportSupabaseError } from '../../lib/sentry'
+import { SHOW_HOLE_BETS, SHOW_PROP_BETS } from '../../lib/featureFlags'
 
 interface Props {
   userId: string
@@ -2088,7 +2089,7 @@ export function Scorecard({ userId, roundId, onEndRound, onHome, readOnly: readO
             })()}
 
             {/* Hole Bets panel (junks + side bets) */}
-            {showGameStatus && !readOnly && (
+            {SHOW_HOLE_BETS && showGameStatus && !readOnly && (
               <HoleBetsPanel
                 currentHole={currentHole}
                 players={players}
@@ -2111,7 +2112,7 @@ export function Scorecard({ userId, roundId, onEndRound, onHome, readOnly: readO
             )}
 
             {/* Props panel */}
-            {showGameStatus && !readOnly && (
+            {SHOW_PROP_BETS && showGameStatus && !readOnly && (
               <PropBetsPanel
                 currentHole={currentHole}
                 players={players}

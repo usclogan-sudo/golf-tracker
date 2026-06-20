@@ -3,6 +3,7 @@ import { v4 as uuidv4 } from 'uuid'
 import { supabase, courseToRow, playerToRow, roundToRow, roundPlayerToRow, buyInToRow, rowToCourse, rowToPlayer, rowToSharedCourse, rowToGamePreset, rowToUserProfile, generateInviteCode } from '../../lib/supabase'
 import { safeWrite } from '../../lib/safeWrite'
 import { reportSupabaseError } from '../../lib/sentry'
+import { SHOW_HOLE_BETS } from '../../lib/featureFlags'
 import { fmtMoney, JUNK_LABELS } from '../../lib/gameLogic'
 import { parseDollarsToCents, parsePointsValue } from '../../lib/money'
 import { venturaCourses } from '../../data/venturaCourses'
@@ -1273,6 +1274,7 @@ function GameSetup({
         </section>
 
         {/* Junk Side Bets */}
+        {SHOW_HOLE_BETS && (
         <section className="bg-white dark:bg-gray-800 rounded-2xl shadow-sm p-4 space-y-3">
           <div className="flex items-center justify-between">
             <div>
@@ -1353,6 +1355,7 @@ function GameSetup({
             </>
           )}
         </section>
+        )}
 
         {/* Buy-in */}
         <section className="bg-white dark:bg-gray-800 rounded-2xl shadow-sm p-4 space-y-3">
