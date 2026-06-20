@@ -40,11 +40,13 @@ jobs:
           export VITE_SUPABASE_URL=$(echo "$RAW_URL" | tr -d '\r\n ')
           export VITE_SUPABASE_ANON_KEY=$(echo "$RAW_KEY" | tr -d '\r\n ')
           export VITE_GOLF_COURSE_API_KEY=$(echo "$RAW_GOLF_KEY" | tr -d '\r\n ')
+          export VITE_SENTRY_DSN=$(echo "$RAW_SENTRY_DSN" | tr -d '\r\n ')
           npm run build
         env:
           RAW_URL: ${{ vars.VITE_SUPABASE_URL }}
           RAW_KEY: ${{ vars.VITE_SUPABASE_ANON_KEY }}
           RAW_GOLF_KEY: ${{ vars.VITE_GOLF_COURSE_API_KEY }}
+          RAW_SENTRY_DSN: ${{ vars.VITE_SENTRY_DSN }}
 
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
