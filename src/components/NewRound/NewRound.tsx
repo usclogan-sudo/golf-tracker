@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { v4 as uuidv4 } from 'uuid'
 import { supabase, courseToRow, playerToRow, roundToRow, roundPlayerToRow, buyInToRow, rowToCourse, rowToPlayer, rowToSharedCourse, rowToGamePreset, rowToUserProfile, generateInviteCode } from '../../lib/supabase'
 import { safeWrite } from '../../lib/safeWrite'
+import { reportSupabaseError } from '../../lib/sentry'
 import { fmtMoney, JUNK_LABELS } from '../../lib/gameLogic'
 import { parseDollarsToCents, parsePointsValue } from '../../lib/money'
 import { venturaCourses } from '../../data/venturaCourses'
@@ -1854,6 +1855,7 @@ function TreasurerAndBuyIns({
       setCreateError(null)
       const roundResult = await supabase.from('rounds').insert(roundToRow(round, userId))
       if (roundResult.error) {
+        reportSupabaseError(roundResult.error, 'create_round.rounds', { roundId, playerCount: players.length, gameType: game.type })
         setCreateError('Failed to create round. Check your connection and try again.')
         setSaving(false)
         return
@@ -1865,6 +1867,8 @@ function TreasurerAndBuyIns({
 
       const insertError = rpResult.error || biResult.error
       if (insertError) {
+        reportSupabaseError(rpResult.error, 'create_round.round_players', { roundId })
+        reportSupabaseError(biResult.error, 'create_round.buy_ins', { roundId })
         setCreateError('Failed to create round. Check your connection and try again.')
         setSaving(false)
         return
@@ -2151,18 +2155,21 @@ export function NewRound({ userId, onStart, onCancel, onAddCourse, initialStakes
       // and Promise.all races caused fk_round_players_round violations.
       const roundResult = await supabase.from('rounds').insert(roundToRow(round, userId))
       if (roundResult.error) {
+        reportSupabaseError(roundResult.error, 'direct_create_round.rounds', { roundId, playerCount: players.length, gameType: g.type })
         setDirectCreateError('Failed to create round. Check your connection and try again.')
         setCreatingDirect(false)
         return
       }
       const rpResult = await supabase.from('round_players').insert(roundPlayers.map(rp => roundPlayerToRow(rp, userId)))
       if (rpResult.error) {
+        reportSupabaseError(rpResult.error, 'direct_create_round.round_players', { roundId })
         setDirectCreateError('Failed to create round. Check your connection and try again.')
         setCreatingDirect(false)
         return
       }
       onStart(roundId)
-    } catch {
+    } catch (err) {
+      reportSupabaseError(err, 'direct_create_round.exception')
       setDirectCreateError('Failed to create round. Check your connection and try again.')
     } finally {
       setCreatingDirect(false)

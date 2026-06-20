@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { supabase } from '../../lib/supabase'
+import { reportSupabaseError } from '../../lib/sentry'
 
 interface RoundPreview {
   id: string
@@ -158,6 +159,14 @@ export function JoinRound({ userId, initialCode, onJoined, onCancel }: Props) {
         onJoined(preview.id)
       }
     } catch (err: any) {
+      // The "already claimed" path is expected user behavior, not an error worth
+      // capturing. Everything else is a real Supabase/RPC failure.
+      if (!err.message?.includes('already claimed')) {
+        reportSupabaseError(err, 'join_round_or_event', {
+          mode: eventPreview ? 'event' : 'round',
+          inviteCode: code.toUpperCase().trim(),
+        })
+      }
       setError(err.message?.includes('already claimed')
         ? 'This player is already claimed by another user'
         : err.message ?? 'Failed to join')

@@ -31,4 +31,27 @@ export function clearSentryUser() {
   Sentry.setUser(null)
 }
 
+/**
+ * Report a Supabase `{ error }` return value to Sentry without disrupting the
+ * caller's existing error-handling flow. Use at write sites where today an
+ * error gets converted to a generic UI message and disappears — like the FK
+ * race in startRound, where the Postgres-side detail
+ * ("violates foreign key constraint fk_round_players_round") never made it
+ * past the catch block.
+ *
+ * No-ops when error is null/undefined so it's safe to call unconditionally
+ * after every `{ error } = await supabase...` destructure.
+ */
+export function reportSupabaseError(
+  error: unknown,
+  op: string,
+  context?: Record<string, unknown>,
+): void {
+  if (!error) return
+  Sentry.captureException(error, {
+    tags: { area: 'supabase', op },
+    extra: context,
+  })
+}
+
 export { Sentry }

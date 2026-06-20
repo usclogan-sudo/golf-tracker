@@ -67,6 +67,7 @@ import type {
   Game,
 } from '../../types'
 import { useShareImage } from '../ShareCard'
+import { reportSupabaseError } from '../../lib/sentry'
 
 interface Props {
   userId: string
@@ -665,7 +666,7 @@ export function Scorecard({ userId, roundId, onEndRound, onHome, readOnly: readO
         if (error) throw error
         showScoreToast("Saved. You're good.", 'success')
       }
-    } catch {
+    } catch (err) {
       if (!isOnline) {
         const live = holeScores.find(s => s.playerId === playerId && s.holeNumber === holeNumber)
         if (live) {
@@ -687,6 +688,12 @@ export function Scorecard({ userId, roundId, onEndRound, onHome, readOnly: readO
         setPendingCount(getPending())
         showScoreToast('Saved offline — will sync when connected', 'success')
       } else {
+        // Online failure path — the actual error never reached the user.
+        // Capture so the underlying Postgres/RPC error is visible.
+        reportSupabaseError(err, 'persist_score', {
+          roundId, playerId, holeNumber, grossScore,
+          path: isEventRound ? 'event_rpc' : selfEntryOnly ? 'participant_rpc' : existing ? 'update' : 'insert',
+        })
         setSaveError('Score failed to save — check your connection')
         setLastFailedSave({ playerId, grossScore })
       }

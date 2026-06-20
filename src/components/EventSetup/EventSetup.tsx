@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { v4 as uuidv4 } from 'uuid'
 import { supabase, rowToCourse, rowToPlayer, rowToSharedCourse, roundToRow, roundPlayerToRow, buyInToRow, eventToRow, generateInviteCode, rowToUserProfile } from '../../lib/supabase'
 import { safeWrite } from '../../lib/safeWrite'
+import { reportSupabaseError } from '../../lib/sentry'
 import { fmtMoney } from '../../lib/gameLogic'
 import { autoAssignGroups, autoAssignShotgunStarts, MAX_PER_GROUP } from '../../lib/eventUtils'
 import { parseDollarsToCents } from '../../lib/money'
@@ -260,13 +261,29 @@ export function EventSetup({ userId, onStart, onCancel, onAddCourse }: Props) {
         teePlayed: p.tee,
       }))
 
-      // Insert event first (round references it), then round + related data
+      // Insert event first (round references it), then the round (parent), then
+      // round_players + buy_ins in parallel. round_players and buy_ins both have
+      // FK constraints on rounds(id), so racing them via Promise.all caused
+      // fk_round_players_round / fk_buy_ins_round violations (same bug pattern
+      // fixed in NewRound.startRound in commit d6358ff).
       await safeWrite(supabase.from('events').insert(eventToRow(golfEvent, userId)), 'insert event')
-      await Promise.all([
-        supabase.from('rounds').insert(roundToRow(round, userId)),
+      const roundResult = await supabase.from('rounds').insert(roundToRow(round, userId))
+      if (roundResult.error) {
+        reportSupabaseError(roundResult.error, 'create_event.rounds', { eventId, roundId, playerCount: selectedPlayers.length })
+        throw roundResult.error
+      }
+      const [rpResult, biResult] = await Promise.all([
         supabase.from('round_players').insert(roundPlayers.map(rp => roundPlayerToRow(rp, userId))),
         supabase.from('buy_ins').insert(buyIns.map(b => buyInToRow(b, userId))),
       ])
+      if (rpResult.error) {
+        reportSupabaseError(rpResult.error, 'create_event.round_players', { eventId, roundId })
+        throw rpResult.error
+      }
+      if (biResult.error) {
+        reportSupabaseError(biResult.error, 'create_event.buy_ins', { eventId, roundId })
+        throw biResult.error
+      }
 
       // Insert the event manager participant (the creator)
       await safeWrite(supabase.from('event_participants').insert({
