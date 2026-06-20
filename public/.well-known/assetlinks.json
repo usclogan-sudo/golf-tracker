@@ -1,0 +1,13 @@
+[
+  {
+    "_note": "STUB. Replace package_name with the Android package once the native partner is engaged, and replace sha256_cert_fingerprints with the production signing certificate's SHA-256. Google verifies this file at https://<your-domain>/.well-known/assetlinks.json. See https://developer.android.com/training/app-links/verify-android-applinks for the full spec.",
+    "relation": ["delegate_permission/common.handle_all_urls"],
+    "target": {
+      "namespace": "android_app",
+      "package_name": "com.gimme.golf",
+      "sha256_cert_fingerprints": [
+        "PLACEHOLDER:00:00:00:00:00:00:00:00:00:00:00:00:00:00:00:00:00:00:00:00:00:00:00:00:00:00:00:00:00:00:00"
+      ]
+    }
+  }
+]

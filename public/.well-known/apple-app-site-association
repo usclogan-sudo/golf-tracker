@@ -1,0 +1,19 @@
+{
+  "_note": "STUB. Replace with real Team ID and bundle ID once the iOS native partner is engaged. Apple verifies this file at https://<your-domain>/.well-known/apple-app-site-association. Must be served as Content-Type: application/json (configured in vercel.json) and reachable without redirect. See https://developer.apple.com/documentation/xcode/supporting-associated-domains for the full spec.",
+  "applinks": {
+    "apps": [],
+    "details": [
+      {
+        "appIDs": ["PLACEHOLDER_TEAMID.com.gimme.golf"],
+        "components": [
+          { "/": "/", "comment": "Splash / home" },
+          { "/": "/*", "?": { "join": "?*" }, "comment": "Invite-code deep link: app.gimme.golf/?join=ABC123" },
+          { "/": "/*", "?": { "spectate": "?*" }, "comment": "Spectator deep link: app.gimme.golf/?spectate=ABC123" }
+        ]
+      }
+    ]
+  },
+  "webcredentials": {
+    "apps": ["PLACEHOLDER_TEAMID.com.gimme.golf"]
+  }
+}
