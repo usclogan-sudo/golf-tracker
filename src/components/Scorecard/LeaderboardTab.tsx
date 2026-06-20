@@ -1,7 +1,6 @@
 import type { RefObject } from 'react'
 import { Tooltip } from '../ui/Tooltip'
 import { ShareCard } from '../ShareCard'
-import type { ShareCardLeaderboardEntry } from '../ShareCard'
 import { strokesOnHole, fmtMoney } from '../../lib/gameLogic'
 import type {
   SkinsResult, BestBallResult, NassauResult, WolfResult, BBBResult,
@@ -78,71 +77,6 @@ export function LeaderboardTab({
   board.forEach((entry, idx) => {
     positions.push(idx === 0 ? 1 : entry.net === board[idx - 1].net ? positions[idx - 1] : idx + 1)
   })
-
-  // Share card data
-  const leaderboard: ShareCardLeaderboardEntry[] = board.map((entry, idx) => ({
-    pos: positions[idx], name: entry.player.name, gross: entry.gross, net: entry.net, vsPar: entry.vsPar,
-  }))
-
-  const gameResults: string[] = []
-  if (skinsResult) {
-    if (skinsResult.totalSkins === 0) {
-      gameResults.push('Skins: No skins won yet')
-    } else {
-      players.forEach(p => {
-        const skins = skinsResult.skinsWon[p.id] ?? 0
-        if (skins > 0) gameResults.push(`${p.name}: ${skins} skin${skins !== 1 ? 's' : ''}`)
-      })
-    }
-  }
-  if (bestBallResult) {
-    gameResults.push(`Team A: ${bestBallResult.holesWon.A}W · Team B: ${bestBallResult.holesWon.B}W · Tied: ${bestBallResult.holesWon.tied}`)
-  }
-  if (nassauResult) {
-    [{ l: 'Front', s: nassauResult.front }, { l: 'Back', s: nassauResult.back }, { l: 'Total', s: nassauResult.total }].forEach(({ l, s }) => {
-      const winner = s.winner ? players.find(p => p.id === s.winner)?.name : null
-      gameResults.push(`${l}: ${s.incomplete ? 'In progress' : winner ? winner : 'Tied'}`)
-    })
-  }
-  if (wolfResult) {
-    players.slice().sort((a, b) => (wolfResult.netUnits[b.id] ?? 0) - (wolfResult.netUnits[a.id] ?? 0)).forEach(p => {
-      const u = wolfResult.netUnits[p.id] ?? 0
-      gameResults.push(`${p.name}: ${u > 0 ? '+' : ''}${u} unit${Math.abs(u) !== 1 ? 's' : ''}`)
-    })
-  }
-  if (bbbResult) {
-    players.slice().sort((a, b) => (bbbResult.pointsWon[b.id] ?? 0) - (bbbResult.pointsWon[a.id] ?? 0)).forEach(p => {
-      const pts = bbbResult.pointsWon[p.id] ?? 0
-      gameResults.push(`${p.name}: ${pts} pt${pts !== 1 ? 's' : ''}`)
-    })
-  }
-  if (hammerResult) {
-    players.slice().sort((a, b) => (hammerResult.netCents[b.id] ?? 0) - (hammerResult.netCents[a.id] ?? 0)).forEach(p => {
-      const net = hammerResult.netCents[p.id] ?? 0
-      gameResults.push(`${p.name}: ${net > 0 ? '+' : ''}${fmtMoney(Math.abs(net))}`)
-    })
-  }
-  if (vegasResult) {
-    gameResults.push(`Team A: ${vegasResult.netPoints.A} pts · Team B: ${vegasResult.netPoints.B} pts`)
-    gameResults.push(vegasResult.winner === 'tie' ? 'Result: Tied' : `Winner: Team ${vegasResult.winner}`)
-  }
-  if (stablefordResult) {
-    players.slice().sort((a, b) => (stablefordResult.points[b.id] ?? 0) - (stablefordResult.points[a.id] ?? 0)).forEach(p => {
-      gameResults.push(`${p.name}: ${stablefordResult.points[p.id] ?? 0} pts`)
-    })
-  }
-  if (bankerResult) {
-    players.slice().sort((a, b) => (bankerResult.netCents[b.id] ?? 0) - (bankerResult.netCents[a.id] ?? 0)).forEach(p => {
-      const net = bankerResult.netCents[p.id] ?? 0
-      gameResults.push(`${p.name}: ${net > 0 ? '+' : ''}${fmtMoney(Math.abs(net))}`)
-    })
-  }
-  if (quotaResult) {
-    players.slice().sort((a, b) => (quotaResult.netPoints[b.id] ?? 0) - (quotaResult.netPoints[a.id] ?? 0)).forEach(p => {
-      const net = quotaResult.netPoints[p.id] ?? 0
-      gameResults.push(`${p.name}: ${net > 0 ? '+' : ''}${net} (quota ${quotaResult.quotas[p.id] ?? 0})`)
-    })
-  }
 
   const gameLabel = game ? (GAME_LABELS[game.type] ?? game.type) : null
 
@@ -468,17 +402,20 @@ export function LeaderboardTab({
         )}
         {sharing ? 'Creating image…' : 'Share Leaderboard'}
       </button>
+      {/*
+        In-round leaderboard share: the brand v1.0 ShareCard is money-standings-shaped
+        and we don't aggregate per-player net cents mid-round here. Until that aggregator
+        lands, the in-round share renders the seal + context + "All square." fallback.
+        The post-round Share Results in SettleUp is the polished pipeline.
+      */}
       <div style={{ position: 'absolute', left: -9999, top: 0 }}>
         <ShareCard
           ref={shareRef}
           courseName={snapshot.courseName}
           date={round!.date}
           gameLabel={gameLabel}
-          stakesMode={game?.stakesMode}
-          leaderboard={leaderboard}
-          gameResults={gameResults}
-          payouts={[]}
-          totalPot={null}
+          standings={[]}
+          settlements={[]}
         />
       </div>
     </div>
