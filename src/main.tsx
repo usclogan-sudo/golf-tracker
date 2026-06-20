@@ -36,7 +36,7 @@ createRoot(document.getElementById('root')!).render(
 
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
-    navigator.serviceWorker.register('/golf-tracker/sw.js').then((reg) => {
+    navigator.serviceWorker.register('/sw.js').then((reg) => {
       // Check for updates every 5 minutes
       setInterval(() => reg.update().catch(() => {}), 5 * 60 * 1000)
 

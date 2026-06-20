@@ -3,10 +3,11 @@
   <head>
     <meta charset="utf-8" />
     <script>
-      // Redirect all 404s to index.html for SPA routing
-      // Preserves the hash (where Supabase puts auth tokens)
+      // GitHub Pages SPA-routing fallback. On Vercel this file is never
+      // served because vercel.json rewrites all unknown paths to index.html
+      // natively. Kept for safety in case it ever needs to fall back.
       window.location.replace(
-        '/golf-tracker/' + window.location.hash
+        '/' + window.location.hash
       );
     </script>
   </head>

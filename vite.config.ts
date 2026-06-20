@@ -26,7 +26,10 @@ function stampServiceWorker(): Plugin {
 // https://vite.dev/config/
 export default defineConfig({
   plugins: [react(), stampServiceWorker()],
-  base: '/golf-tracker/',
+  // Root path now that we serve from Vercel (gimme-app.vercel.app/...) instead
+  // of GitHub Pages (usclogan-sudo.github.io/golf-tracker/...). All static asset
+  // references update automatically because they all go through this base.
+  base: '/',
   define: {
     __APP_VERSION__: JSON.stringify(APP_VERSION),
     __APP_PLATFORM__: JSON.stringify('web'),

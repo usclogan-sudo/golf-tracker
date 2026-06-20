@@ -60,7 +60,7 @@ export function Auth({ inviteCode, sessionExpired }: AuthProps = {}) {
     const { error: err } = await supabase.auth.signUp({
       email: email.trim(),
       password,
-      options: { emailRedirectTo: window.location.origin + '/golf-tracker/' },
+      options: { emailRedirectTo: window.location.origin + '/' },
     })
     if (err) {
       setError(friendlyError(err.message))
@@ -84,7 +84,7 @@ export function Auth({ inviteCode, sessionExpired }: AuthProps = {}) {
     setLoading(true)
     setError(null)
     const { error: err } = await supabase.auth.resetPasswordForEmail(email.trim(), {
-      redirectTo: window.location.origin + '/golf-tracker/',
+      redirectTo: window.location.origin + '/',
     })
     if (err) {
       setError(friendlyError(err.message))
