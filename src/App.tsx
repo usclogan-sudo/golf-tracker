@@ -1117,7 +1117,11 @@ export default function App() {
       />
     ) : screen === 'ledger' ? (
       <Ledger userId={userId} onBack={goHome} />
-    ) : screen === 'prop-bets' && activeRoundId ? (
+    ) : screen === 'prop-bets' && activeRoundId && SHOW_PROP_BETS ? (
+      // Gated by SHOW_PROP_BETS — when false, this branch is skipped, screenContent
+      // falls through to null, and the user lands on the home screen. So even a stale
+      // 'prop-bets' state (bookmarked URL, legacy callback) routes safely to home
+      // rather than rendering a hidden surface.
       <PropBetsScreen
         roundId={activeRoundId}
         userId={userId}
