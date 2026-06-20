@@ -1,10 +1,17 @@
-import { StrictMode } from 'react'
+import { StrictMode, lazy, Suspense } from 'react'
 import { createRoot } from 'react-dom/client'
 import { initSentry, Sentry } from './lib/sentry'
 import './index.css'
 import App from './App.tsx'
 
 initSentry()
+
+// Brand QA preview — bypasses auth and renders the result-card scenarios.
+// Reachable at /golf-tracker/?preview=share-card. Removing the query param returns to the app.
+const previewParam = new URLSearchParams(window.location.search).get('preview')
+const ShareCardPreview = previewParam === 'share-card'
+  ? lazy(() => import('./components/ShareCard/ShareCardPreview').then(m => ({ default: m.ShareCardPreview })))
+  : null
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
@@ -16,7 +23,13 @@ createRoot(document.getElementById('root')!).render(
         <button onClick={() => window.location.reload()} style={{ marginTop: 16, padding: '8px 16px' }}>Reload</button>
       </div>
     )}>
-      <App />
+      {ShareCardPreview ? (
+        <Suspense fallback={<div style={{ minHeight: '100vh', background: '#16263B' }} />}>
+          <ShareCardPreview />
+        </Suspense>
+      ) : (
+        <App />
+      )}
     </Sentry.ErrorBoundary>
   </StrictMode>,
 )

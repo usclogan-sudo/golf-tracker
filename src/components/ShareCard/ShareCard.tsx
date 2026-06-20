@@ -30,7 +30,7 @@ const CREAM_MUTED = 'rgba(242, 236, 221, 0.62)'
 const SERIF = '"Playfair Display", Georgia, serif'
 const SANS  = 'Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif'
 
-const SUBLINES = [
+export const SUBLINES = [
   'Standings are official.',
   'Squared away.',
   'Card of the year.',
@@ -41,20 +41,20 @@ const SUBLINES = [
   'Lunch is on {lastPlace}.',
 ]
 
-function fmt(cents: number, withSign = false): string {
+export function fmt(cents: number, withSign = false): string {
   const abs = new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(Math.abs(cents) / 100)
   if (!withSign) return abs
   if (cents === 0) return abs
   return (cents > 0 ? '+' : '−') + abs
 }
 
-function hashStr(s: string): number {
+export function hashStr(s: string): number {
   let h = 0
   for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) | 0
   return Math.abs(h)
 }
 
-function pickSubline(winner: string, lastPlace: string | null, salt: string): string {
+export function pickSubline(winner: string, lastPlace: string | null, salt: string): string {
   const pool = SUBLINES.filter(line => lastPlace || !line.includes('{lastPlace}'))
   const idx = hashStr(salt + winner) % pool.length
   return pool[idx]
@@ -219,6 +219,8 @@ export const ShareCard = forwardRef<HTMLDivElement, ShareCardProps>(function Sha
                   style={{
                     display: 'flex',
                     justifyContent: 'space-between',
+                    alignItems: 'baseline',
+                    gap: 12,
                     fontFamily: SERIF,
                     fontWeight: isWinner ? 700 : 500,
                     fontSize: 18,
@@ -227,8 +229,10 @@ export const ShareCard = forwardRef<HTMLDivElement, ShareCardProps>(function Sha
                     borderBottom: idx < standings.length - 1 ? `1px solid ${SLATE}` : 'none',
                   }}
                 >
-                  <span>{s.name}</span>
-                  <span style={{ fontFeatureSettings: '"tnum" 1' }}>
+                  <span style={{ minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    {s.name}
+                  </span>
+                  <span style={{ fontFeatureSettings: '"tnum" 1', whiteSpace: 'nowrap', flexShrink: 0 }}>
                     {s.netCents === 0 ? 'E' : fmt(s.netCents, true)}
                   </span>
                 </div>
@@ -258,16 +262,17 @@ export const ShareCard = forwardRef<HTMLDivElement, ShareCardProps>(function Sha
                   display: 'flex',
                   justifyContent: 'space-between',
                   alignItems: 'baseline',
+                  gap: 12,
                   fontFamily: SANS,
                   fontSize: 14,
                   color: CREAM,
                   padding: '4px 0',
                 }}
               >
-                <span>
+                <span style={{ minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                   {s.fromName} <span style={{ color: BRASS }}>→</span> {s.toName}
                 </span>
-                <span style={{ fontWeight: 600, fontFeatureSettings: '"tnum" 1' }}>
+                <span style={{ fontWeight: 600, fontFeatureSettings: '"tnum" 1', whiteSpace: 'nowrap', flexShrink: 0 }}>
                   {fmt(s.amountCents)}
                 </span>
               </div>
