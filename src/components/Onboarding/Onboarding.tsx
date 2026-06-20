@@ -109,6 +109,9 @@ export function Onboarding({ userId, onComplete }: Props) {
                   onChange={e => setHandicapIndex(e.target.value)}
                   className="w-full h-12 px-4 rounded-xl border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 text-base focus:outline-none focus:ring-2 focus:ring-amber-500"
                 />
+                <p className="text-xs text-gray-400 dark:text-gray-500 mt-1.5 leading-snug">
+                  Your USGA index, if you know it. Skip if you're not sure — we'll track one for you as you play.
+                </p>
               </div>
             </div>
 

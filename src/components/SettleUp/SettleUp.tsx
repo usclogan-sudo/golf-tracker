@@ -195,8 +195,9 @@ export function SettleUp({ roundId, userId, eventId, onDone, onContinue }: Props
   const [nudgedPlayerIds, setNudgedPlayerIds] = useState<Set<string>>(new Set())
   const [calculatingSettlements, setCalculatingSettlements] = useState(false)
   const [settlementTimeout, setSettlementTimeout] = useState(false)
-  const [pendingAction, setPendingAction] = useState<{ type: 'settlement' | 'buyin' | 'bulk_buyin'; id: string; ids?: string[]; name: string; timer: ReturnType<typeof setTimeout>; prevBuyIns?: BuyIn[]; prevRecords?: SettlementRecord[] } | null>(null)
+  const [pendingAction, setPendingAction] = useState<{ type: 'settlement' | 'buyin' | 'bulk_buyin' | 'bulk_settlement'; id: string; ids?: string[]; name: string; timer: ReturnType<typeof setTimeout>; prevBuyIns?: BuyIn[]; prevRecords?: SettlementRecord[] } | null>(null)
   const [showMarkAllPaidConfirm, setShowMarkAllPaidConfirm] = useState(false)
+  const [showMarkAllSettlementsConfirm, setShowMarkAllSettlementsConfirm] = useState(false)
   const { shareRef, sharing, shareImage } = useShareImage('gimme-results')
 
   const loadSettleUpData = () => {
@@ -636,6 +637,8 @@ export function SettleUp({ roundId, userId, eventId, onDone, onContinue }: Props
       setSettlementRecords(pendingAction.prevRecords)
     } else if (pendingAction.type === 'bulk_buyin' && pendingAction.prevBuyIns) {
       setBuyIns(pendingAction.prevBuyIns)
+    } else if (pendingAction.type === 'bulk_settlement' && pendingAction.prevRecords) {
+      setSettlementRecords(pendingAction.prevRecords)
     }
     setPendingAction(null)
   }
@@ -678,6 +681,33 @@ export function SettleUp({ roundId, userId, eventId, onDone, onContinue }: Props
     }, 4000)
 
     setPendingAction({ type: 'bulk_buyin', id: 'bulk', ids: unpaidIds, name: `${unpaidIds.length} buy-ins`, timer, prevBuyIns })
+  }
+
+  const markAllSettlementsPaid = () => {
+    cancelPendingAction()
+    const prevRecords = [...settlementRecords]
+    const owedIds = settlementRecords.filter(s => s.status === 'owed').map(s => s.id)
+    if (owedIds.length === 0) return
+    const paidAt = new Date().toISOString()
+
+    setSettlementRecords(prev => prev.map(s =>
+      owedIds.includes(s.id)
+        ? { ...s, status: 'paid' as SettlementRecord['status'], paidAt: new Date(paidAt) }
+        : s
+    ))
+    setMutationError(null)
+    setShowMarkAllSettlementsConfirm(false)
+
+    const timer = setTimeout(async () => {
+      setPendingAction(null)
+      const { error } = await supabase.from('settlements').update({ status: 'paid', paid_at: paidAt }).in('id', owedIds)
+      if (error) {
+        setSettlementRecords(prevRecords)
+        setMutationError('Failed to mark settlements as paid. Please try again.')
+      }
+    }, 4000)
+
+    setPendingAction({ type: 'bulk_settlement', id: 'bulk', ids: owedIds, name: `${owedIds.length} settlement${owedIds.length !== 1 ? 's' : ''}`, timer, prevRecords })
   }
 
   // Collection Checklist: aggregate settlements by counterparty from treasurer's perspective
@@ -1420,18 +1450,38 @@ export function SettleUp({ roundId, userId, eventId, onDone, onContinue }: Props
                 </p>
               </div>
               {isTreasurer && (
-                <button
-                  onClick={async () => {
-                    await safeWrite(supabase.from('settlements').delete().eq('round_id', roundId), 'recalculate settlements')
-                    setSettlementRecords([])
-                    setSettlementsInitialized(false)
-                  }}
-                  className="text-xs text-gray-500 border border-gray-200 px-3 py-1.5 rounded-lg font-semibold active:bg-gray-100"
-                >
-                  Recalculate
-                </button>
+                <div className="flex items-center gap-2">
+                  {owedSettlements.length > 1 && (
+                    <button
+                      onClick={() => setShowMarkAllSettlementsConfirm(true)}
+                      className="text-xs text-emerald-700 bg-emerald-50 border border-emerald-200 px-3 py-1.5 rounded-lg font-semibold active:bg-emerald-100"
+                    >
+                      Mark all {owedSettlements.length} paid
+                    </button>
+                  )}
+                  <button
+                    onClick={async () => {
+                      await safeWrite(supabase.from('settlements').delete().eq('round_id', roundId), 'recalculate settlements')
+                      setSettlementRecords([])
+                      setSettlementsInitialized(false)
+                    }}
+                    className="text-xs text-gray-500 border border-gray-200 px-3 py-1.5 rounded-lg font-semibold active:bg-gray-100"
+                  >
+                    Recalculate
+                  </button>
+                </div>
               )}
             </div>
+            {showMarkAllSettlementsConfirm && (
+              <div className="bg-amber-50 border border-amber-200 rounded-xl px-4 py-3 space-y-3">
+                <p className="text-sm font-semibold text-amber-900">Mark all {owedSettlements.length} settlements as paid?</p>
+                <p className="text-xs text-amber-700">You'll have 4 seconds to undo.</p>
+                <div className="flex gap-2">
+                  <button onClick={() => setShowMarkAllSettlementsConfirm(false)} className="flex-1 h-10 bg-gray-200 text-gray-700 text-sm font-semibold rounded-xl active:bg-gray-300">Cancel</button>
+                  <button onClick={markAllSettlementsPaid} className="flex-1 h-10 bg-emerald-600 text-white text-sm font-semibold rounded-xl active:bg-emerald-700">Mark all paid</button>
+                </div>
+              </div>
+            )}
             {settlementRecords.map(s => {
               const fromPlayer = playerById(s.fromPlayerId)
               const toPlayer = playerById(s.toPlayerId)
