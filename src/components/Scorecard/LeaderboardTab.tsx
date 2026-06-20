@@ -1,12 +1,19 @@
 import type { Ref, RefObject } from 'react'
 import { Tooltip } from '../ui/Tooltip'
 import { ShareCard } from '../ShareCard'
-import { strokesOnHole, fmtMoney } from '../../lib/gameLogic'
+import type { ShareCardStanding } from '../ShareCard/ShareCard'
+import {
+  strokesOnHole, fmtMoney,
+  calculateSkinsPayouts, calculateBestBallPayouts, calculateNassauPayouts,
+  calculateWolfPayouts, calculateBBBPayouts, calculateVegasPayouts,
+  calculateStablefordPayouts, calculateQuotaPayouts,
+} from '../../lib/gameLogic'
 import type {
   SkinsResult, BestBallResult, NassauResult, WolfResult, BBBResult,
   HammerResult, VegasResult, StablefordResult, BankerResult, QuotaResult,
+  PlayerPayout,
 } from '../../lib/gameLogic'
-import type { Player, HoleScore, CourseSnapshot, Round, Game } from '../../types'
+import type { Player, HoleScore, CourseSnapshot, Round, Game, BestBallConfig, VegasConfig } from '../../types'
 
 interface Props {
   snapshot: CourseSnapshot
@@ -77,6 +84,67 @@ export function LeaderboardTab({
   board.forEach((entry, idx) => {
     positions.push(idx === 0 ? 1 : entry.net === board[idx - 1].net ? positions[idx - 1] : idx + 1)
   })
+
+  // In-round per-player net cents for the off-screen share card.
+  // - Hammer / Banker / Dots are direct-settlement: result.netCents per player is zero-sum.
+  // - Pot-based games: every player implicitly pays buyInCents in; winners receive a slice
+  //   of the pot via calculateXxxPayouts.
+  // Net per player = (received from pot) − (buyInCents stake) + (direct-settlement netCents).
+  const shareStandings: ShareCardStanding[] = (() => {
+    if (!game) return []
+    const netByPlayer = new Map<string, number>()
+    players.forEach(p => netByPlayer.set(p.id, 0))
+
+    // Direct-settlement results
+    if (hammerResult) {
+      Object.entries(hammerResult.netCents).forEach(([pid, c]) => {
+        netByPlayer.set(pid, (netByPlayer.get(pid) ?? 0) + c)
+      })
+    }
+    if (bankerResult) {
+      Object.entries(bankerResult.netCents).forEach(([pid, c]) => {
+        netByPlayer.set(pid, (netByPlayer.get(pid) ?? 0) + c)
+      })
+    }
+
+    // Pot-based dispatch — mirrors SettleUp.payouts
+    let payouts: PlayerPayout[] = []
+    if (game.type === 'skins' && skinsResult) {
+      payouts = calculateSkinsPayouts(skinsResult, game, players.length)
+    } else if (game.type === 'best_ball' && bestBallResult) {
+      payouts = calculateBestBallPayouts(bestBallResult, game.config as BestBallConfig, game, players)
+    } else if (game.type === 'nassau' && nassauResult) {
+      payouts = calculateNassauPayouts(nassauResult, game, players, holeScores, snapshot, courseHcps)
+    } else if (game.type === 'wolf' && wolfResult) {
+      payouts = calculateWolfPayouts(wolfResult, game, players)
+    } else if (game.type === 'bingo_bango_bongo' && bbbResult) {
+      payouts = calculateBBBPayouts(bbbResult, game, players)
+    } else if (game.type === 'vegas' && vegasResult) {
+      payouts = calculateVegasPayouts(vegasResult, game.config as VegasConfig, game, players)
+    } else if (game.type === 'stableford' && stablefordResult) {
+      payouts = calculateStablefordPayouts(stablefordResult, game, players)
+    } else if (game.type === 'quota' && quotaResult) {
+      payouts = calculateQuotaPayouts(quotaResult, game, players)
+    }
+
+    if (payouts.length > 0 && game.buyInCents > 0) {
+      // Everyone implicitly paid in
+      players.forEach(p => {
+        netByPlayer.set(p.id, (netByPlayer.get(p.id) ?? 0) - game.buyInCents)
+      })
+      // Winners receive from the pot
+      payouts.forEach(po => {
+        netByPlayer.set(po.playerId, (netByPlayer.get(po.playerId) ?? 0) + po.amountCents)
+      })
+    }
+
+    // Drop empty standings — keeps "All square." path for unscored rounds clean.
+    const allZero = Array.from(netByPlayer.values()).every(v => v === 0)
+    if (allZero) return []
+    return players
+      .map(p => ({ name: p.name, netCents: netByPlayer.get(p.id) ?? 0 }))
+      .sort((a, b) => b.netCents - a.netCents)
+  })()
 
   const gameLabel = game ? (GAME_LABELS[game.type] ?? game.type) : null
 
@@ -403,10 +471,12 @@ export function LeaderboardTab({
         {sharing ? 'Creating image…' : 'Share Leaderboard'}
       </button>
       {/*
-        In-round leaderboard share: the brand v1.0 ShareCard is money-standings-shaped
-        and we don't aggregate per-player net cents mid-round here. Until that aggregator
-        lands, the in-round share renders the seal + context + "All square." fallback.
-        The post-round Share Results in SettleUp is the polished pipeline.
+        In-round leaderboard share: standings aggregated from in-flight game
+        results (Hammer/Banker netCents direct; pot-based games via the
+        calculateXxxPayouts dispatch + buyIn subtraction). Settlements stay
+        empty mid-round — the net-out graph is computed in SettleUp post-round.
+        When no game results exist yet, shareStandings is [] and the card
+        falls back to the "All square." path.
       */}
       <div style={{ position: 'absolute', left: -9999, top: 0 }}>
         <ShareCard
@@ -414,7 +484,7 @@ export function LeaderboardTab({
           courseName={snapshot.courseName}
           date={round!.date}
           gameLabel={gameLabel}
-          standings={[]}
+          standings={shareStandings}
           settlements={[]}
         />
       </div>
