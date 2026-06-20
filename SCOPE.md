@@ -2,7 +2,7 @@
 
 **Last Updated:** March 22, 2026
 **Repo:** https://github.com/usclogan-sudo/golf-tracker
-**Live Site:** https://usclogan-sudo.github.io/golf-tracker/
+**Live Site:** https://gimme.vercel.app/
 
 ---
 

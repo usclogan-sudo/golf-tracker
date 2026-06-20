@@ -12,7 +12,7 @@ _Last updated: 2026-06-10_
 
 You're being asked to design and build native iOS and Android applications for **Gimme**, a working web product (PWA) with ~12,000 lines of tested production code, a real user base on beta, and a defined v1 native scope. This document gives you everything you need to scope, propose, and execute — concept, audience, tech stack, architecture, the full capability inventory, what's in v1 vs. roadmap, native-specific requirements, non-negotiable constraints, and the open questions we need you to answer in your proposal.
 
-The web app lives at `usclogan-sudo.github.io/golf-tracker` (production). Source is in this repo. You'll want to play with it before reading further — five minutes on the PWA explains more than any spec.
+The web app lives at `gimme.vercel.app` (production). Source is in this repo. You'll want to play with it before reading further — five minutes on the PWA explains more than any spec.
 
 ---
 

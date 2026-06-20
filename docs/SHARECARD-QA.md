@@ -12,7 +12,7 @@ npm run dev
 Or, after the next deploy, the live URL:
 
 ```
-https://usclogan-sudo.github.io/golf-tracker/?preview=share-card
+https://gimme.vercel.app/?preview=share-card
 ```
 
 The preview harness renders 8 scenarios side-by-side at 50% scale. Each scenario has a "Render & share PNG" button that exercises the actual html2canvas → native share-sheet pipeline.
