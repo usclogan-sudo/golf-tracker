@@ -6,6 +6,7 @@ import { parseDollarsToCents } from '../../lib/money'
 import { venturaCourses } from '../../data/venturaCourses'
 import { ConfirmModal } from '../ConfirmModal'
 import { logAdminAction } from '../../lib/adminAudit'
+import { UserDetailsModal } from './UserDetailsModal'
 import type { Course, Tee, Hole, GamePreset, GameType, StakesMode } from '../../types'
 
 interface Props {
@@ -726,6 +727,7 @@ function UsersTab({ currentUserId }: { currentUserId: string }) {
   const [deleteTarget, setDeleteTarget] = useState<{ id: string; name: string } | null>(null)
   const [deleting, setDeleting] = useState(false)
   const [editTarget, setEditTarget] = useState<any | null>(null)
+  const [detailsTarget, setDetailsTarget] = useState<{ id: string; name: string } | null>(null)
   const [editDisplayName, setEditDisplayName] = useState('')
   const [editHandicap, setEditHandicap] = useState('')
   const [editVenmo, setEditVenmo] = useState('')
@@ -1054,6 +1056,12 @@ function UsersTab({ currentUserId }: { currentUserId: string }) {
                 </div>
                 <div className="flex items-center gap-2 flex-shrink-0">
                   {u.is_admin && <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-amber-100 text-amber-700">Admin</span>}
+                  <button
+                    onClick={() => setDetailsTarget({ id: u.user_id, name: u.display_name || 'Unnamed user' })}
+                    className="text-xs font-semibold px-2.5 py-1.5 rounded-lg text-gray-700 border border-gray-200 active:bg-gray-50"
+                  >
+                    View
+                  </button>
                   {!isSelf && (
                     <>
                       <button
@@ -1097,6 +1105,13 @@ function UsersTab({ currentUserId }: { currentUserId: string }) {
         onConfirm={() => { if (deleteTarget) deleteUser(deleteTarget.id) }}
         onCancel={() => setDeleteTarget(null)}
       />
+      {detailsTarget && (
+        <UserDetailsModal
+          targetUserId={detailsTarget.id}
+          targetName={detailsTarget.name}
+          onClose={() => setDetailsTarget(null)}
+        />
+      )}
     </div>
   )
 }
