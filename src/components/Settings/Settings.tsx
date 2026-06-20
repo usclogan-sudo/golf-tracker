@@ -195,14 +195,14 @@ export function Settings({ userId, email, onBack, onSignOut, isAdmin, onAdmin, i
       if (roundIds.length > 0) {
         const roundTables = ['hole_scores', 'round_players', 'buy_ins', 'bbb_points', 'settlements', 'side_bets', 'junk_records', 'round_participants', 'notifications']
         for (const table of roundTables) {
-          await supabase.from(table).delete().in('round_id', roundIds).catch(() => {})
+          try { await supabase.from(table).delete().in('round_id', roundIds) } catch {}
         }
         await supabase.from('rounds').delete().in('id', roundIds)
       }
       // Delete standalone user data
       const userTables = ['notifications', 'pinned_friends', 'game_presets', 'event_participants', 'players', 'courses', 'user_profiles']
       for (const table of userTables) {
-        await supabase.from(table).delete().eq('user_id', userId).catch(() => {})
+        try { await supabase.from(table).delete().eq('user_id', userId) } catch {}
       }
       await supabase.auth.signOut()
       onSignOut()

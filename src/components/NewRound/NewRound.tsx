@@ -1550,7 +1550,7 @@ function GameSetup({
             <div>
               <p className="text-sm text-gray-600 mb-2">Max Presses Per Hole</p>
               <div className="flex gap-2">
-                {[null, 1, 2, 3].map(mp => (
+                {[undefined, 1, 2, 3].map(mp => (
                   <button
                     key={mp ?? 'none'}
                     onClick={() => setHammerMaxPresses(mp)}

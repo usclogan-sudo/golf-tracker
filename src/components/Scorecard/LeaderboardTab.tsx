@@ -1,4 +1,4 @@
-import type { RefObject } from 'react'
+import type { Ref, RefObject } from 'react'
 import { Tooltip } from '../ui/Tooltip'
 import { ShareCard } from '../ShareCard'
 import { strokesOnHole, fmtMoney } from '../../lib/gameLogic'
@@ -6,7 +6,7 @@ import type {
   SkinsResult, BestBallResult, NassauResult, WolfResult, BBBResult,
   HammerResult, VegasResult, StablefordResult, BankerResult, QuotaResult,
 } from '../../lib/gameLogic'
-import type { Player, HoleScore, CourseSnapshot, Round, Game, StakesMode } from '../../types'
+import type { Player, HoleScore, CourseSnapshot, Round, Game } from '../../types'
 
 interface Props {
   snapshot: CourseSnapshot
@@ -410,7 +410,7 @@ export function LeaderboardTab({
       */}
       <div style={{ position: 'absolute', left: -9999, top: 0 }}>
         <ShareCard
-          ref={shareRef}
+          ref={shareRef as Ref<HTMLDivElement>}
           courseName={snapshot.courseName}
           date={round!.date}
           gameLabel={gameLabel}

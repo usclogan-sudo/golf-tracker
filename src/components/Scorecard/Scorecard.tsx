@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, useCallback, useRef } from 'react'
+import { useEffect, useMemo, useState, useRef } from 'react'
 import { v4 as uuidv4 } from 'uuid'
 import { useOnlineStatus } from '../../hooks/useOnlineStatus'
 import { useUnsavedChangesPrompt } from '../../hooks/useUnsavedChangesPrompt'
@@ -36,7 +36,6 @@ import {
   wolfForHole,
   strokesOnHole,
   fmtMoney,
-  JUNK_LABELS,
 } from '../../lib/gameLogic'
 import { makePlayableSnapshot, getPlayableHoleNumbers, roundToHolesConfig } from '../../lib/holeUtils'
 import type {
@@ -62,13 +61,12 @@ import type {
   GolfEvent,
   EventParticipant,
   ScoreStatus,
-  UserProfile,
   Player,
   PropBet,
   PropWager,
+  Game,
 } from '../../types'
-import { ShareCard, useShareImage } from '../ShareCard'
-import type { ShareCardLeaderboardEntry } from '../ShareCard'
+import { useShareImage } from '../ShareCard'
 
 interface Props {
   userId: string
@@ -799,7 +797,7 @@ export function Scorecard({ userId, roundId, onEndRound, onHome, readOnly: readO
     if (!latest?.game) return
     const updatedGame = mutate(latest.game)
     setRound(prev => prev ? { ...prev, game: updatedGame } : prev)
-    const { data, error } = await supabase.from('rounds')
+    const { error } = await supabase.from('rounds')
       .update({ game: updatedGame }).eq('id', roundId).select('game').single()
     if (error) {
       // Conflict or network error — refetch and retry once
@@ -1047,8 +1045,6 @@ export function Scorecard({ userId, roundId, onEndRound, onHome, readOnly: readO
 
   // Role-based access (must be before approvedScores which depends on isEventRound)
   const {
-    isCreator,
-    isGameMaster,
     isScoremasterRole,
     selfEntryOnly,
     isEventManager,
@@ -1221,7 +1217,7 @@ export function Scorecard({ userId, roundId, onEndRound, onHome, readOnly: readO
     return (
       <div className="min-h-screen bg-gray-50 dark:bg-gray-900 flex flex-col items-center justify-center gap-4 px-6">
         <p className="text-red-500 font-semibold">Failed to load scorecard</p>
-        <button onClick={loadScorecardData} className="px-6 py-3 bg-amber-500 text-white font-bold rounded-xl active:bg-amber-600">Tap to Retry</button>
+        <button onClick={() => loadScorecardData()} className="px-6 py-3 bg-amber-500 text-white font-bold rounded-xl active:bg-amber-600">Tap to Retry</button>
         <button onClick={onHome} className="text-gray-500 text-sm underline mt-2">Go Back</button>
       </div>
     )
@@ -1760,8 +1756,8 @@ export function Scorecard({ userId, roundId, onEndRound, onHome, readOnly: readO
           players={players}
           holeScores={holeScores}
           courseHcps={courseHcps}
-          game={game}
-          round={round}
+          game={game ?? null}
+          round={round ?? null}
           skinsResult={skinsResult}
           bestBallResult={bestBallResult}
           nassauResult={nassauResult}
@@ -2089,7 +2085,7 @@ export function Scorecard({ userId, roundId, onEndRound, onHome, readOnly: readO
               <HoleBetsPanel
                 currentHole={currentHole}
                 players={players}
-                junkConfig={junkConfig}
+                junkConfig={junkConfig ?? null}
                 junkRecords={junkRecords}
                 sideBets={sideBets}
                 showSideBetForm={showSideBetForm}

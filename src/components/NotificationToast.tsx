@@ -20,6 +20,7 @@ export function NotificationToast({ notification, onDismiss, onAction }: Props) 
     score_update: '📝',
     round_invite: '🏌️',
     round_complete: '🏁',
+    broadcast: '📣',
   }[notification.type] ?? '🔔'
 
   return (

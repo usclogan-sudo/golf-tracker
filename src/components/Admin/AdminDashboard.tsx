@@ -846,7 +846,7 @@ function UsersTab({ currentUserId }: { currentUserId: string }) {
   const handleCreateAccount = async () => {
     if (!createEmail.trim() || !createPassword.trim()) return
     setCreating(true)
-    const { data, error } = await supabase.rpc('admin_create_user', {
+    const { error } = await supabase.rpc('admin_create_user', {
       user_email: createEmail.trim(),
       user_password: createPassword,
       user_display_name: createDisplayName.trim() || null,

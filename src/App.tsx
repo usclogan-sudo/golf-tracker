@@ -41,7 +41,7 @@ const Ledger = lazy(() => import('./components/Ledger/Ledger').then(m => ({ defa
 const LiveLeaderboard = lazy(() => import('./components/LiveLeaderboard/LiveLeaderboard').then(m => ({ default: m.LiveLeaderboard })))
 const PropBetsScreen = lazy(() => import('./components/PropBets/PropBetsScreen').then(m => ({ default: m.PropBetsScreen })))
 import { RouteErrorBoundary } from './components/RouteErrorBoundary'
-import type { AppNotification, Course, Round, HoleScore, UserProfile, GameType, StakesMode } from './types'
+import type { AppNotification, Course, Round, UserProfile, GameType, StakesMode } from './types'
 
 type Screen = 'home' | 'course-catalog' | 'course-setup' | 'new-round' | 'scorecard' | 'settle-up' | 'round-history' | 'stats' | 'settings' | 'onboarding' | 'admin' | 'upgrade-account' | 'player-directory' | 'handicap-detail' | 'join-round' | 'tournament-list' | 'tournament-setup' | 'tournament-detail' | 'personal-dashboard' | 'event-setup' | 'event-leaderboard' | 'ledger' | 'spectate' | 'prop-bets'
 
@@ -716,7 +716,10 @@ export default function App() {
   const { unreadCount: notificationCount, latestToast, dismissToast, markRead } = useNotifications(session?.user?.id ?? null)
 
   // Derived early so hooks can safely reference it in dependency arrays
-  const userId = session?.user?.id ?? null
+  // Empty string is a typesafe sentinel — all consumers below are gated behind
+  // an explicit `if (!session)` early return, so this value is only `''` for
+  // unreachable code paths.
+  const userId: string = session?.user?.id ?? ''
 
   const handleToastAction = useCallback(async (n: AppNotification) => {
     if (n.type === 'round_invite' && n.inviteCode) {

@@ -1,4 +1,4 @@
-import { useEffect, useState, useMemo } from 'react'
+import { useEffect, useState } from 'react'
 import { supabase, rowToRound, rowToUserProfile, rowToPinnedFriend } from '../../lib/supabase'
 import { venmoProfileLink, cashAppProfileLink, zelleLink, paypalLink } from '../../lib/gameLogic'
 import { UserAvatar } from '../AvatarPicker'

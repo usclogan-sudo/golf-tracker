@@ -1,9 +1,9 @@
 import { useEffect, useState } from 'react'
-import { supabase, rowToTournament, rowToTournamentMatchup, rowToHoleScore } from '../../lib/supabase'
+import { supabase, rowToTournament, rowToTournamentMatchup } from '../../lib/supabase'
 import { advanceBracket, calculateStrokePlayStandings } from '../../lib/tournamentLogic'
 import { TournamentBracket } from '../TournamentBracket/TournamentBracket'
 import { ConfirmModal } from '../ConfirmModal'
-import type { Tournament, TournamentMatchup, Player, HoleScore } from '../../types'
+import type { Tournament, TournamentMatchup, Player } from '../../types'
 
 interface Props {
   userId: string
@@ -18,7 +18,7 @@ const FORMAT_LABELS: Record<string, string> = {
   stroke_play: 'Stroke Play',
 }
 
-export function TournamentDetail({ userId, tournamentId, onBack, onStartRound }: Props) {
+export function TournamentDetail({ tournamentId, onBack, onStartRound }: Props) {
   const [tournament, setTournament] = useState<Tournament | null>(null)
   const [matchups, setMatchups] = useState<TournamentMatchup[]>([])
   const [players, setPlayers] = useState<Player[]>([])

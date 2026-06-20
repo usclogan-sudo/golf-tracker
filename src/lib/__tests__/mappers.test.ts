@@ -9,18 +9,8 @@ import {
   tournamentToRow,
   rowToTournamentMatchup,
   tournamentMatchupToRow,
-  rowToTournamentRound,
-  tournamentRoundToRow,
   rowToRound,
-  roundToRow,
   rowToHoleScore,
-  holeScoreToRow,
-  rowToSideBet,
-  sideBetToRow,
-  rowToNotification,
-  notificationToRow,
-  rowToSettlementRecord,
-  settlementRecordToRow,
 } from '../supabase'
 
 // ─── rowToRoundParticipant ──────────────────────────────────────────────────

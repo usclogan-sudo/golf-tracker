@@ -21,11 +21,8 @@ import type {
   WolfConfig,
   BBBConfig,
   HammerConfig,
-  JunkConfig,
-  JunkType,
   BuyIn,
   GameType,
-  StakesMode,
   HolesMode,
 } from '../../types'
 
@@ -72,11 +69,11 @@ export function EventSetup({ userId, onStart, onCancel, onAddCourse }: Props) {
   const [buyInCents, setBuyInCents] = useState(1000)
   const [skinsMode, setSkinsMode] = useState<'gross' | 'net'>('net')
   const [carryovers, setCarryovers] = useState(true)
-  const [bbScoring, setBbScoring] = useState<'match' | 'total'>('match')
-  const [bbMode, setBbMode] = useState<'gross' | 'net'>('net')
-  const [nassauMode, setNassauMode] = useState<'gross' | 'net'>('net')
-  const [wolfMode, setWolfMode] = useState<'gross' | 'net'>('net')
-  const [bbbMode, setBbbMode] = useState<'gross' | 'net'>('net')
+  const [bbScoring] = useState<'match' | 'total'>('match')
+  const [bbMode] = useState<'gross' | 'net'>('net')
+  const [nassauMode] = useState<'gross' | 'net'>('net')
+  const [wolfMode] = useState<'gross' | 'net'>('net')
+  const [bbbMode] = useState<'gross' | 'net'>('net')
   const [treasurerId, setTreasurerId] = useState<string | null>(null)
   const [customBuyIn, setCustomBuyIn] = useState('')
   const [gameError, setGameError] = useState<string | null>(null)
@@ -94,7 +91,9 @@ export function EventSetup({ userId, onStart, onCancel, onAddCourse }: Props) {
       const owned = (ownedRes.data ?? []).map(rowToCourse)
       const shared = (sharedRes.data ?? []).map(rowToSharedCourse)
       const catalog = venturaCourses.map(vc => ({
-        id: vc.id,
+        // CourseTemplate has no id field; derive a stable one from the name so
+        // React reconciliation is consistent across re-renders.
+        id: `catalog-${vc.name.replace(/\s+/g, '-').toLowerCase()}`,
         name: vc.name,
         tees: vc.tees,
         holes: vc.holes,

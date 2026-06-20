@@ -15,7 +15,6 @@ export function generateBracket(
 
   // Next power of 2
   const size = Math.pow(2, Math.ceil(Math.log2(n)))
-  const byes = size - n
 
   // Seed players (top seeds get byes)
   const seeded = [...playerIds]

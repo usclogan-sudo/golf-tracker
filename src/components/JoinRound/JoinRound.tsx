@@ -1,6 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
 import { supabase } from '../../lib/supabase'
-import type { RoundParticipant } from '../../types'
 
 interface RoundPreview {
   id: string
@@ -137,7 +136,7 @@ export function JoinRound({ userId, initialCode, onJoined, onCancel }: Props) {
         // Already-joined users skip the info card
         const alreadyClaimed = eventPreview.participants.some((p: any) => p.userId === userId && p.playerId === playerId)
         // Join event
-        const { data, error: rpcError } = await supabase.rpc('join_event', {
+        const { error: rpcError } = await supabase.rpc('join_event', {
           p_invite_code: code.toUpperCase().trim(),
           p_player_id: playerId,
         })
@@ -151,7 +150,7 @@ export function JoinRound({ userId, initialCode, onJoined, onCancel }: Props) {
         setStep('joined')
       } else if (preview) {
         // Join regular round
-        const { data, error: rpcError } = await supabase.rpc('join_round', {
+        const { error: rpcError } = await supabase.rpc('join_round', {
           p_invite_code: code.toUpperCase().trim(),
           p_player_id: playerId,
         })
@@ -352,7 +351,6 @@ export function JoinRound({ userId, initialCode, onJoined, onCancel }: Props) {
         )}
 
         {step === 'joined' && eventPreview && joinedPlayerId && (() => {
-          const playerName = eventPreview.players.find(p => p.id === joinedPlayerId)?.name ?? 'Unknown'
           const groupNum = eventPreview.groups?.[joinedPlayerId]
           const groupMembers = groupNum
             ? eventPreview.players

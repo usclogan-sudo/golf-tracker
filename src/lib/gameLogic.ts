@@ -346,7 +346,6 @@ export function calculateNassau(
   courseHcps: Record<string, number>,
 ): NassauResult {
   const holeNums = snapshot.holes.map(h => h.number)
-  const half = Math.ceil(holeNums.length / 2)
   const { frontHoles, backHoles } = getFrontBackSplit(snapshot.holes)
   const frontLabel = `${frontHoles[0]}–${frontHoles[frontHoles.length - 1]}`
   const backLabel = `${backHoles[0]}–${backHoles[backHoles.length - 1]}`
@@ -681,7 +680,7 @@ export function calculateHammer(
   holeScores: HoleScore[],
   snapshot: CourseSnapshot,
   config: HammerConfig,
-  courseHcps: Record<string, number>,
+  _courseHcps: Record<string, number>,
 ): HammerResult {
   const netCents: Record<string, number> = {}
   const holeResults: HammerHoleResult[] = []
@@ -754,7 +753,7 @@ export function calculateHammer(
 
 export function calculateHammerPayouts(
   result: HammerResult,
-  game: Game,
+  _game: Game,
   players: Player[],
 ): PlayerPayout[] {
   if (players.length !== 2) return []
@@ -1016,8 +1015,8 @@ export function calculateDots(
 
 export function calculateDotsPayouts(
   result: DotsResult,
-  game: Game,
-  players: Player[],
+  _game: Game,
+  _players: Player[],
 ): PlayerPayout[] {
   // Dots is direct settlement, not pot-based. Use net cents directly.
   return Object.entries(result.netCents)

@@ -1,6 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
 import { supabase } from '../../lib/supabase'
-import { buildCourseHandicaps, fmtMoney } from '../../lib/gameLogic'
 import { makePlayableSnapshot } from '../../lib/holeUtils'
 import type { CourseSnapshot, Player, RoundPlayer, HoleScore, Game, HolesMode } from '../../types'
 
@@ -103,16 +102,10 @@ export function LiveLeaderboard({ inviteCode, onBack }: Props) {
     return () => clearInterval(interval)
   }, [data?.status, inviteCode])
 
-  const courseHcps = useMemo(() => {
-    if (!data?.courseSnapshot || !data.roundPlayers) return {}
-    return buildCourseHandicaps(data.players, data.roundPlayers, data.courseSnapshot, data.holesMode)
-  }, [data?.players, data?.roundPlayers, data?.courseSnapshot, data?.holesMode])
-
   // Build leaderboard
   const leaderboard = useMemo(() => {
     if (!data) return []
     const snapshot = makePlayableSnapshot(data.courseSnapshot, { holesMode: data.holesMode })
-    const totalPar = snapshot.holes.reduce((s, h) => s + h.par, 0)
     const holesPlayed = snapshot.holes.length
 
     return data.players.map(player => {
@@ -183,6 +176,11 @@ export function LiveLeaderboard({ inviteCode, onBack }: Props) {
     wolf: '🐺 Wolf',
     bingo_bango_bongo: '⭐ BBB',
     hammer: '🔨 Hammer',
+    vegas: '🎲 Vegas',
+    stableford: '📊 Stableford',
+    dots: '🔴 Dots',
+    banker: '🏦 Banker',
+    quota: '📋 Quota',
   }[data.game.type] ?? data.game.type) : null
 
   return (

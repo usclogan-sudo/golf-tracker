@@ -42,7 +42,7 @@ async function resizeImage(file: File): Promise<Blob> {
   })
 }
 
-export function AvatarPicker({ currentPreset, currentUrl, userId, onSelect, onUpload, onClose }: Props) {
+export function AvatarPicker({ currentPreset, userId, onSelect, onUpload, onClose }: Props) {
   const [selected, setSelected] = useState(currentPreset ?? '')
   const [uploading, setUploading] = useState(false)
   const [uploadError, setUploadError] = useState('')

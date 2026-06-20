@@ -4,12 +4,10 @@ import { vi, describe, it, expect } from 'vitest'
 import {
   applyHoleScorePayload,
   applyBBBPointPayload,
-  applyJunkRecordPayload,
-  applySideBetPayload,
   applyRoundParticipantPayload,
   applyBuyInPayload,
 } from '../realtimeReducers'
-import type { HoleScore, BBBPoint, JunkRecord, SideBet, RoundParticipant, BuyIn } from '../../types'
+import type { HoleScore, BBBPoint, RoundParticipant, BuyIn } from '../../types'
 
 // ─── applyHoleScorePayload ──────────────────────────────────────────────────
 
@@ -203,7 +201,7 @@ describe('applyRoundParticipantPayload', () => {
 
 describe('applyBuyInPayload', () => {
   const existing: BuyIn[] = [
-    { id: 'bi-1', roundId: 'r-1', playerId: 'p-1', amountCents: 500, status: 'pending' },
+    { id: 'bi-1', roundId: 'r-1', playerId: 'p-1', amountCents: 500, status: 'unpaid' },
   ]
 
   it('UPDATE replaces matching buy-in', () => {
