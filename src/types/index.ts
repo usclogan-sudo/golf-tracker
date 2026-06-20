@@ -354,7 +354,7 @@ export interface SettlementRecord {
 
 // ─── Notifications ──────────────────────────────────────────────────────────
 
-export type NotificationType = 'unsettled_round' | 'score_update' | 'round_invite' | 'round_complete'
+export type NotificationType = 'unsettled_round' | 'score_update' | 'round_invite' | 'round_complete' | 'broadcast'
 
 export interface AppNotification {
   id: string

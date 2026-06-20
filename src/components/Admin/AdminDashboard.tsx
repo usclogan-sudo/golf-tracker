@@ -1219,6 +1219,154 @@ function RoundsTab() {
   )
 }
 
+// ─── Broadcast Tab (Admin) ────────────────────────────────────────────────────
+
+function BroadcastTab() {
+  const [title, setTitle] = useState('')
+  const [body, setBody] = useState('')
+  const [audienceCount, setAudienceCount] = useState<number | null>(null)
+  const [recent, setRecent] = useState<Array<{ id: string; target_label: string; metadata: any; created_at: string }>>([])
+  const [showConfirm, setShowConfirm] = useState(false)
+  const [sending, setSending] = useState(false)
+  const [sendResult, setSendResult] = useState<{ ok: boolean; message: string } | null>(null)
+
+  const refreshRecent = async () => {
+    const { data } = await supabase
+      .from('admin_audit_log')
+      .select('id, target_label, metadata, created_at')
+      .eq('action', 'send_broadcast')
+      .order('created_at', { ascending: false })
+      .limit(5)
+    if (data) setRecent(data as any)
+  }
+
+  useEffect(() => {
+    supabase
+      .from('user_profiles')
+      .select('user_id', { count: 'exact', head: true })
+      .eq('onboarding_complete', true)
+      .then(({ count }) => setAudienceCount(count ?? 0))
+    refreshRecent()
+  }, [])
+
+  const send = async () => {
+    setSending(true)
+    setSendResult(null)
+    const { data, error } = await supabase.rpc('admin_send_broadcast', {
+      p_title: title.trim(),
+      p_body: body.trim() || null,
+      p_target_user_ids: null,
+    })
+    setSending(false)
+    setShowConfirm(false)
+    if (error) {
+      setSendResult({ ok: false, message: error.message })
+      return
+    }
+    const count = typeof data === 'number' ? data : 0
+    setSendResult({ ok: true, message: `Sent to ${count} user${count !== 1 ? 's' : ''}.` })
+    setTitle('')
+    setBody('')
+    refreshRecent()
+  }
+
+  const canSend = title.trim().length > 0 && !sending
+
+  return (
+    <div className="space-y-4">
+      <section className="bg-white rounded-2xl shadow-sm border border-gray-100 p-4 space-y-3">
+        <div>
+          <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Compose</p>
+          <p className="text-xs text-gray-400 mt-1">
+            Goes to every user who finished onboarding.
+            {audienceCount !== null && ` Current audience: ${audienceCount} user${audienceCount !== 1 ? 's' : ''}.`}
+          </p>
+        </div>
+
+        <div>
+          <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">Title</label>
+          <input
+            type="text"
+            value={title}
+            onChange={e => setTitle(e.target.value)}
+            placeholder="e.g. New side games are here"
+            maxLength={100}
+            className="w-full h-11 px-3 rounded-xl border border-gray-300 text-sm focus:outline-none focus:ring-2 focus:ring-amber-500"
+          />
+        </div>
+
+        <div>
+          <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">
+            Body <span className="font-normal normal-case text-gray-400">(optional)</span>
+          </label>
+          <textarea
+            value={body}
+            onChange={e => setBody(e.target.value)}
+            rows={4}
+            placeholder="Short context for the notification."
+            maxLength={500}
+            className="w-full px-3 py-2 rounded-xl border border-gray-300 text-sm focus:outline-none focus:ring-2 focus:ring-amber-500 resize-none"
+          />
+          <p className="text-[10px] text-gray-400 mt-1">{body.length}/500</p>
+        </div>
+
+        {sendResult && (
+          <p className={`text-sm font-semibold ${sendResult.ok ? 'text-green-600' : 'text-red-600'}`}>
+            {sendResult.message}
+          </p>
+        )}
+
+        <button
+          onClick={() => setShowConfirm(true)}
+          disabled={!canSend}
+          className="w-full h-12 bg-gray-800 text-white font-bold rounded-xl disabled:opacity-40 active:bg-gray-900 transition-colors"
+        >
+          Send broadcast
+        </button>
+
+        {showConfirm && (
+          <div className="bg-amber-50 border border-amber-200 rounded-xl px-4 py-3 space-y-3">
+            <p className="text-sm font-semibold text-amber-900">
+              Send "{title}" to {audienceCount ?? '?'} user{audienceCount !== 1 ? 's' : ''}?
+            </p>
+            <p className="text-xs text-amber-700">No undo. The notification will appear in each user's in-app inbox immediately.</p>
+            <div className="flex gap-2">
+              <button onClick={() => setShowConfirm(false)} className="flex-1 h-10 bg-gray-200 text-gray-700 text-sm font-semibold rounded-xl active:bg-gray-300">Cancel</button>
+              <button onClick={send} disabled={sending} className="flex-1 h-10 bg-amber-600 text-white text-sm font-semibold rounded-xl disabled:opacity-50 active:bg-amber-700">
+                {sending ? 'Sending…' : 'Send now'}
+              </button>
+            </div>
+          </div>
+        )}
+      </section>
+
+      <section className="bg-white rounded-2xl shadow-sm border border-gray-100 p-4 space-y-2">
+        <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Recent broadcasts</p>
+        {recent.length === 0 ? (
+          <p className="text-sm text-gray-500">No broadcasts sent yet.</p>
+        ) : (
+          <div className="space-y-2">
+            {recent.map(r => (
+              <div key={r.id} className="bg-gray-50 rounded-xl px-3 py-2 text-sm">
+                <p className="font-semibold text-gray-800 truncate">{r.target_label || 'Untitled broadcast'}</p>
+                <p className="text-xs text-gray-500 mt-0.5">
+                  {new Date(r.created_at).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}
+                  {r.metadata?.recipient_count !== undefined && ` · ${r.metadata.recipient_count} recipient${r.metadata.recipient_count !== 1 ? 's' : ''}`}
+                </p>
+              </div>
+            ))}
+          </div>
+        )}
+      </section>
+
+      <p className="text-xs text-gray-400 leading-relaxed px-2">
+        Broadcasts write to the in-app notifications table today. When native push (N4) ships, the same
+        admin_send_broadcast RPC fans out push payloads as well — no UI changes needed.
+      </p>
+    </div>
+  )
+}
+
 // ─── System Tab (Admin) ───────────────────────────────────────────────────────
 
 function SystemTab() {
@@ -1272,7 +1420,7 @@ function SystemTab() {
 
 // ─── Admin Dashboard ─────────────────────────────────────────────────────────
 
-type AdminTab = 'courses' | 'presets' | 'players' | 'users' | 'rounds' | 'system'
+type AdminTab = 'courses' | 'presets' | 'players' | 'users' | 'rounds' | 'broadcast' | 'system'
 
 export function AdminDashboard({ userId, onBack, isHome, onSettings, onLogout }: Props) {
   const [tab, setTab] = useState<AdminTab>('courses')
@@ -1283,6 +1431,7 @@ export function AdminDashboard({ userId, onBack, isHome, onSettings, onLogout }:
     { key: 'players', label: 'Players' },
     { key: 'users', label: 'Users' },
     { key: 'rounds', label: 'Rounds' },
+    { key: 'broadcast', label: 'Broadcast' },
     { key: 'system', label: 'System' },
   ]
 
@@ -1347,6 +1496,7 @@ export function AdminDashboard({ userId, onBack, isHome, onSettings, onLogout }:
         {tab === 'players' && <PlayersTab />}
         {tab === 'users' && <UsersTab currentUserId={userId} />}
         {tab === 'rounds' && <RoundsTab />}
+        {tab === 'broadcast' && <BroadcastTab />}
         {tab === 'system' && <SystemTab />}
       </div>
     </div>
