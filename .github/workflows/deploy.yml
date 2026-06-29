@@ -1,8 +1,12 @@
 name: Deploy to GitHub Pages
 
+# DISABLED 2026-06-29: production migrated to Vercel (root-path build).
+# The Vite base is now '/', which is incompatible with GitHub Pages' '/golf-tracker/'
+# subpath, so this pipeline would publish a broken build. Kept as manual-only
+# (workflow_dispatch) for rollback; the auto push trigger is removed to avoid
+# double-deploying against Vercel. To re-enable, restore `push: branches: [main]`.
 on:
-  push:
-    branches: [main]
+  workflow_dispatch:
 
 permissions:
   contents: read
