@@ -1,0 +1,3 @@
+-- Seed file for Supabase preview branches.
+-- Preview branches start with no production data (by design). Add sample
+-- rows here if you want previews pre-populated. Empty for now.
