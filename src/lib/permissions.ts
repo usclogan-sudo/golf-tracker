@@ -27,7 +27,9 @@ export function computeScorecardPermissions(
   const isCreator = userId === round?.createdBy
   const isGameMaster = userId === round?.gameMasterId
   const isScoremasterRole = isCreator || isGameMaster
-  const myParticipant = roundParticipants.find(p => p.userId === userId)
+  // Only an *accepted* participant counts as an active member (pending/declined
+  // invitees get no scoring access until they accept).
+  const myParticipant = roundParticipants.find(p => p.userId === userId && p.status === 'accepted')
   const selfEntryOnly = !!myParticipant && !isScoremasterRole
 
   const myEventParticipant = eventParticipants.find(ep => ep.userId === userId)

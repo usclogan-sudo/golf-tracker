@@ -164,7 +164,7 @@ describe('applyBBBPointPayload', () => {
 
 describe('applyRoundParticipantPayload', () => {
   const existing: RoundParticipant[] = [
-    { id: 'rp-1', roundId: 'r-1', userId: 'u-1', playerId: 'p-1' },
+    { id: 'rp-1', roundId: 'r-1', userId: 'u-1', playerId: 'p-1', status: 'accepted' },
   ]
 
   it('INSERT adds new participant', () => {
@@ -267,7 +267,7 @@ describe('offline→online race condition scenario', () => {
 
   it('new participant joining while offline is handled on reconnect', () => {
     let participants: RoundParticipant[] = [
-      { id: 'rp-1', roundId: 'r-1', userId: 'u-1', playerId: 'p-1' },
+      { id: 'rp-1', roundId: 'r-1', userId: 'u-1', playerId: 'p-1', status: 'accepted' },
     ]
 
     // While offline, another user joins

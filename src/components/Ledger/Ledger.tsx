@@ -56,7 +56,7 @@ export function Ledger({ userId, onBack }: Props) {
 
     const [roundsRes, partRes] = await Promise.all([
       supabase.from('rounds').select('*').eq('status', 'complete'),
-      supabase.from('round_participants').select('player_id').eq('user_id', userId),
+      supabase.from('round_participants').select('player_id').eq('user_id', userId).eq('status', 'accepted'),
     ])
 
     const rounds = (roundsRes.data ?? []).map(rowToRound)

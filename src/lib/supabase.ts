@@ -392,6 +392,9 @@ export function rowToRoundParticipant(row: any): RoundParticipant {
     roundId: row.round_id,
     userId: row.user_id,
     playerId: row.player_id,
+    status: row.status ?? 'accepted',
+    invitedBy: row.invited_by ?? undefined,
+    invitedAt: row.invited_at ? new Date(row.invited_at) : undefined,
     joinedAt: row.joined_at ? new Date(row.joined_at) : undefined,
   }
 }

@@ -135,7 +135,7 @@ export function PersonalDashboard({ userId, onBack }: { userId: string; onBack: 
       supabase.from('bbb_points').select('*').in('round_id', roundIds),
       supabase.from('junk_records').select('*').in('round_id', roundIds),
       supabase.from('side_bets').select('*').in('round_id', roundIds),
-      supabase.from('round_participants').select('*').eq('user_id', userId),
+      supabase.from('round_participants').select('*').eq('user_id', userId).eq('status', 'accepted'),
     ])
 
     const allScores: HoleScore[] = (scoresRes.data ?? []).map(rowToHoleScore)

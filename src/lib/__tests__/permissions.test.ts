@@ -7,8 +7,8 @@ function makeRound(overrides: { createdBy?: string; gameMasterId?: string } = {}
   return { createdBy: overrides.createdBy ?? 'other-user', gameMasterId: overrides.gameMasterId ?? undefined }
 }
 
-function makeRoundParticipant(uid: string): RoundParticipant {
-  return { id: 'rp-1', roundId: 'r-1', userId: uid, playerId: 'pl-1' }
+function makeRoundParticipant(uid: string, status: RoundParticipant['status'] = 'accepted'): RoundParticipant {
+  return { id: 'rp-1', roundId: 'r-1', userId: uid, playerId: 'pl-1', status }
 }
 
 function makeEventParticipant(uid: string, role: 'manager' | 'scorekeeper' | 'player', groupNumber?: number): EventParticipant {
@@ -71,6 +71,13 @@ describe('self-entry participant', () => {
   it('selfEntryOnly is true', () => {
     const perms = computeScorecardPermissions(userId, makeRound(), [makeRoundParticipant(userId)], [], false, false)
     expect(perms.selfEntryOnly).toBe(true)
+  })
+
+  it('a pending invitee is not treated as an active member', () => {
+    const perms = computeScorecardPermissions(userId, makeRound(), [makeRoundParticipant(userId, 'pending')], [], false, false)
+    expect(perms.myParticipant).toBeUndefined()
+    expect(perms.selfEntryOnly).toBe(false)
+    expect(perms.readOnly).toBe(true)
   })
 
   it('cannot approve scores alone', () => {

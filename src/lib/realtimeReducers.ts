@@ -94,10 +94,18 @@ export function applyRoundParticipantPayload(
 ): RoundParticipant[] {
   const row = payload.new
   if (payload.eventType === 'INSERT') {
-    if (prev.some(p => p.id === row.id)) return prev
-    return [...prev, rowToRoundParticipant(row)]
+    const mapped = rowToRoundParticipant(row)
+    // Keep active-member state to accepted only; a pending invite must not leak in.
+    if (mapped.status !== 'accepted') return prev
+    if (prev.some(p => p.id === mapped.id)) return prev
+    return [...prev, mapped]
   } else if (payload.eventType === 'UPDATE') {
-    return prev.map(p => p.id === row.id ? rowToRoundParticipant(row) : p)
+    const mapped = rowToRoundParticipant(row)
+    // pending→accepted adds; accepted→declined/pending removes.
+    if (mapped.status !== 'accepted') return prev.filter(p => p.id !== mapped.id)
+    return prev.some(p => p.id === mapped.id)
+      ? prev.map(p => p.id === mapped.id ? mapped : p)
+      : [...prev, mapped]
   } else if (payload.eventType === 'DELETE') {
     return prev.filter(p => p.id !== payload.old.id)
   }
