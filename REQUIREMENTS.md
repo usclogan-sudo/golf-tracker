@@ -9,7 +9,7 @@
 
 A mobile-first web app for groups of friends who play golf together to track side games, scores, handicaps, and settle money — all from the course in real time.
 
-**Live Site:** https://gimme.vercel.app/
+**Live Site:** https://gimme-golf.vercel.app/
 **Stack:** React 18 + TypeScript + Vite + Tailwind CSS v3 + Supabase
 
 ---
