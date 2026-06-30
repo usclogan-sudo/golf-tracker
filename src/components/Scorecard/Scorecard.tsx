@@ -13,6 +13,7 @@ import { Tooltip } from '../ui/Tooltip'
 import { ConfirmModal } from '../ConfirmModal'
 import { GameRulesModal } from '../GameRulesModal'
 import { InviteQRModal } from '../InviteQR'
+import { InvitePlayerModal } from '../InvitePlayerModal'
 import { usePhotoImport } from './PhotoImportButton'
 import { PhotoImportConfirmGrid } from './PhotoImportConfirmGrid'
 import type { ExtractionResult } from '../../lib/photoImport'
@@ -239,6 +240,7 @@ export function Scorecard({ userId, roundId, onEndRound, onHome, readOnly: readO
   const [pendingPopover, setPendingPopover] = useState(false)
   const [showHeaderMenu, setShowHeaderMenu] = useState(false)
   const [showQRModal, setShowQRModal] = useState(false)
+  const [showInviteModal, setShowInviteModal] = useState(false)
   const headerMenuRef = useRef<HTMLDivElement>(null)
   // Per-cell debounce for score writes — coalesces rapid taps on the same
   // (player, hole) into one server write 250ms after the last tap. Map keyed
@@ -1355,6 +1357,14 @@ export function Scorecard({ userId, roundId, onEndRound, onHome, readOnly: readO
                     className="w-full px-4 py-3 text-left text-sm font-medium text-cyan-300 hover:bg-gray-700 active:bg-gray-700"
                   >
                     Invite Players
+                  </button>
+                )}
+                {isScoremasterRole && (
+                  <button
+                    onClick={() => { setShowHeaderMenu(false); setShowInviteModal(true) }}
+                    className="w-full px-4 py-3 text-left text-sm font-medium text-cyan-300 hover:bg-gray-700 active:bg-gray-700"
+                  >
+                    Invite by name
                   </button>
                 )}
                 {isScoremasterRole && (
@@ -2665,6 +2675,16 @@ export function Scorecard({ userId, roundId, onEndRound, onHome, readOnly: readO
         const qrUrl = `${window.location.origin}${window.location.pathname}?join=${qrCode}`
         return <InviteQRModal url={qrUrl} code={qrCode} eventName={event?.name} onClose={() => setShowQRModal(false)} />
       })()}
+
+      {showInviteModal && (
+        <InvitePlayerModal
+          roundId={roundId}
+          currentUserId={userId}
+          existingPlayerIds={players.map((p: any) => p.id)}
+          onClose={() => setShowInviteModal(false)}
+          onInvited={name => { setInviteToast(`Invited ${name}`); setTimeout(() => setInviteToast(null), 3000) }}
+        />
+      )}
 
       {/* Photo import flow — capture overlays always mounted; confirmation
           grid renders only when an extraction is in hand. */}

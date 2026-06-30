@@ -16,6 +16,7 @@ import { GuestBanner } from './components/GuestBanner/GuestBanner'
 import { ConfirmModal } from './components/ConfirmModal'
 import { UserAvatar } from './components/AvatarPicker'
 import { InstallBanner } from './components/InstallBanner'
+import { PendingInvites } from './components/PendingInvites'
 
 // Lazy-loaded screens (not needed for initial Home render)
 const JoinRound = lazy(() => import('./components/JoinRound/JoinRound').then(m => ({ default: m.JoinRound })))
@@ -435,6 +436,8 @@ function Home({
             </div>
           </div>
         )}
+
+        <PendingInvites userId={userId} onAccepted={onResumeRound} />
 
         {activeRounds.length > 0 && (
           <section className="space-y-3">
