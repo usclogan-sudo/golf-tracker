@@ -274,7 +274,7 @@ export function Scorecard({ userId, roundId, onEndRound, onHome, readOnly: readO
       supabase.from('bbb_points').select('*').eq('round_id', roundId),
       supabase.from('junk_records').select('*').eq('round_id', roundId),
       supabase.from('side_bets').select('*').eq('round_id', roundId),
-      supabase.from('round_participants').select('*').eq('round_id', roundId),
+      supabase.from('round_participants').select('*').eq('round_id', roundId).eq('status', 'accepted'),
       supabase.from('buy_ins').select('*').eq('round_id', roundId),
       supabase.from('prop_bets').select('*').eq('round_id', roundId),
       supabase.from('prop_wagers').select('*').eq('round_id', roundId),

@@ -302,6 +302,9 @@ export interface RoundParticipant {
   roundId: string
   userId: string
   playerId: string
+  status: 'pending' | 'accepted' | 'declined'
+  invitedBy?: string
+  invitedAt?: Date
   joinedAt?: Date
 }
 

@@ -199,7 +199,7 @@ function Home({
       if (data) setCourses(data.map(rowToCourse))
     })
     // Fetch participant rows first so all downstream queries scope to this user's rounds.
-    supabase.from('round_participants').select('round_id, player_id').eq('user_id', userId).then(async ({ data: partData }) => {
+    supabase.from('round_participants').select('round_id, player_id').eq('user_id', userId).eq('status', 'accepted').then(async ({ data: partData }) => {
       const partRoundIds = (partData ?? []).map((p: any) => p.round_id)
       const myPlayerIds = new Set((partData ?? []).map((p: any) => p.player_id))
       myPlayerIds.add(userId)

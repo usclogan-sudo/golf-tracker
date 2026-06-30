@@ -212,7 +212,7 @@ export function SettleUp({ roundId, userId, eventId, onDone, onContinue }: Props
       supabase.from('junk_records').select('*').eq('round_id', roundId),
       supabase.from('side_bets').select('*').eq('round_id', roundId),
       supabase.from('settlements').select('*').eq('round_id', roundId),
-      supabase.from('round_participants').select('*').eq('round_id', roundId),
+      supabase.from('round_participants').select('*').eq('round_id', roundId).eq('status', 'accepted'),
       supabase.from('prop_bets').select('*').eq('round_id', roundId),
       supabase.from('prop_wagers').select('*').eq('round_id', roundId),
     ]).then(([roundRes, rpRes, hsRes, biRes, bbbRes, junkRes, sbRes, settlRes, partRes, pbRes, pwRes]) => {
