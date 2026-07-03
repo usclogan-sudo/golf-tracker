@@ -1205,7 +1205,7 @@ export function SettleUp({ roundId, userId, eventId, onDone, onContinue }: Props
         {skinsResult && (
           <section className="bg-white dark:bg-gray-800 rounded-2xl shadow-sm overflow-hidden">
             <button onClick={() => toggleSection('skins')} className="w-full flex items-center justify-between p-4 active:bg-gray-50 dark:active:bg-gray-700">
-              <span className="text-sm font-semibold text-gray-700 dark:text-gray-200">🎰 Skins · {skinsResult.totalSkins} skin{skinsResult.totalSkins !== 1 ? 's' : ''}</span>
+              <span className="text-sm font-semibold text-gray-700 dark:text-gray-200">⛳ Skins · {skinsResult.totalSkins} skin{skinsResult.totalSkins !== 1 ? 's' : ''}</span>
               <span className="text-gray-400 text-sm">{expandedSections.has('skins') ? '▾' : '▸'}</span>
             </button>
             {expandedSections.has('skins') && (
