@@ -23,6 +23,7 @@ import {
   buildUnifiedSettlements,
   calculateSideBetSettlements,
   fmtMoney,
+  fmtAmount,
   venmoLink,
   cashAppLink,
   zelleLink,
@@ -517,5 +518,23 @@ describe('payment link generators', () => {
     const link = paypalLink('carol@email.com', 750)
     expect(link).toContain('paypal.com/paypalme')
     expect(link).toContain('7.50')
+  })
+})
+
+describe('fmtAmount (token/points mode)', () => {
+  it('renders points mode as "pts" (raw value, no cents conversion)', () => {
+    expect(fmtAmount(25, 'points')).toBe('25 pts')
+    expect(fmtAmount(0, 'points')).toBe('0 pts')
+    expect(fmtAmount(150, 'points')).toBe('150 pts')
+  })
+
+  it('renders money for standard / high_roller / undefined', () => {
+    expect(fmtAmount(2500, 'standard')).toBe('$25.00')
+    expect(fmtAmount(2500, 'high_roller')).toBe('$25.00')
+    expect(fmtAmount(2500)).toBe('$25.00')
+  })
+
+  it('matches fmtMoney when not in points mode', () => {
+    expect(fmtAmount(1234, 'standard')).toBe(fmtMoney(1234))
   })
 })

@@ -33,6 +33,26 @@ describe('fmt', () => {
     expect(fmt(0, true)).toBe('$0.00')
   })
 
+  // ─── token/points mode (isPoints=true) ──────────────────────────────────
+  it('renders points ("pts") when isPoints is true', () => {
+    expect(fmt(25, false, true)).toBe('25 pts')
+  })
+
+  it('renders absolute points without sign by default', () => {
+    expect(fmt(-25, false, true)).toBe('25 pts')
+  })
+
+  it('adds + / − signs to points when withSign is true', () => {
+    expect(fmt(25, true, true)).toBe('+25 pts')
+    expect(fmt(-25, true, true)).toBe('−25 pts')
+    expect(fmt(-25, true, true).charCodeAt(0)).toBe(0x2212)
+  })
+
+  it('points mode shows raw value (no cents division)', () => {
+    // In points mode amounts are stored raw (1 pt = $1), so 50 → "50 pts", not "0.50".
+    expect(fmt(50, false, true)).toBe('50 pts')
+  })
+
   it('handles fractional cents (rounding)', () => {
     // Intl rounds to 2 decimals by default
     expect(fmt(1)).toBe('$0.01')
