@@ -18,13 +18,13 @@ import type {
 } from '../../types'
 
 const GAME_LABELS: Record<GameType, string> = {
-  skins: '🎰 Skins',
+  skins: '⛳ Skins',
   best_ball: '🤝 Best Ball',
   nassau: '🏳️ Nassau',
   wolf: '🐺 Wolf',
   bingo_bango_bongo: '⭐ BBB',
   hammer: '🔨 Hammer',
-  vegas: '🎲 Vegas',
+  vegas: 'Vegas',
   stableford: '📊 Stableford',
   dots: '🔴 Dots',
   banker: '🏦 Banker',
@@ -33,7 +33,7 @@ const GAME_LABELS: Record<GameType, string> = {
 
 function fmtSigned(cents: number): string {
   const abs = Math.abs(cents)
-  const str = `$${(abs / 100).toFixed(abs % 100 === 0 ? 0 : 2)}`
+  const str = `${abs} pts`
   return cents < 0 ? `-${str}` : cents > 0 ? `+${str}` : '$0'
 }
 
@@ -343,7 +343,7 @@ export function PersonalDashboard({ userId, onBack }: { userId: string; onBack: 
             <p className={`text-2xl font-bold font-display ${data.netWinnings > 0 ? 'text-green-600' : data.netWinnings < 0 ? 'text-red-500' : 'text-gray-500 dark:text-gray-400'}`}>
               {fmtSigned(data.netWinnings)}
             </p>
-            <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">Net Winnings</p>
+            <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">Net Result</p>
           </div>
           <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-sm p-4 text-center">
             <p className="text-2xl font-bold font-display text-gray-900 dark:text-gray-100">{data.scoringAvg ?? '—'}</p>

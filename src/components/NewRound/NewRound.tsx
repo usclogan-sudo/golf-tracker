@@ -1234,7 +1234,7 @@ function GameSetup({
         <section className="bg-white dark:bg-gray-800 rounded-2xl shadow-sm p-4 space-y-3">
           <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Game Type</p>
           <div className="grid grid-cols-2 gap-2">
-            <GameButton gameType="skins" label="🎰 Skins" />
+            <GameButton gameType="skins" label="⛳ Skins" />
             <GameButton gameType="best_ball" label="🤝 Best Ball" disabled={!bestBallAllowed} />
           </div>
           {showAllGames && (
@@ -1243,7 +1243,6 @@ function GameSetup({
               <GameButton gameType="wolf" label="🐺 Wolf" disabled={!wolfAllowed} />
               <GameButton gameType="bingo_bango_bongo" label="⭐ BBB" />
               <GameButton gameType="hammer" label="🔨 Hammer" disabled={!hammerAllowed} />
-              <GameButton gameType="vegas" label="🎲 Vegas" disabled={!vegasAllowed} />
               <GameButton gameType="stableford" label="📊 Stableford" />
               <GameButton gameType="dots" label="🔴 Dots" />
               <GameButton gameType="banker" label="🏦 Banker" disabled={!bankerAllowed} />
@@ -2076,7 +2075,7 @@ function TreasurerAndBuyIns({
 
 // ─── NewRound orchestrator ────────────────────────────────────────────────────
 
-export function NewRound({ userId, onStart, onCancel, onAddCourse, initialStakesMode = 'standard', templateRound }: Props) {
+export function NewRound({ userId, onStart, onCancel, onAddCourse, initialStakesMode = 'points', templateRound }: Props) {
   // If templateRound provided, pre-fill course from snapshot and start at players step
   const templateCourse = templateRound?.courseSnapshot
     ? {
