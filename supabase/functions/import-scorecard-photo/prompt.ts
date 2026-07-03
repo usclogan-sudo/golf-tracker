@@ -90,5 +90,7 @@ Begin extraction.`
 /** The Anthropic vision model to use. Sonnet 4.6 is the price/accuracy sweet spot. */
 export const MODEL = 'claude-sonnet-4-6'
 
-/** Cap output tokens — strict JSON for an 18-hole 4-player card is well under 2k. */
-export const MAX_TOKENS = 2048
+/** Cap output tokens. A 4-player 18-hole card (72 score lines + mapping +
+ *  notes) lands around 1800–2500 tokens of structured JSON; 4096 leaves
+ *  headroom for the model's occasional preamble and 5-player cards. */
+export const MAX_TOKENS = 4096
