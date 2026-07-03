@@ -6,6 +6,8 @@ Prepared by: Head of Brand · Date: May 31, 2026 · v1.0
 
 > Paste this into Claude Code in the project repo. Work top-down: P0 first. This updates **brand and copy only** — do not change app logic, features, or data flow. When unsure, ask before altering behavior.
 
+> **Update (July 2026 — post token/points pivot):** Beta now operates in **token/points mode** — points are a friendlier synonym for money (**1 pt = $1**). In-app, amounts render as **"X pts"**; only outbound payment deep-links (Venmo/Zelle/Cash App/PayPal) show real dollars. Apply this throughout: prefer **pts** in result cards, standings, and settle-up copy; keep dollar framing only where an actual payment link is involved. This supersedes the money-forward `+$X` examples in §6.
+
 ---
 
 ## 0. Context
@@ -80,10 +82,10 @@ Rule across the app: minimize **money / buy-in / wager / bet / winnings**; prefe
 Implement the post-round **shareable result card** as the settlement/share screen. Spec:
 - Navy card, thin brass inner frame, the seal stamped at top.
 - Context line (course · games · date) in tracked caps.
-- Headline: `{winner} takes it.` in the serif + winner's `+$X` in brass.
+- Headline: `{winner} takes it.` in the serif + winner's `+X pts` in brass (points mode; `+$X` only in dollar-stakes rounds).
 - A single auto-generated **witty sub-line** (tasteful, affectionate — never cruel; keep a small rotating library, e.g. "Lunch's on {last place}.").
-- **Standings**: ranked rows, name + net `+/−$`, winner in brass, others cream/muted.
-- **Settle up**: the who-owes-who lines (`{from} → {to}  $X`), zero-sum.
+- **Standings**: ranked rows, name + net `+/− pts`, winner in brass, others cream/muted.
+- **Settle up**: the who-owes-who lines (`{from} → {to}  X pts`), zero-sum. (The card is a display artifact → show pts; the actual Venmo/etc. links elsewhere carry the dollar amount.)
 - Footer: hairline + `THAT'S GOOD.` tracked, brass.
 - Must export/screenshot cleanly at portrait (story) ratio for sharing.
 
