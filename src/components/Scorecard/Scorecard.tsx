@@ -37,6 +37,7 @@ import {
   wolfForHole,
   strokesOnHole,
   fmtMoney,
+  fmtAmount,
 } from '../../lib/gameLogic'
 import { makePlayableSnapshot, getPlayableHoleNumbers, roundToHolesConfig } from '../../lib/holeUtils'
 import type {
@@ -157,20 +158,20 @@ function InlineScorePad({
   )
 }
 
-function SkinsStatus({ carry, potCents }: { carry: number; potCents: number }) {
+function SkinsStatus({ carry, potCents, stakesMode }: { carry: number; potCents: number; stakesMode?: string }) {
   const valueCents = potCents * (carry + 1)
   if (carry === 0) {
     return (
       <div className="bg-gray-50 border border-gray-200 rounded-xl px-3 py-2 flex items-center gap-2">
-        <span className="text-gray-500 font-bold text-sm">Skins Pot</span>
-        <span className="text-gray-600 text-sm">{fmtMoney(valueCents)} per hole</span>
+        <span className="text-gray-500 font-bold text-sm">Skins</span>
+        <span className="text-gray-600 text-sm">{fmtAmount(valueCents, stakesMode)} per hole</span>
       </div>
     )
   }
   return (
     <div className="bg-yellow-50 border border-yellow-200 rounded-xl px-3 py-2 flex items-center gap-2">
       <Tooltip term="Carry"><span className="text-yellow-600 font-bold text-sm">🔥 Carry ×{carry + 1}</span></Tooltip>
-      <span className="text-yellow-700 text-sm">{fmtMoney(valueCents)} on the line</span>
+      <span className="text-yellow-700 text-sm">{fmtAmount(valueCents, stakesMode)} on the line</span>
     </div>
   )
 }
@@ -1527,6 +1528,7 @@ export function Scorecard({ userId, roundId, onEndRound, onHome, readOnly: readO
             treasurerPlayer={treasurerProfile}
             roundId={roundId}
             playerId={myPlayerId}
+            stakesMode={game?.stakesMode}
             onReported={(method) => {
               setBuyIns(prev => prev.map(b =>
                 b.playerId === myPlayerId
@@ -1883,7 +1885,7 @@ export function Scorecard({ userId, roundId, onEndRound, onHome, readOnly: readO
             {showGameStatus && skinsResult && game && (
               <div className="flex items-center gap-2">
                 <div className="flex-1">
-                  <SkinsStatus carry={currentCarry} potCents={game.buyInCents * players.length * (1 + ((game.config as any).presses?.length ?? 0))} />
+                  <SkinsStatus carry={currentCarry} potCents={game.buyInCents * players.length * (1 + ((game.config as any).presses?.length ?? 0))} stakesMode={game.stakesMode} />
                 </div>
                 {!readOnly && (
                   <button

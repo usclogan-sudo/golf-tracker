@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { supabase, rowToRound, rowToHoleScore } from '../../lib/supabase'
-import { buildCourseHandicaps, fmtMoney, strokesOnHole } from '../../lib/gameLogic'
+import { buildCourseHandicaps, fmtAmount, strokesOnHole } from '../../lib/gameLogic'
 import { makePlayableSnapshot, roundToHolesConfig } from '../../lib/holeUtils'
 import { ConfirmModal } from '../ConfirmModal'
 import type { Round, HoleScore, RoundPlayer, GameType } from '../../types'
@@ -13,7 +13,7 @@ interface Props {
 }
 
 const GAME_EMOJI: Record<GameType, string> = {
-  skins: '🎰 Skins',
+  skins: '⛳ Skins',
   best_ball: '🤝 Best Ball',
   nassau: '🏳️ Nassau',
   wolf: '🐺 Wolf',
@@ -168,7 +168,7 @@ export function RoundHistory({ userId, onBack, onViewSettlements, onPlayAgain }:
                   <div className="text-right flex items-center gap-2">
                     <div>
                       <p className="text-sm font-semibold text-gray-700">{players.length} players</p>
-                      {potCents > 0 && <p className="text-xs text-green-600 font-medium">{fmtMoney(potCents)} pot</p>}
+                      {potCents > 0 && <p className="text-xs text-green-600 font-medium">{fmtAmount(potCents, game?.stakesMode)} pot</p>}
                     </div>
                     <svg className={`w-4 h-4 text-gray-400 transition-transform ${isExpanded ? 'rotate-90' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />

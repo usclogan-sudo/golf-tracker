@@ -19,6 +19,8 @@ export interface ShareCardProps {
   standings: ShareCardStanding[]
   /** Net-out who-owes-who pairs. */
   settlements: ShareCardSettlement[]
+  /** When true, render values as tokens ("pts") instead of dollars. */
+  isPoints?: boolean
 }
 
 const NAVY  = '#16263B'
@@ -41,8 +43,10 @@ export const SUBLINES = [
   'Lunch is on {lastPlace}.',
 ]
 
-export function fmt(cents: number, withSign = false): string {
-  const abs = new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(Math.abs(cents) / 100)
+export function fmt(cents: number, withSign = false, isPoints = false): string {
+  const abs = isPoints
+    ? `${Math.abs(cents)} pts`
+    : new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(Math.abs(cents) / 100)
   if (!withSign) return abs
   if (cents === 0) return abs
   return (cents > 0 ? '+' : '−') + abs
@@ -63,7 +67,7 @@ export function pickSubline(winner: string, lastPlace: string | null, salt: stri
 }
 
 export const ShareCard = forwardRef<HTMLDivElement, ShareCardProps>(function ShareCard(
-  { courseName, date, gameLabel, standings, settlements },
+  { courseName, date, gameLabel, standings, settlements, isPoints = false },
   ref
 ) {
   const dateStr = date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
@@ -178,7 +182,7 @@ export const ShareCard = forwardRef<HTMLDivElement, ShareCardProps>(function Sha
                 marginTop: 6,
               }}
             >
-              {fmt(winner.netCents, true)}
+              {fmt(winner.netCents, true, isPoints)}
             </div>
           )}
         </div>
@@ -233,7 +237,7 @@ export const ShareCard = forwardRef<HTMLDivElement, ShareCardProps>(function Sha
                     {s.name}
                   </span>
                   <span style={{ fontFeatureSettings: '"tnum" 1', whiteSpace: 'nowrap', flexShrink: 0 }}>
-                    {s.netCents === 0 ? 'E' : fmt(s.netCents, true)}
+                    {s.netCents === 0 ? 'E' : fmt(s.netCents, true, isPoints)}
                   </span>
                 </div>
               )
@@ -273,7 +277,7 @@ export const ShareCard = forwardRef<HTMLDivElement, ShareCardProps>(function Sha
                   {s.fromName} <span style={{ color: BRASS }}>→</span> {s.toName}
                 </span>
                 <span style={{ fontWeight: 600, fontFeatureSettings: '"tnum" 1', whiteSpace: 'nowrap', flexShrink: 0 }}>
-                  {fmt(s.amountCents)}
+                  {fmt(s.amountCents, false, isPoints)}
                 </span>
               </div>
             ))}

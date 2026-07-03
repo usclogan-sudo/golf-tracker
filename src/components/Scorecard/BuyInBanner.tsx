@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { supabase } from '../../lib/supabase'
 import { PaymentButtons } from '../PaymentButtons'
-import { fmtMoney } from '../../lib/gameLogic'
+import { fmtAmount } from '../../lib/gameLogic'
 import type { BuyIn, Player } from '../../types'
 
 interface Props {
@@ -10,9 +10,13 @@ interface Props {
   roundId: string
   playerId: string
   onReported: (method: string) => void
+  stakesMode?: string
 }
 
-export function BuyInBanner({ buyIn, treasurerPlayer, roundId, playerId, onReported }: Props) {
+export function BuyInBanner({ buyIn, treasurerPlayer, roundId, playerId, onReported, stakesMode }: Props) {
+  // Points are whole-dollar synonyms (1 pt = $1): show "pts" in-app, but the
+  // payment deep-link needs real cents so Venmo/etc. open with the right dollars.
+  const payCents = stakesMode === 'points' ? buyIn.amountCents * 100 : buyIn.amountCents
   const [reporting, setReporting] = useState(false)
   const [showConfirm, setShowConfirm] = useState(false)
 
@@ -81,13 +85,13 @@ export function BuyInBanner({ buyIn, treasurerPlayer, roundId, playerId, onRepor
   return (
     <div className="mx-4 mt-2 bg-amber-50 border border-amber-200 rounded-xl p-3 space-y-2">
       <p className="text-amber-800 font-semibold text-sm">
-        Buy-in: {fmtMoney(buyIn.amountCents)} to {treasurerPlayer.name}
+        Buy-in: {fmtAmount(buyIn.amountCents, stakesMode)} to {treasurerPlayer.name}
       </p>
       {hasDigitalPayment && (
         <div onClick={() => setShowConfirm(true)}>
           <PaymentButtons
             toPlayer={treasurerPlayer}
-            amountCents={buyIn.amountCents}
+            amountCents={payCents}
             note="buy-in"
             compact
           />

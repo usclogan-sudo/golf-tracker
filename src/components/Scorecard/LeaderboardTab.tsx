@@ -486,6 +486,7 @@ export function LeaderboardTab({
           gameLabel={gameLabel}
           standings={shareStandings}
           settlements={[]}
+          isPoints={game?.stakesMode === 'points'}
         />
       </div>
     </div>

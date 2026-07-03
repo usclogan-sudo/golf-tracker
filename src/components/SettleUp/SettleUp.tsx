@@ -107,9 +107,9 @@ function mergePaymentInfo(player: Player, profiles: Map<string, UserProfile>, pa
   }
 }
 
-function NudgeButton({ playerName, amountCents, toPlayer, fromPlayerId, roundId, treasurerName, participantMap, nudgedPlayerIds, onNudged }: {
+function NudgeButton({ playerName, amountCents, toPlayer, fromPlayerId, roundId, treasurerName, participantMap, nudgedPlayerIds, onNudged, stakesMode }: {
   playerName: string; amountCents: number; toPlayer: Player; fromPlayerId: string; roundId: string; treasurerName: string
-  participantMap: Map<string, string>; nudgedPlayerIds: Set<string>; onNudged: (playerId: string) => void
+  participantMap: Map<string, string>; nudgedPlayerIds: Set<string>; onNudged: (playerId: string) => void; stakesMode?: string
 }) {
   const [sending, setSending] = useState(false)
   const alreadyNudged = nudgedPlayerIds.has(fromPlayerId)
@@ -120,7 +120,7 @@ function NudgeButton({ playerName, amountCents, toPlayer, fromPlayerId, roundId,
     : toPlayer.paypalEmail
     ? `paypal.me/${toPlayer.paypalEmail}`
     : null
-  const msg = `Hey ${playerName}! You owe ${fmtAmount(amountCents)} for golf.${paymentLink ? ` Pay here: ${paymentLink}` : ''}`
+  const msg = `Hey ${playerName}! You owe ${fmtAmount(amountCents, stakesMode)} for golf.${paymentLink ? ` Pay here: ${paymentLink}` : ''}`
 
   const handleSendReminder = async () => {
     const targetUserId = participantMap.get(fromPlayerId)
@@ -135,7 +135,7 @@ function NudgeButton({ playerName, amountCents, toPlayer, fromPlayerId, roundId,
       id: uuidv4(),
       userId: targetUserId,
       type: 'unsettled_round',
-      title: `You owe ${fmtAmount(amountCents)} to ${treasurerName}`,
+      title: `You owe ${fmtAmount(amountCents, stakesMode)} to ${treasurerName}`,
       body: `Settle up for your round`,
       roundId,
       read: false,
@@ -478,7 +478,7 @@ export function SettleUp({ roundId, userId, eventId, onDone, onContinue }: Props
         id: uuidv4(),
         userId: debtorUserId,
         type: 'unsettled_round',
-        title: `You owe ${fmtAmount(record.amountCents)} to ${treasurerName}`,
+        title: `You owe ${fmtAmount(record.amountCents, game?.stakesMode)} to ${treasurerName}`,
         body: 'Round complete — settle up!',
         roundId,
         read: false,
@@ -554,7 +554,7 @@ export function SettleUp({ roundId, userId, eventId, onDone, onContinue }: Props
           id: uuidv4(),
           userId: targetUserId,
           type: 'unsettled_round',
-          title: `${myName} says they paid ${fmtAmount(settlement.amountCents)} to ${toName}`,
+          title: `${myName} says they paid ${fmtAmount(settlement.amountCents, game?.stakesMode)} to ${toName}`,
           body: `Reported via ${method} — confirm in Settle Up`,
           roundId,
           read: false,
@@ -801,6 +801,10 @@ export function SettleUp({ roundId, userId, eventId, onDone, onContinue }: Props
   const isHighRoller = game.stakesMode === 'high_roller'
   const isPoints = game.stakesMode === 'points'
   const fmt = (cents: number) => fmtAmount(cents, game.stakesMode)
+  // Points are whole-dollar synonyms for money (1 pt = $1). In-app we show "pts",
+  // but payment apps (Venmo/Zelle/etc.) only speak dollars, so amounts handed to a
+  // payment rail must be converted from raw points to real cents.
+  const toPayCents = (amt: number) => (isPoints ? amt * 100 : amt)
   const headerClass = isHighRoller ? 'hr-header' : 'app-header'
 
   const owedSettlements = settlementRecords.filter(s => s.status === 'owed')
@@ -958,8 +962,8 @@ export function SettleUp({ roundId, userId, eventId, onDone, onContinue }: Props
                         </div>
                       )
                     })()}
-                    {!isPoints && !item.isDirect && item.player && item.netCents < 0 && (
-                      <PaymentButtons toPlayer={item.player} amountCents={Math.abs(item.netCents)} note={`${snapshot.courseName} · ${gameLabel}`} />
+                    {!item.isDirect && item.player && item.netCents < 0 && (
+                      <PaymentButtons toPlayer={item.player} amountCents={toPayCents(Math.abs(item.netCents))} note={`${snapshot.courseName} · ${gameLabel}`} />
                     )}
                     <button
                       onClick={() => markPlayerSettled(item.owedIds)}
@@ -1087,11 +1091,11 @@ export function SettleUp({ roundId, userId, eventId, onDone, onContinue }: Props
               <p className={`text-xl font-bold ${isHighRoller ? 'text-white' : 'text-gray-800'}`}>{players.length}</p>
             </div>
             <div className={`rounded-xl p-3 ${isHighRoller ? 'bg-black/30' : 'bg-gray-50'}`}>
-              <p className={`text-xs ${isHighRoller ? 'text-amber-400' : 'text-gray-500'}`}>Buy-in</p>
+              <p className={`text-xs ${isHighRoller ? 'text-amber-400' : 'text-gray-500'}`}>{isPoints ? 'Entry' : 'Buy-in'}</p>
               <p className={`text-xl font-bold ${isHighRoller ? 'text-white' : 'text-gray-800'}`}>{fmt(game.buyInCents)}</p>
             </div>
             <div className={`rounded-xl p-3 ${isHighRoller ? 'bg-amber-900/40' : 'bg-green-50'}`}>
-              <p className={`text-xs ${isHighRoller ? 'text-amber-400' : 'text-gray-500'}`}>Total pot</p>
+              <p className={`text-xs ${isHighRoller ? 'text-amber-400' : 'text-gray-500'}`}>{isPoints ? 'Total points' : 'Total pot'}</p>
               <p className={`text-xl font-bold ${isHighRoller ? 'text-amber-400' : 'text-green-800'}`}>{fmt(potCents)}</p>
             </div>
           </div>
@@ -1201,7 +1205,7 @@ export function SettleUp({ roundId, userId, eventId, onDone, onContinue }: Props
         {skinsResult && (
           <section className="bg-white dark:bg-gray-800 rounded-2xl shadow-sm overflow-hidden">
             <button onClick={() => toggleSection('skins')} className="w-full flex items-center justify-between p-4 active:bg-gray-50 dark:active:bg-gray-700">
-              <span className="text-sm font-semibold text-gray-700 dark:text-gray-200">🎰 Skins · {skinsResult.totalSkins} skin{skinsResult.totalSkins !== 1 ? 's' : ''}</span>
+              <span className="text-sm font-semibold text-gray-700 dark:text-gray-200">⛳ Skins · {skinsResult.totalSkins} skin{skinsResult.totalSkins !== 1 ? 's' : ''}</span>
               <span className="text-gray-400 text-sm">{expandedSections.has('skins') ? '▾' : '▸'}</span>
             </button>
             {expandedSections.has('skins') && (
@@ -1546,11 +1550,11 @@ export function SettleUp({ roundId, userId, eventId, onDone, onContinue }: Props
                     </div>
                   </div>
                   {/* Payment links for unpaid & non-reported settlements */}
-                  {!isPoints && !isPaid && !playerReported && (
-                    <PaymentButtons toPlayer={toPlayer} amountCents={s.amountCents} note={roundNote} compact />
+                  {!isPaid && !playerReported && (
+                    <PaymentButtons toPlayer={toPlayer} amountCents={toPayCents(s.amountCents)} note={roundNote} compact />
                   )}
                   {/* "I Paid" button for non-treasurer players on their own debts */}
-                  {!isTreasurer && isMyDebt && !playerReported && !isPoints && (() => {
+                  {!isTreasurer && isMyDebt && !playerReported && (() => {
                     const isReporting = reportingSettlementId === s.id
                     const hasDigitalPayment = !!(toPlayer.venmoUsername || toPlayer.zelleIdentifier || toPlayer.cashAppUsername || toPlayer.paypalEmail)
                     const defaultMethod = toPlayer.venmoUsername ? 'venmo' : toPlayer.zelleIdentifier ? 'zelle' : toPlayer.cashAppUsername ? 'cashapp' : toPlayer.paypalEmail ? 'paypal' : 'cash'
@@ -1583,10 +1587,11 @@ export function SettleUp({ roundId, userId, eventId, onDone, onContinue }: Props
                       <span className="text-gray-400 text-xs">— waiting for confirmation</span>
                     </div>
                   )}
-                  {!isPoints && !isPaid && isTreasurer && (
+                  {!isPaid && isTreasurer && (
                     <NudgeButton
                       playerName={fromPlayer.name}
                       amountCents={s.amountCents}
+                      stakesMode={game.stakesMode}
                       toPlayer={toPlayer}
                       fromPlayerId={s.fromPlayerId}
                       roundId={roundId}
@@ -1678,6 +1683,7 @@ export function SettleUp({ roundId, userId, eventId, onDone, onContinue }: Props
                   gameLabel={gameLabel}
                   standings={shareStandings}
                   settlements={shareSettlements}
+                  isPoints={isPoints}
                 />
               </div>
             </>
