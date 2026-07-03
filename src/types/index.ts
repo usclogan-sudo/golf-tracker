@@ -242,6 +242,9 @@ export interface EventParticipant {
   userId: string
   playerId: string
   role: EventRole
+  status: 'pending' | 'accepted' | 'declined'
+  invitedBy?: string
+  invitedAt?: Date
   groupNumber?: number
   joinedAt?: Date
 }

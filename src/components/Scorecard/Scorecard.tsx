@@ -318,7 +318,7 @@ export function Scorecard({ userId, roundId, onEndRound, onHome, readOnly: readO
     let cancelled = false
     Promise.all([
       supabase.from('events').select('*').eq('id', round.eventId).single(),
-      supabase.from('event_participants').select('*').eq('event_id', round.eventId),
+      supabase.from('event_participants').select('*').eq('event_id', round.eventId).eq('status', 'accepted'),
     ]).then(([eventRes, epRes]) => {
       if (cancelled) return
       if (eventRes.data) setEvent(rowToEvent(eventRes.data))

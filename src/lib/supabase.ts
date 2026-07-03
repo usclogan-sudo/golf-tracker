@@ -665,6 +665,9 @@ export function rowToEventParticipant(row: any): EventParticipant {
     userId: row.user_id,
     playerId: row.player_id,
     role: row.role as EventRole,
+    status: row.status ?? 'accepted',
+    invitedBy: row.invited_by ?? undefined,
+    invitedAt: row.invited_at ? new Date(row.invited_at) : undefined,
     groupNumber: row.group_number ?? undefined,
     joinedAt: row.joined_at ? new Date(row.joined_at) : undefined,
   }

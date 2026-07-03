@@ -11,8 +11,8 @@ function makeRoundParticipant(uid: string, status: RoundParticipant['status'] = 
   return { id: 'rp-1', roundId: 'r-1', userId: uid, playerId: 'pl-1', status }
 }
 
-function makeEventParticipant(uid: string, role: 'manager' | 'scorekeeper' | 'player', groupNumber?: number): EventParticipant {
-  return { id: 'ep-1', eventId: 'e-1', userId: uid, playerId: 'pl-1', role, groupNumber }
+function makeEventParticipant(uid: string, role: 'manager' | 'scorekeeper' | 'player', groupNumber?: number, status: EventParticipant['status'] = 'accepted'): EventParticipant {
+  return { id: 'ep-1', eventId: 'e-1', userId: uid, playerId: 'pl-1', role, status, groupNumber }
 }
 
 // ─── Creator scenarios ──────────────────────────────────────────────────────
@@ -108,6 +108,15 @@ describe('event roles', () => {
     )
     expect(perms.canApproveScores).toBe(true)
     expect(perms.isGroupScorekeeper).toBe(true)
+  })
+
+  it('a pending event invitee (even role=manager) gets no access', () => {
+    const perms = computeScorecardPermissions(
+      userId, makeRound(), [], [makeEventParticipant(userId, 'manager', undefined, 'pending')], true, false,
+    )
+    expect(perms.myEventParticipant).toBeUndefined()
+    expect(perms.isEventManager).toBe(false)
+    expect(perms.canApproveScores).toBe(false)
   })
 
   it('player (role=player) cannot approve', () => {
