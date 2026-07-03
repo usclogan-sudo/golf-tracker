@@ -4,21 +4,23 @@ import { reportSupabaseError } from '../lib/sentry'
 import type { UserProfile } from '../types'
 
 interface Props {
-  roundId: string
+  /** Round invite — pass roundId. Event invite — pass eventId instead. */
+  roundId?: string
+  eventId?: string
   currentUserId: string
-  /** player_ids already in the round roster (to hide from the picker) */
+  /** player_ids already in the roster (to hide from the picker) */
   existingPlayerIds: string[]
   onClose: () => void
   onInvited?: (name: string) => void
 }
 
 /**
- * Organizer modal: search registered users and invite one into the round.
- * Calls invite_to_round, which creates a pending membership (and adds a roster
- * slot if the invitee isn't already in the round). Registered users' player_id
- * equals their auth uuid, so we pass userId for both p_user_id and p_player_id.
+ * Organizer modal: search registered users and invite one into a round or event.
+ * Calls invite_to_round or invite_to_event, which create a pending membership.
+ * Registered users' player_id equals their auth uuid, so we pass userId for both
+ * p_user_id and p_player_id.
  */
-export function InvitePlayerModal({ roundId, currentUserId, existingPlayerIds, onClose, onInvited }: Props) {
+export function InvitePlayerModal({ roundId, eventId, currentUserId, existingPlayerIds, onClose, onInvited }: Props) {
   const [users, setUsers] = useState<UserProfile[]>([])
   const [search, setSearch] = useState('')
   const [busy, setBusy] = useState<string | null>(null)
@@ -40,14 +42,12 @@ export function InvitePlayerModal({ roundId, currentUserId, existingPlayerIds, o
   const invite = async (u: UserProfile) => {
     setBusy(u.userId)
     setMsg(null)
-    const { error } = await supabase.rpc('invite_to_round', {
-      p_round_id: roundId,
-      p_user_id: u.userId,
-      p_player_id: u.userId,
-    })
+    const { error } = eventId
+      ? await supabase.rpc('invite_to_event', { p_event_id: eventId, p_user_id: u.userId, p_player_id: u.userId })
+      : await supabase.rpc('invite_to_round', { p_round_id: roundId, p_user_id: u.userId, p_player_id: u.userId })
     setBusy(null)
     if (error) {
-      reportSupabaseError(error, 'invite_to_round', { roundId, invitee: u.userId })
+      reportSupabaseError(error, eventId ? 'invite_to_event' : 'invite_to_round', { roundId, eventId, invitee: u.userId })
       setMsg(error.message || 'Could not send invite.')
       return
     }

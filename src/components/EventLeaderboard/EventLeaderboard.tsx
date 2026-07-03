@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { supabase, rowToRound, rowToRoundPlayer, rowToHoleScore, rowToEvent, rowToEventParticipant } from '../../lib/supabase'
 import { buildCourseHandicaps, strokesOnHole, fmtMoney } from '../../lib/gameLogic'
 import { makePlayableSnapshot, roundToHolesConfig } from '../../lib/holeUtils'
+import { InvitePlayerModal } from '../InvitePlayerModal'
 import type { Round, RoundPlayer, HoleScore, GolfEvent, EventParticipant, ScoreStatus } from '../../types'
 
 interface Props {
@@ -16,6 +17,7 @@ export function EventLeaderboard({ userId, eventId, onBack }: Props) {
   const [roundPlayers, setRoundPlayers] = useState<RoundPlayer[]>([])
   const [holeScores, setHoleScores] = useState<HoleScore[]>([])
   const [eventParticipants, setEventParticipants] = useState<EventParticipant[]>([])
+  const [showInvite, setShowInvite] = useState(false)
   const [loading, setLoading] = useState(true)
   const [activeTab, setActiveTab] = useState<'overall' | number>('overall')
   const [onlineUsers, setOnlineUsers] = useState<Set<string>>(new Set())
@@ -261,9 +263,23 @@ export function EventLeaderboard({ userId, eventId, onBack }: Props) {
               </span>
             </h1>
           </div>
-          <button onClick={onBack} className="text-gray-300 text-sm font-medium px-3 min-h-[44px] rounded-lg hover:bg-gray-600">← Back</button>
+          <div className="flex items-center gap-1">
+            {isManager && (
+              <button onClick={() => setShowInvite(true)} className="text-cyan-300 text-sm font-medium px-3 min-h-[44px] rounded-lg hover:bg-gray-600">Invite</button>
+            )}
+            <button onClick={onBack} className="text-gray-300 text-sm font-medium px-3 min-h-[44px] rounded-lg hover:bg-gray-600">← Back</button>
+          </div>
         </div>
       </header>
+
+      {showInvite && (
+        <InvitePlayerModal
+          eventId={eventId}
+          currentUserId={userId}
+          existingPlayerIds={players.map((p: any) => p.id)}
+          onClose={() => setShowInvite(false)}
+        />
+      )}
 
       {/* Tab bar */}
       <div className="bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 px-4 py-2 sticky top-[4.5rem] z-[6]">
