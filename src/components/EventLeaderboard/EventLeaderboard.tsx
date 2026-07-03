@@ -36,7 +36,7 @@ export function EventLeaderboard({ userId, eventId, onBack }: Props) {
         supabase.from('rounds').select('*').eq('id', ev.roundId).single(),
         supabase.from('round_players').select('*').eq('round_id', ev.roundId),
         supabase.from('hole_scores').select('*').eq('round_id', ev.roundId),
-        supabase.from('event_participants').select('*').eq('event_id', eventId),
+        supabase.from('event_participants').select('*').eq('event_id', eventId).eq('status', 'accepted'),
       ]).then(([roundRes, rpRes, hsRes, epRes]) => {
         if (cancelled()) return
         if (roundRes.data) setRound(rowToRound(roundRes.data))
