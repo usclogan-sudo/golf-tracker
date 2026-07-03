@@ -201,10 +201,14 @@ create or replace function public.join_event(p_invite_code text, p_player_id tex
       raise exception 'Event not found or no longer active';
     end if;
 
+    -- NOTE: use FOUND, not "v_existing IS NOT NULL". A record IS NOT NULL only when
+    -- EVERY field is non-null; event_participants.group_number is nullable, so the
+    -- old baseline check silently failed for group-less events and fell through to a
+    -- duplicate INSERT. FOUND is true whenever the SELECT returned a row.
     select * into v_existing from event_participants
     where event_id = v_event.id and user_id = v_caller;
 
-    if v_existing is not null then
+    if found then
       if v_existing.player_id != p_player_id or v_existing.status != 'accepted' then
         update event_participants set player_id = p_player_id, status = 'accepted' where id = v_existing.id;
       end if;
@@ -214,9 +218,9 @@ create or replace function public.join_event(p_invite_code text, p_player_id tex
       return jsonb_build_object('event_id', v_event.id, 'round_id', v_event.round_id, 'participant_id', v_existing.id);
     end if;
 
-    select * into v_existing from event_participants
+    perform 1 from event_participants
     where event_id = v_event.id and player_id = p_player_id and user_id != v_caller and status = 'accepted';
-    if v_existing is not null then
+    if found then
       raise exception 'Player already claimed by another user';
     end if;
 
