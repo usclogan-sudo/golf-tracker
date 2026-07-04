@@ -47,5 +47,11 @@
 	</array>
 	<key>UIViewControllerBasedStatusBarAppearance</key>
 	<true/>
+	<key>NSCameraUsageDescription</key>
+	<string>Gimme uses the camera to snap a photo of your scorecard and read the scores automatically.</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>Gimme lets you pick a scorecard photo from your library to read the scores automatically.</string>
+	<key>NSPhotoLibraryAddUsageDescription</key>
+	<string>Gimme can save your shareable result card to your photos.</string>
 </dict>
 </plist>

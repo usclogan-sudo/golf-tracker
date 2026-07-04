@@ -17,6 +17,7 @@ import { ConfirmModal } from './components/ConfirmModal'
 import { UserAvatar } from './components/AvatarPicker'
 import { InstallBanner } from './components/InstallBanner'
 import { PendingInvites } from './components/PendingInvites'
+import { minimizeApp } from './lib/native'
 
 // Lazy-loaded screens (not needed for initial Home render)
 const JoinRound = lazy(() => import('./components/JoinRound/JoinRound').then(m => ({ default: m.JoinRound })))
@@ -990,6 +991,19 @@ export default function App() {
     setHomeKey(k => k + 1)
     setScreen(userProfile?.adminOnly ? 'admin' : 'home')
   }
+
+  // Android hardware back button (bridged from native.ts): step back toward home
+  // rather than quitting; at the root, background the app instead of exiting.
+  useEffect(() => {
+    const onBack = () => {
+      if (spectateCode) { setSpectateCode(null); return }
+      if (screen !== 'home' && screen !== 'admin') { goHome(); return }
+      void minimizeApp()
+    }
+    window.addEventListener('gimme:back', onBack)
+    return () => window.removeEventListener('gimme:back', onBack)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [screen, spectateCode])
 
   // Loading fallback for lazy-loaded screens
   const screenFallback = (

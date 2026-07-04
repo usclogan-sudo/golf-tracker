@@ -11,6 +11,16 @@ import { SplashScreen } from '@capacitor/splash-screen'
 
 export const isNative = () => Capacitor.isNativePlatform()
 
+/** Background the app (Android) instead of quitting — used at the nav root. */
+export async function minimizeApp(): Promise<void> {
+  if (!Capacitor.isNativePlatform()) return
+  try {
+    await CapApp.minimizeApp()
+  } catch {
+    /* not available on this platform */
+  }
+}
+
 /**
  * Route a Gimme deep link (Universal/App Link) into the app's existing
  * join/spectate flow. The web app reads ?join= / ?spectate= from the URL on
@@ -50,6 +60,12 @@ export async function initNative(): Promise<void> {
 
   // Deep links, whether the app is warm or cold-started.
   CapApp.addListener('appUrlOpen', ({ url }) => routeDeepLink(url))
+
+  // Android hardware back button: let the app decide (go back vs. minimize)
+  // instead of the default, which quits the app.
+  CapApp.addListener('backButton', () => {
+    window.dispatchEvent(new CustomEvent('gimme:back'))
+  })
 
   // Reveal the app once the web layer has painted.
   try {
