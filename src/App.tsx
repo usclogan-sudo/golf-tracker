@@ -785,6 +785,19 @@ export default function App() {
     }
   }, [])
 
+  // Native deep links (Universal/App Links) bridged from Capacitor — routes an
+  // invite/spectate code opened from outside the app into the same flow the web
+  // uses for ?join= / ?spectate=. No-op on web (event never fires).
+  useEffect(() => {
+    const onDeepLink = (e: Event) => {
+      const { join, spectate } = (e as CustomEvent<{ join?: string | null; spectate?: string | null }>).detail || {}
+      if (spectate) setSpectateCode(spectate)
+      if (join) setPendingJoinCode(join)
+    }
+    window.addEventListener('gimme:deeplink', onDeepLink)
+    return () => window.removeEventListener('gimme:deeplink', onDeepLink)
+  }, [])
+
   useEffect(() => {
     // Set up auth listener FIRST so it catches events from code exchange
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {

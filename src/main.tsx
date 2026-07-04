@@ -1,10 +1,13 @@
 import { StrictMode, lazy, Suspense } from 'react'
 import { createRoot } from 'react-dom/client'
 import { initSentry, Sentry } from './lib/sentry'
+import { initNative, isNative } from './lib/native'
 import './index.css'
 import App from './App.tsx'
 
 initSentry()
+// Native shell (Capacitor) — no-op on web.
+void initNative()
 
 // Brand QA preview — bypasses auth and renders the result-card scenarios.
 // Reachable at /golf-tracker/?preview=share-card. Removing the query param returns to the app.
@@ -34,7 +37,9 @@ createRoot(document.getElementById('root')!).render(
   </StrictMode>,
 )
 
-if ('serviceWorker' in navigator) {
+// The service worker is a PWA/web concern only. In the native shell Capacitor
+// serves assets locally, so registering an SW would just fight its cache.
+if (!isNative() && 'serviceWorker' in navigator) {
   window.addEventListener('load', () => {
     navigator.serviceWorker.register('/sw.js').then((reg) => {
       // Check for updates every 5 minutes
