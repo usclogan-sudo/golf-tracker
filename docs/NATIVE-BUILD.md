@@ -61,14 +61,44 @@ npx cap open android   # opens Android Studio
 Apple/Google fetch these from `https://<domain>/.well-known/…` to verify link ownership.
 
 ## Push notifications — finish the delivery path
-Registration is wired (`src/lib/native.ts` → `initPush`), but tokens aren't stored/sent yet:
-1. **iOS:** create an **APNs Auth Key** (.p8) in the Apple Developer portal.
-2. **Android:** create a **Firebase** project, add the Android app, drop
-   `google-services.json` into `android/app/`, and enable the FCM plugin wiring.
-3. Persist the device token: add a `device_tokens` table (user_id, platform, token) and
-   have the `registration` listener upsert it.
-4. Send: a Supabase Edge Function that, on invite / settlement-nudge / scorekeeper-approval,
-   looks up tokens and calls APNs/FCM. (Mirror the existing in-app `notifications` writes.)
+**Already built:** the `device_tokens` table (migration), the token upsert in
+`src/lib/native.ts` (`registration` listener), and the **`send-push` Edge Function**
+(`supabase/functions/send-push/`, FCM v1 — covers iOS + Android via Firebase).
+
+Remaining (your Firebase/Apple config + a device to validate):
+1. **Firebase:** create a project; add iOS + Android apps; **upload an APNs Auth Key
+   (.p8)** to Firebase (this is what lets FCM deliver to iOS). Drop
+   `google-services.json` into `android/app/`; for iOS add `GoogleService-Info.plist`
+   in Xcode and the Firebase iOS SDK (or use the FCM-via-APNs path).
+2. **Secrets + deploy:**
+   ```bash
+   supabase secrets set FCM_SERVICE_ACCOUNT="$(cat service-account.json)"
+   supabase secrets set FCM_PROJECT_ID=<firebase-project-id>
+   supabase functions deploy send-push --no-verify-jwt
+   ```
+3. **Fire pushes on in-app notifications** — the app already writes `notifications`
+   rows for invites / nudges / approvals. Add a trigger so each also sends a native
+   push (uses pg_net; enable the extension first):
+   ```sql
+   create extension if not exists pg_net;
+   create or replace function public.notify_push() returns trigger
+     language plpgsql security definer set search_path = public, pg_temp as $$
+   begin
+     perform net.http_post(
+       url := '<your-project>.functions.supabase.co/send-push',
+       headers := jsonb_build_object('Content-Type','application/json',
+         'Authorization','Bearer ' || current_setting('app.service_role_key', true)),
+       body := jsonb_build_object('userId', NEW.user_id, 'title', NEW.title,
+         'body', coalesce(NEW.body,''), 'data', jsonb_build_object('round_id', coalesce(NEW.round_id,'')))
+     );
+     return NEW;
+   end $$;
+   create trigger notifications_push after insert on public.notifications
+     for each row execute function public.notify_push();
+   ```
+   Set `app.service_role_key` (e.g. via `alter database ... set`) or store it in Vault
+   and read it in the function — don't hardcode the key. `send-push` only accepts the
+   service-role key as its bearer, so it can't be called by clients.
 
 ## Store listing / compliance (from the MVP positioning)
 - Lead copy with **side games · scores · settle up**; minimize bet/wager/gamble/money.

@@ -8,6 +8,7 @@ import { Capacitor } from '@capacitor/core'
 import { App as CapApp } from '@capacitor/app'
 import { StatusBar, Style } from '@capacitor/status-bar'
 import { SplashScreen } from '@capacitor/splash-screen'
+import { supabase } from './supabase'
 
 export const isNative = () => Capacitor.isNativePlatform()
 
@@ -85,10 +86,20 @@ async function initPush(): Promise<void> {
     const perm = await PushNotifications.requestPermissions()
     if (perm.receive !== 'granted') return
     await PushNotifications.register()
-    PushNotifications.addListener('registration', () => {
-      // TODO(native): persist token.value to a `device_tokens` table so the
-      // backend can send invite / settlement-nudge / approval pushes via APNs/FCM.
-      console.info('[push] device registered')
+    PushNotifications.addListener('registration', async (token) => {
+      // Persist the device token so the send-push Edge Function can deliver
+      // native pushes to this user. Requires an active session.
+      try {
+        const { data } = await supabase.auth.getUser()
+        const uid = data.user?.id
+        if (!uid) return
+        await supabase.from('device_tokens').upsert(
+          { user_id: uid, platform: Capacitor.getPlatform(), token: token.value },
+          { onConflict: 'user_id,token' },
+        )
+      } catch (e) {
+        console.warn('[push] token upsert failed', e)
+      }
     })
     PushNotifications.addListener('registrationError', (e) =>
       console.warn('[push] registration error', e),
