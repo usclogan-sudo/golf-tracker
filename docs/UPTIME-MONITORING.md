@@ -12,7 +12,7 @@ In rough priority — start with #1 and #2, add the rest as you grow.
 
 | # | Target | URL | What it proves |
 |---|---|---|---|
-| 1 | **PWA loads** | `https://gimme-golf.vercel.app/` | Vercel is serving the app shell; the HTML, manifest, and main JS bundle are reachable |
+| 1 | **PWA loads** | `https://gimme.gg/` | Vercel is serving the app shell; the HTML, manifest, and main JS bundle are reachable |
 | 2 | **Supabase REST is reachable** | `https://dbtphtdzblwphpuwodea.supabase.co/rest/v1/?apikey=<anon_key>` | Database fronting layer is alive (returns 200 with the anon key) |
 | 3 | **Supabase Auth is reachable** | `https://dbtphtdzblwphpuwodea.supabase.co/auth/v1/health` | `gotrue` (auth service) is healthy |
 | 4 | **A read-only app_versions check** | RPC via REST: `GET /rest/v1/app_versions?platform=eq.web&select=recommended_version` | End-to-end: HTTPS + Postgres + RLS-permitted read all work for an anon session |
@@ -36,7 +36,7 @@ If you don't know which to pick: **Better Uptime**. The 3-minute frequency catch
 
 ### 1. Pick a provider and create an account
 
-Use a shared team email (e.g. `ops@gimme.golf`) so on-call alerts don't get stuck in one inbox.
+Use a shared team email (e.g. `ops@gimme.gg`) so on-call alerts don't get stuck in one inbox.
 
 ### 2. Add the monitors above
 
@@ -107,8 +107,8 @@ When Gimme gets its own backend (whether for native v1 or for an API gateway), a
 After picking a provider and configuring the monitors, record:
 
 - **Provider**: _e.g. Better Uptime_
-- **Status page URL**: _e.g. status.gimme.golf_
+- **Status page URL**: _e.g. status.gimme.gg_
 - **On-call rotation**: _e.g. usclogan@gmail.com (solo)_
-- **Account login**: _e.g. ops@gimme.golf — credentials in 1Password_
+- **Account login**: _e.g. ops@gimme.gg — credentials in 1Password_
 
 Updating this doc when the setup is done makes future-you's life easier when an alert fires at 2am.

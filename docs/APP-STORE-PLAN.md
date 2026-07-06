@@ -101,7 +101,7 @@ Gimme is currently a **Progressive Web App (PWA)**. That means:
 ### Accounts
 - **Apple Developer Program** — $99/year. Apply with your ID; takes 24–48 hours to be approved. Required to ship to App Store.
 - **Google Play Console** — $25 one-time. Faster approval (usually same-day).
-- **Support email address** — required on both store listings. Make a `support@gimme.golf` or use your personal one.
+- **Support email address** — required on both store listings. Make a `support@gimme.gg` or use your personal one.
 
 ### Branding assets
 - **App icon** in 18 different sizes for iOS, plus Android. A designer can do this in a few hours, or use a tool like Bakery / Icon Set Creator.
@@ -148,7 +148,7 @@ After year 1 it drops to ~$130/year recurring.
 - Legitimacy — being in the App Store signals "real product" to skeptical golfers.
 - Push notifications work properly on iOS (web push is restricted on iPhones).
 - Native share-sheet, biometric login, deep link handling.
-- Easier word-of-mouth (texting "go to gimme.golf and add to home screen" loses 90% of installs vs. "search Gimme on the App Store").
+- Easier word-of-mouth (texting "go to gimme.gg and add to home screen" loses 90% of installs vs. "search Gimme on the App Store").
 
 **Cons / things to be ready for:**
 - App Store review can be capricious. Expect at least one rejection cycle. We'll have a clear "this isn't just a website, here's the native value" story ready.
