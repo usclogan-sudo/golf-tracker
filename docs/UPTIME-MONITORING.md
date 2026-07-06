@@ -12,7 +12,7 @@ In rough priority — start with #1 and #2, add the rest as you grow.
 
 | # | Target | URL | What it proves |
 |---|---|---|---|
-| 1 | **PWA loads** | `https://gimme-golf.vercel.app/` | Vercel is serving the app shell; the HTML, manifest, and main JS bundle are reachable |
+| 1 | **PWA loads** | `https://gimme-golf-rust.vercel.app/` | Vercel is serving the app shell; the HTML, manifest, and main JS bundle are reachable |
 | 2 | **Supabase REST is reachable** | `https://dbtphtdzblwphpuwodea.supabase.co/rest/v1/?apikey=<anon_key>` | Database fronting layer is alive (returns 200 with the anon key) |
 | 3 | **Supabase Auth is reachable** | `https://dbtphtdzblwphpuwodea.supabase.co/auth/v1/health` | `gotrue` (auth service) is healthy |
 | 4 | **A read-only app_versions check** | RPC via REST: `GET /rest/v1/app_versions?platform=eq.web&select=recommended_version` | End-to-end: HTTPS + Postgres + RLS-permitted read all work for an anon session |
