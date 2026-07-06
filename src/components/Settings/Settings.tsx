@@ -479,6 +479,15 @@ export function Settings({ userId, email, onBack, onSignOut, isAdmin, onAdmin, i
             {deleting ? 'Deleting...' : 'Delete All Data & Sign Out'}
           </button>
         </section>}
+
+        {/* Legal */}
+        <section className="pt-1 text-center">
+          <p className="text-xs text-gray-400">
+            <a href="https://gimme.gg/privacy" target="_blank" rel="noopener noreferrer" className="underline hover:text-gray-600">Privacy Policy</a>
+            <span className="mx-2">·</span>
+            <a href="https://gimme.gg/terms" target="_blank" rel="noopener noreferrer" className="underline hover:text-gray-600">Terms of Service</a>
+          </p>
+        </section>
       </div>
 
       {showAvatarPicker && (
