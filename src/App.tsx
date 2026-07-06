@@ -799,6 +799,24 @@ export default function App() {
     return () => window.removeEventListener('gimme:deeplink', onDeepLink)
   }, [])
 
+  // Android hardware back button (bridged from native.ts): step back toward home
+  // rather than quitting; at the root, background the app instead of exiting.
+  // NOTE: must live ABOVE the early returns below so the hook always runs.
+  useEffect(() => {
+    const onBack = () => {
+      if (spectateCode) { setSpectateCode(null); return }
+      if (screen !== 'home' && screen !== 'admin') {
+        setHomeKey(k => k + 1)
+        setScreen(userProfile?.adminOnly ? 'admin' : 'home')
+        return
+      }
+      void minimizeApp()
+    }
+    window.addEventListener('gimme:back', onBack)
+    return () => window.removeEventListener('gimme:back', onBack)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [screen, spectateCode, userProfile?.adminOnly])
+
   useEffect(() => {
     // Set up auth listener FIRST so it catches events from code exchange
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
@@ -991,19 +1009,6 @@ export default function App() {
     setHomeKey(k => k + 1)
     setScreen(userProfile?.adminOnly ? 'admin' : 'home')
   }
-
-  // Android hardware back button (bridged from native.ts): step back toward home
-  // rather than quitting; at the root, background the app instead of exiting.
-  useEffect(() => {
-    const onBack = () => {
-      if (spectateCode) { setSpectateCode(null); return }
-      if (screen !== 'home' && screen !== 'admin') { goHome(); return }
-      void minimizeApp()
-    }
-    window.addEventListener('gimme:back', onBack)
-    return () => window.removeEventListener('gimme:back', onBack)
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [screen, spectateCode])
 
   // Loading fallback for lazy-loaded screens
   const screenFallback = (
