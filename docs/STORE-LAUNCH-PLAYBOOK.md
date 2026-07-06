@@ -27,26 +27,31 @@ configured. Companion docs: `NATIVE-BUILD.md` (build/signing mechanics), `APP-ST
    (photo scorecard import), and Universal Links. In the App Review notes, explicitly list
    these native capabilities so the reviewer doesn't have to hunt.
 
-3. **Google's new closed-testing gate (adds ~2 weeks).** Personal Play Console accounts
-   created after ~Nov 2023 **must run a closed test with ≥12 testers for ≥14 continuous days**
-   before they can publish to production. This is the single biggest schedule driver on
-   Android. **Start recruiting 12 testers early** (your beta group on gimme.gg is perfect).
-   A registered **organization/company** account is exempt — worth considering if you have an LLC.
+3. ~~**Google's new closed-testing gate (adds ~2 weeks).**~~ **✅ RESOLVED for Gimme.**
+   The 14-day / 12-tester closed-test rule applies to **personal** accounts only. Gimme is
+   enrolling as an **Organization** (LLC + D-U-N-S on hand), which is **exempt** — Android
+   goes straight to production after review. The former long-pole is gone.
+
+   **New #3 risk — Organization identity match.** Both Apple and Google verify your org
+   against the D-U-N-S record. Your **legal entity name + address must EXACTLY match** what
+   Dun & Bradstreet has on file (abbreviations, "LLC" vs "L.L.C.", suite numbers all matter).
+   Confirm/refresh your D&B record *before* enrolling — mismatches are the #1 cause of
+   multi-day org-enrollment stalls.
 
 ---
 
 ## Critical path & realistic timeline
 
 ```
-Week 0    Accounts + legal (Apple 24–48h approval; Play identity verify)   🧑
-Week 0–1  Compliance prep, listing assets, technical finalize              🧑+🤖
-Week 1    iOS → TestFlight; Android → closed test STARTS (14-day clock)    🧑+🤖
-Week 1–3  Android 14-day closed test runs; iOS review (1–7 days)           ⏳
-Week 3    Both submitted to production; final review                        ⏳
-Week 3–4  LIVE 🎉
+Week 0    Org enrollment: Apple (D-U-N-S verify, 2–10d) + Google (ID verify) 🧑
+Week 0–1  Compliance prep, listing assets, technical finalize                🧑+🤖
+Week 1    iOS → TestFlight → review; Android → straight to production review  🧑+🤖
+Week 1–2  Store review (Apple 1–7d, Google 1–3d)                             ⏳
+Week 2    LIVE on both 🎉
 ```
-**End-to-end: ~3–4 weeks**, gated mostly by Google's 14-day test + Apple review cycles.
-iOS can be live in ~1 week; Android is the long pole.
+**End-to-end: ~2–3 weeks** (org route — no 14-day Android gate). The pacing item is now
+**Apple's Organization verification** against your D-U-N-S record, so get that exactly right.
+iOS review may still take one cycle; Android is no longer the long pole.
 
 ---
 
