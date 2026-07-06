@@ -7,8 +7,8 @@
         "appIDs": ["PLACEHOLDER_TEAMID.com.gimme.golf"],
         "components": [
           { "/": "/", "comment": "Splash / home" },
-          { "/": "/*", "?": { "join": "?*" }, "comment": "Invite-code deep link: app.gimme.golf/?join=ABC123" },
-          { "/": "/*", "?": { "spectate": "?*" }, "comment": "Spectator deep link: app.gimme.golf/?spectate=ABC123" }
+          { "/": "/*", "?": { "join": "?*" }, "comment": "Invite-code deep link: gimme.gg/?join=ABC123" },
+          { "/": "/*", "?": { "spectate": "?*" }, "comment": "Spectator deep link: gimme.gg/?spectate=ABC123" }
         ]
       }
     ]
