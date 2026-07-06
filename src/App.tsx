@@ -708,7 +708,9 @@ export default function App() {
   const [screen, setScreen] = useState<Screen>('home')
   const [afterCourseSetup, setAfterCourseSetup] = useState<Screen>('home')
   const [activeRoundId, setActiveRoundId] = useState<string | null>(null)
-  const [newRoundStakesMode, setNewRoundStakesMode] = useState<StakesMode>('standard')
+  // Beta operates in token/points mode — no monetary units surface in the UI.
+  // (The stakes selector is hidden behind SHOW_ALT_STAKES_MODES.)
+  const [newRoundStakesMode, setNewRoundStakesMode] = useState<StakesMode>('points')
   const [editingCourse, setEditingCourse] = useState<Course | undefined>(undefined)
   const [homeKey, setHomeKey] = useState(0)
   const [userProfile, setUserProfile] = useState<UserProfile | null>(null)
@@ -1233,7 +1235,7 @@ export default function App() {
       key={homeKey}
       userId={userId}
       userProfile={userProfile}
-      onNewRound={() => { setNewRoundStakesMode('standard'); setScreen('new-round') }}
+      onNewRound={() => { setNewRoundStakesMode('points'); setScreen('new-round') }}
       onAddCourse={(courseName) => {
         setAfterCourseSetup('home')
         if (courseName) {
@@ -1267,7 +1269,7 @@ export default function App() {
       onPersonalDashboard={() => setScreen('personal-dashboard')}
       onCreateEvent={() => setScreen('event-setup')}
       onLedger={() => setScreen('ledger')}
-      onPlayAgain={(round) => { setPlayAgainRound(round); setNewRoundStakesMode(round.game?.stakesMode ?? 'standard'); setScreen('new-round') }}
+      onPlayAgain={(round) => { setPlayAgainRound(round); setNewRoundStakesMode(round.game?.stakesMode ?? 'points'); setScreen('new-round') }}
     />
     {appConfirmModal && (
       <ConfirmModal

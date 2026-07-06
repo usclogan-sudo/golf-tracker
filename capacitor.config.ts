@@ -12,7 +12,10 @@ const config: CapacitorConfig = {
     iosScheme: 'https',
   },
   ios: {
-    contentInset: 'never',
+    // 'automatic' lets the webview scroll view respect top/bottom safe areas so
+    // content isn't trapped under the notch / home indicator. (The app also adds
+    // its own env(safe-area-inset-*) padding on headers.)
+    contentInset: 'automatic',
     backgroundColor: '#16263B',
   },
   android: {
