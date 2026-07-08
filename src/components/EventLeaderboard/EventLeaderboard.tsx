@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { supabase, rowToRound, rowToRoundPlayer, rowToHoleScore, rowToEvent, rowToEventParticipant } from '../../lib/supabase'
-import { buildCourseHandicaps, strokesOnHole, fmtMoney } from '../../lib/gameLogic'
+import { buildCourseHandicaps, strokesOnHole, fmtAmount } from '../../lib/gameLogic'
 import { makePlayableSnapshot, roundToHolesConfig } from '../../lib/holeUtils'
 import { InvitePlayerModal } from '../InvitePlayerModal'
 import type { Round, RoundPlayer, HoleScore, GolfEvent, EventParticipant, ScoreStatus } from '../../types'
@@ -479,7 +479,7 @@ export function EventLeaderboard({ userId, eventId, onBack }: Props) {
           <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-sm p-4">
             <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Game</p>
             <p className="text-sm text-gray-700 dark:text-gray-300">
-              {game.type.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())} · {fmtMoney(game.buyInCents)}/player · Pot {fmtMoney(game.buyInCents * players.length)}
+              {game.type.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())} · {fmtAmount(game.buyInCents, game.stakesMode)}/player · Pot {fmtAmount(game.buyInCents * players.length, game.stakesMode)}
             </p>
           </div>
         )}

@@ -4,7 +4,7 @@ import { supabase, courseToRow, playerToRow, roundToRow, roundPlayerToRow, buyIn
 import { safeWrite } from '../../lib/safeWrite'
 import { reportSupabaseError } from '../../lib/sentry'
 import { SHOW_HOLE_BETS } from '../../lib/featureFlags'
-import { fmtMoney, JUNK_LABELS } from '../../lib/gameLogic'
+import { fmtMoney, fmtAmount, JUNK_LABELS } from '../../lib/gameLogic'
 import { parseDollarsToCents, parsePointsValue } from '../../lib/money'
 import { venturaCourses } from '../../data/venturaCourses'
 import { NearMeCourses } from '../NearMeCourses/NearMeCourses'
@@ -1328,7 +1328,7 @@ function GameSetup({
               <div>
                 <p className="text-sm text-gray-600 mb-2">Value per junk</p>
                 <div className="flex items-center gap-2">
-                  <span className="text-xl font-bold text-gray-500">$</span>
+                  <span className="text-xl font-bold text-gray-500">{stakesMode === 'points' ? 'pts' : '$'}</span>
                   <input
                     type="number"
                     inputMode="decimal"
@@ -1538,7 +1538,7 @@ function GameSetup({
             <div>
               <p className="text-sm text-gray-600 mb-2">Base Value Per Hole</p>
               <div className="flex items-center gap-2">
-                <span className="text-xl font-bold text-gray-500">$</span>
+                <span className="text-xl font-bold text-gray-500">{stakesMode === 'points' ? 'pts' : '$'}</span>
                 <input
                   type="number"
                   inputMode="decimal"
@@ -1570,7 +1570,9 @@ function GameSetup({
             </div>
             <div className="bg-orange-50 rounded-xl p-3 text-sm text-orange-700 space-y-1">
               <p className="font-semibold">How Hammer works:</p>
-              <p>• Each hole starts at {fmtMoney(Math.max(1, parseDollarsToCents(hammerBaseValueDollars)))}</p>
+              <p>• Each hole starts at {stakesMode === 'points'
+                ? `${Math.max(1, parsePointsValue(hammerBaseValueDollars))} pts`
+                : fmtMoney(Math.max(1, parseDollarsToCents(hammerBaseValueDollars)))}</p>
               <p>• The hammer holder can "throw" the hammer to double the stakes</p>
               <p>• Opponent must accept (value doubles) or decline (lose current value)</p>
               <p>• After accepting, the hammer passes to the accepter</p>
@@ -1638,7 +1640,7 @@ function GameSetup({
             <div>
               <p className="text-sm text-gray-600 mb-2">Value Per Dot</p>
               <div className="flex items-center gap-2">
-                <span className="text-xl font-bold text-gray-500">$</span>
+                <span className="text-xl font-bold text-gray-500">{stakesMode === 'points' ? 'pts' : '$'}</span>
                 <input
                   type="number"
                   inputMode="decimal"
@@ -1914,7 +1916,7 @@ function TreasurerAndBuyIns({
         <div className="min-w-0">
           <h1 className="text-xl font-bold">Buy-ins & Treasurer</h1>
           <p className="text-gray-300 text-xs truncate">
-            Pot {fmtMoney(potCents)} · {course.name}
+            Pot {fmtAmount(potCents, game.stakesMode)} · {course.name}
             {game.stakesMode === 'high_roller' && (
               <span className="ml-2 font-bold" style={{ color: '#fbbf24' }}>💎 HIGH ROLLER</span>
             )}
@@ -1956,7 +1958,7 @@ function TreasurerAndBuyIns({
         {treasurerId && treasurer && (
           <section className="bg-amber-50 dark:bg-amber-900/20 rounded-2xl shadow-sm p-4 space-y-2 border border-amber-200">
             <p className="font-bold text-gray-800 dark:text-gray-100 text-lg">
-              {fmtMoney(game.buyInCents)} per player
+              {fmtAmount(game.buyInCents, game.stakesMode)} per player
             </p>
             <p className="text-sm text-gray-600 dark:text-gray-300">
               Pay <strong>{treasurer.name}</strong>

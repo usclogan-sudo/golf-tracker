@@ -1,4 +1,4 @@
-import { fmtMoney } from '../../lib/gameLogic'
+import { fmtAmount } from '../../lib/gameLogic'
 import type { PropBet, PropWager } from '../../types'
 
 interface Props {
@@ -43,7 +43,7 @@ export function PropPoolBar({ prop, wagers }: Props) {
           const pool = poolByOutcome[o.id] ?? 0
           return (
             <span key={o.id} className="text-gray-600 dark:text-gray-400">
-              {o.label}: {fmtMoney(pool)}
+              {o.label}: {fmtAmount(pool)}
             </span>
           )
         })}
