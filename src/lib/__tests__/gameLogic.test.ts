@@ -528,13 +528,17 @@ describe('fmtAmount (token/points mode)', () => {
     expect(fmtAmount(150, 'points')).toBe('150 pts')
   })
 
-  it('renders money for standard / high_roller / undefined', () => {
-    expect(fmtAmount(2500, 'standard')).toBe('$25.00')
-    expect(fmtAmount(2500, 'high_roller')).toBe('$25.00')
-    expect(fmtAmount(2500)).toBe('$25.00')
+  // Gimme surfaces points only (1 pt = $1); legacy money-mode values are stored
+  // in cents, so fmtAmount converts them to points (never renders $).
+  it('converts legacy money-mode cents to points (standard / high_roller / undefined)', () => {
+    expect(fmtAmount(2500, 'standard')).toBe('25 pts')
+    expect(fmtAmount(2500, 'high_roller')).toBe('25 pts')
+    expect(fmtAmount(2500)).toBe('25 pts')
   })
 
-  it('matches fmtMoney when not in points mode', () => {
-    expect(fmtAmount(1234, 'standard')).toBe(fmtMoney(1234))
+  it('never renders a currency symbol', () => {
+    expect(fmtAmount(1234, 'standard')).not.toContain('$')
+    expect(fmtAmount(1234, 'standard')).toBe('12 pts') // 1234 cents -> 12 pts (rounded)
+    expect(fmtAmount(25, 'points')).not.toContain('$')
   })
 })

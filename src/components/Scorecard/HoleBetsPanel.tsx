@@ -1,4 +1,4 @@
-import { fmtMoney, JUNK_LABELS } from '../../lib/gameLogic'
+import { fmtAmount, JUNK_LABELS } from '../../lib/gameLogic'
 import type { Player, JunkType, JunkRecord, SideBet, JunkConfig } from '../../types'
 
 interface Props {
@@ -56,7 +56,7 @@ export function HoleBetsPanel({
       {hasJunks && (
         <div className="space-y-2">
           <p className="text-xs font-semibold text-indigo-700 dark:text-indigo-300">
-            🎲 Junks <span className="text-indigo-400 font-normal">{fmtMoney(junkConfig!.valueCents)}/junk</span>
+            🎲 Junks <span className="text-indigo-400 font-normal">{fmtAmount(junkConfig!.valueCents)}/junk</span>
           </p>
           {junkConfig!.types.map(jt => {
             const info = JUNK_LABELS[jt]
@@ -108,7 +108,7 @@ export function HoleBetsPanel({
                   <div>
                     <p className="text-sm font-semibold text-gray-800 dark:text-gray-100">{bet.description}</p>
                     <p className="text-xs text-gray-500 dark:text-gray-400">
-                      {fmtMoney(bet.amountCents)} · {participantNames.join(' vs ')}
+                      {fmtAmount(bet.amountCents)} · {participantNames.join(' vs ')}
                     </p>
                   </div>
                   {bet.status === 'resolved' && winnerName && (
@@ -157,7 +157,7 @@ export function HoleBetsPanel({
             className="w-full text-sm border border-gray-200 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 rounded-lg px-3 py-2"
           />
           <div className="flex items-center gap-2">
-            <span className="text-sm text-gray-600 dark:text-gray-400">$</span>
+            <span className="text-sm text-gray-600 dark:text-gray-400">pts</span>
             <input
               type="number"
               value={sideBetAmount}

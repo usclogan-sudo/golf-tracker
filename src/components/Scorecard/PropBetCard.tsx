@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { fmtMoney } from '../../lib/gameLogic'
+import { fmtAmount } from '../../lib/gameLogic'
 import type { PropBet, PropWager, Player } from '../../types'
 
 interface Props {
@@ -91,7 +91,7 @@ export function PropBetCard({ prop, wagers, players, currentPlayerId, onAccept, 
           <p className="font-bold text-gray-800 dark:text-gray-100 text-sm">{prop.title}</p>
           <div className="flex items-center gap-2 mt-0.5 flex-wrap">
             <span className="text-xs text-gray-500">{creator?.name ?? 'Unknown'}</span>
-            <span className="text-xs font-semibold text-gray-700 dark:text-gray-300">{fmtMoney(prop.stakeCents)}</span>
+            <span className="text-xs font-semibold text-gray-700 dark:text-gray-300">{fmtAmount(prop.stakeCents)}</span>
             {prop.wagerModel === 'pool' && (
               <span className="text-xs text-purple-600">Pool</span>
             )}
@@ -138,7 +138,7 @@ export function PropBetCard({ prop, wagers, players, currentPlayerId, onAccept, 
                 } bg-gray-50 dark:bg-gray-700`}
               >
                 <p className="text-xs font-semibold text-gray-700 dark:text-gray-300">{o.label}</p>
-                <p className="text-xs text-gray-500">{fmtMoney(pool)} ({pct}%)</p>
+                <p className="text-xs text-gray-500">{fmtAmount(pool)} ({pct}%)</p>
               </button>
             )
           })}
@@ -155,7 +155,7 @@ export function PropBetCard({ prop, wagers, players, currentPlayerId, onAccept, 
               disabled={busy}
               className="px-3 py-1.5 bg-green-500 text-white text-xs font-bold rounded-lg active:bg-green-600 disabled:opacity-50"
             >
-              {busy ? 'Accepting...' : `Accept ${fmtMoney(prop.stakeCents)}`}
+              {busy ? 'Accepting...' : `Accept ${fmtAmount(prop.stakeCents)}`}
             </button>
           )}
           {prop.wagerModel === 'challenge' && hasAccepted && (

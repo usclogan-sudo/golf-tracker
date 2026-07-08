@@ -3,7 +3,7 @@ import { supabase, rowToSettlementRecord, rowToRound } from '../../lib/supabase'
 import { safeWrite } from '../../lib/safeWrite'
 import { PaymentButtons } from '../PaymentButtons'
 import { ConfirmModal } from '../ConfirmModal'
-import { fmtMoney } from '../../lib/gameLogic'
+import { fmtAmount } from '../../lib/gameLogic'
 import type { SettlementRecord, Round, Player } from '../../types'
 
 interface Props {
@@ -284,11 +284,11 @@ export function Ledger({ userId, onBack }: Props) {
             <div className="grid grid-cols-2 gap-3">
               <div className="bg-green-50 dark:bg-green-900/20 rounded-2xl p-4 text-center">
                 <p className="text-xs text-green-600 dark:text-green-400 font-semibold uppercase">Owed to you</p>
-                <p className="text-2xl font-bold text-green-700 dark:text-green-300">{fmtMoney(totalOwedToYou)}</p>
+                <p className="text-2xl font-bold text-green-700 dark:text-green-300">{fmtAmount(totalOwedToYou, 'points')}</p>
               </div>
               <div className="bg-red-50 dark:bg-red-900/20 rounded-2xl p-4 text-center">
                 <p className="text-xs text-red-600 dark:text-red-400 font-semibold uppercase">You owe</p>
-                <p className="text-2xl font-bold text-red-700 dark:text-red-300">{fmtMoney(totalYouOwe)}</p>
+                <p className="text-2xl font-bold text-red-700 dark:text-red-300">{fmtAmount(totalYouOwe, 'points')}</p>
               </div>
             </div>
 
@@ -311,11 +311,11 @@ export function Ledger({ userId, onBack }: Props) {
                       <div className="flex items-center gap-2">
                         <div className="text-right">
                           {isZero ? (
-                            <p className="text-lg font-bold text-gray-400">$0.00</p>
+                            <p className="text-lg font-bold text-gray-400">0 pts</p>
                           ) : (
                             <>
                               <p className={`text-lg font-bold ${owedToYou ? 'text-green-600' : 'text-red-600'}`}>
-                                {owedToYou ? '+' : '-'}{fmtMoney(Math.abs(b.netCents))}
+                                {owedToYou ? '+' : '-'}{fmtAmount(Math.abs(b.netCents), 'points')}
                               </p>
                               <p className={`text-xs ${owedToYou ? 'text-green-500' : 'text-red-500'}`}>
                                 {owedToYou ? 'they owe you' : 'you owe'}
@@ -340,7 +340,7 @@ export function Ledger({ userId, onBack }: Props) {
                                 <p className="text-xs text-gray-500">{r.date}</p>
                               </div>
                               <p className={`font-bold text-sm ${r.amountCents > 0 ? 'text-green-600' : r.amountCents < 0 ? 'text-red-600' : 'text-gray-400'}`}>
-                                {r.amountCents > 0 ? '+' : ''}{fmtMoney(r.amountCents === 0 ? 0 : Math.abs(r.amountCents))}
+                                {r.amountCents > 0 ? '+' : ''}{fmtAmount(r.amountCents === 0 ? 0 : Math.abs(r.amountCents), 'points')}
                                 {r.amountCents < 0 && <span className="text-xs font-normal ml-0.5">owed</span>}
                               </p>
                             </div>
@@ -351,7 +351,8 @@ export function Ledger({ userId, onBack }: Props) {
                         {!owedToYou && !isZero && b.player && (
                           <div>
                             <p className="text-xs text-gray-500 mb-2">Pay {b.playerName}</p>
-                            <PaymentButtons toPlayer={b.player} amountCents={Math.abs(b.netCents)} note="Golf ledger balance" />
+                            {/* Ledger balances are in points (1 pt = $1); ×100 → cents for the payment link. */}
+                            <PaymentButtons toPlayer={b.player} amountCents={Math.abs(b.netCents) * 100} note="Golf ledger balance" />
                           </div>
                         )}
 

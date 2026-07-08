@@ -241,10 +241,11 @@ export function Stats({ userId, onBack }: Props) {
     setShowResetConfirm(false)
   }
 
-  const fmtMoney = (cents: number) => {
-    const abs = Math.abs(cents)
-    const str = `$${(abs / 100).toFixed(abs % 100 === 0 ? 0 : 2)}`
-    return cents < 0 ? `-${str}` : `+${str}`
+  // Points only — winnings totals are aggregated point values (1 pt = $1).
+  const fmtPts = (value: number) => {
+    const abs = Math.abs(value)
+    const str = `${abs} pts`
+    return value < 0 ? `-${str}` : `+${str}`
   }
 
   return (
@@ -326,7 +327,7 @@ export function Stats({ userId, onBack }: Props) {
                           player.totalWinningsCents < 0 ? 'text-red-600 dark:text-red-400' :
                           'text-gray-500 dark:text-gray-400'
                         }`}>
-                          {player.totalWinningsCents === 0 ? '$0' : fmtMoney(player.totalWinningsCents)}
+                          {player.totalWinningsCents === 0 ? '0 pts' : fmtPts(player.totalWinningsCents)}
                         </p>
                         <p className="text-xs text-gray-400 dark:text-gray-500">net</p>
                       </div>

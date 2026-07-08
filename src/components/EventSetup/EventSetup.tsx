@@ -3,7 +3,9 @@ import { v4 as uuidv4 } from 'uuid'
 import { supabase, rowToCourse, rowToPlayer, rowToSharedCourse, roundToRow, roundPlayerToRow, buyInToRow, eventToRow, generateInviteCode, rowToUserProfile } from '../../lib/supabase'
 import { safeWrite } from '../../lib/safeWrite'
 import { reportSupabaseError } from '../../lib/sentry'
-import { fmtMoney } from '../../lib/gameLogic'
+// Events store buy-in in cents (money mode); fmtAmount with no stakesMode
+// converts cents -> points for display (1 pt = $1), so no $ surfaces.
+import { fmtAmount } from '../../lib/gameLogic'
 import { autoAssignGroups, autoAssignShotgunStarts, MAX_PER_GROUP } from '../../lib/eventUtils'
 import { parseDollarsToCents } from '../../lib/money'
 import { venturaCourses } from '../../data/venturaCourses'
@@ -775,14 +777,14 @@ export function EventSetup({ userId, onStart, onCancel, onAddCourse }: Props) {
                       : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300'
                   }`}
                 >
-                  {fmtMoney(cents)}
+                  {fmtAmount(cents)}
                 </button>
               ))}
             </div>
             <div className="flex items-center gap-2">
               <span className="text-sm text-gray-500 font-medium">Custom:</span>
               <div className="relative flex-1">
-                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-sm">$</span>
+                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-sm">pts</span>
                 <input
                   type="number"
                   inputMode="decimal"
@@ -793,12 +795,12 @@ export function EventSetup({ userId, onStart, onCancel, onAddCourse }: Props) {
                     const v = parseDollarsToCents(e.target.value, { allowZero: false })
                     if (v > 0) setBuyInCents(v)
                   }}
-                  className="w-full h-10 pl-7 pr-3 rounded-xl border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 text-sm focus:outline-none focus:ring-2 focus:ring-amber-500"
+                  className="w-full h-10 pl-11 pr-3 rounded-xl border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 text-sm focus:outline-none focus:ring-2 focus:ring-amber-500"
                 />
               </div>
             </div>
             <p className="text-sm text-gray-500 text-center">
-              Pot: {fmtMoney(buyInCents * selectedPlayers.length)}
+              Pot: {fmtAmount(buyInCents * selectedPlayers.length)}
             </p>
           </section>
 
@@ -983,12 +985,12 @@ export function EventSetup({ userId, onStart, onCancel, onAddCourse }: Props) {
             </div>
             <div className="bg-amber-50 dark:bg-amber-900/30 rounded-xl p-3">
               <p className="text-xs text-amber-600">Pot</p>
-              <p className="text-xl font-bold text-amber-700">{fmtMoney(buyInCents * selectedPlayers.length)}</p>
+              <p className="text-xl font-bold text-amber-700">{fmtAmount(buyInCents * selectedPlayers.length)}</p>
             </div>
           </div>
 
           <div className="space-y-2">
-            <p className="text-xs font-semibold text-gray-500 uppercase">Game: {GAME_LABELS[gameType]} · {fmtMoney(buyInCents)}/player</p>
+            <p className="text-xs font-semibold text-gray-500 uppercase">Game: {GAME_LABELS[gameType]} · {fmtAmount(buyInCents)}/player</p>
             <p className="text-xs text-gray-500">Treasurer: {selectedPlayers.find(p => p.id === treasurerId)?.name ?? '—'}</p>
           </div>
 

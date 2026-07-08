@@ -36,7 +36,6 @@ import {
   calculateQuota,
   wolfForHole,
   strokesOnHole,
-  fmtMoney,
   fmtAmount,
 } from '../../lib/gameLogic'
 import { makePlayableSnapshot, getPlayableHoleNumbers, roundToHolesConfig } from '../../lib/holeUtils'
@@ -1721,7 +1720,7 @@ export function Scorecard({ userId, roundId, onEndRound, onHome, readOnly: readO
                   {hammerResult && (
                     <p className="text-xs text-gray-500">
                       <span className="font-semibold">Hammer:</span>{' '}
-                      {players.map(p => { const c = hammerResult.netCents[p.id] ?? 0; return `${p.name} ${c >= 0 ? '+' : '−'}${fmtMoney(Math.abs(c))}` }).join(', ')}
+                      {players.map(p => { const c = hammerResult.netCents[p.id] ?? 0; return `${p.name} ${c >= 0 ? '+' : '−'}${fmtAmount(Math.abs(c), game?.stakesMode)}` }).join(', ')}
                     </p>
                   )}
                   {bbbResult && (
@@ -2003,14 +2002,14 @@ export function Scorecard({ userId, roundId, onEndRound, onHome, readOnly: readO
                   <div className="flex items-center justify-between">
                     <p className="font-bold text-orange-800 text-sm">🔨 Hammer</p>
                     <span className="text-xs font-semibold text-orange-600 bg-orange-100 px-2 py-0.5 rounded-full">
-                      Hole value: {fmtMoney(holeValue)}
+                      Hole value: {fmtAmount(holeValue, game?.stakesMode)}
                     </span>
                   </div>
 
                   {hState?.declined ? (
                     <div className="bg-red-50 border border-red-200 rounded-lg p-2">
                       <p className="text-sm text-red-700 font-semibold">
-                        {players.find(p => p.id === hState.declinedBy)?.name} declined — {holderName} wins {fmtMoney(hState.value / 2)}
+                        {players.find(p => p.id === hState.declinedBy)?.name} declined — {holderName} wins {fmtAmount(hState.value / 2, game?.stakesMode)}
                       </p>
                     </div>
                   ) : (
@@ -2050,7 +2049,7 @@ export function Scorecard({ userId, roundId, onEndRound, onHome, readOnly: readO
                         <div key={p.id} className={`flex-1 text-center rounded-lg py-1 ${net > 0 ? 'bg-green-50' : net < 0 ? 'bg-red-50' : 'bg-gray-50'}`}>
                           <p className="text-xs text-gray-500">{p.name}</p>
                           <p className={`text-sm font-bold ${net > 0 ? 'text-green-700' : net < 0 ? 'text-red-700' : 'text-gray-600'}`}>
-                            {net >= 0 ? '+' : ''}{fmtMoney(Math.abs(net))}
+                            {net >= 0 ? '+' : ''}{fmtAmount(Math.abs(net), game?.stakesMode)}
                           </p>
                         </div>
                       )
