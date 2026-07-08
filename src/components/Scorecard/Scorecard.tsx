@@ -849,6 +849,22 @@ export function Scorecard({ userId, roundId, onEndRound, onHome, readOnly: readO
     })
   }
 
+  // Undo the current user's most recent press (removes the last press this
+  // device added — presses are attributed to userId when created above).
+  const handleUndoPress = async () => {
+    await updateGameState(game => {
+      const config = game.config as any
+      const presses = [...(config.presses ?? [])]
+      for (let i = presses.length - 1; i >= 0; i--) {
+        if (presses[i].playerId === userId) { presses.splice(i, 1); break }
+      }
+      return { ...game, config: { ...config, presses } }
+    })
+  }
+
+  // How many presses the current user can undo.
+  const myPressCount = ((game?.config as any)?.presses ?? []).filter((p: any) => p.playerId === userId).length
+
   // BBB point handler
   const setBBBPoint = async (category: 'bingo' | 'bango' | 'bongo', playerId: string) => {
     const existing = bbbPoints.find(p => p.holeNumber === currentHole)
@@ -1894,6 +1910,16 @@ export function Scorecard({ userId, roundId, onEndRound, onHome, readOnly: readO
                     Press{(game.config as any).presses?.length ? ` (${(game.config as any).presses.length})` : ''}
                   </button>
                 )}
+                {!readOnly && myPressCount > 0 && (
+                  <button
+                    onClick={handleUndoPress}
+                    aria-label="Undo last press"
+                    title="Undo last press"
+                    className="px-2.5 py-2 bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-200 text-xs font-bold rounded-xl active:bg-gray-300 dark:active:bg-gray-600 flex-shrink-0"
+                  >
+                    ↩
+                  </button>
+                )}
               </div>
             )}
             {showGameStatus && bestBallResult && <BestBallStatus holesWon={bestBallResult.holesWon} />}
@@ -1935,6 +1961,16 @@ export function Scorecard({ userId, roundId, onEndRound, onHome, readOnly: readO
                       className="px-3 py-2 bg-orange-500 text-white text-xs font-bold rounded-xl active:bg-orange-600 flex-shrink-0"
                     >
                       Press{pressCount ? ` (${pressCount})` : ''}
+                    </button>
+                  )}
+                  {!readOnly && myPressCount > 0 && (
+                    <button
+                      onClick={handleUndoPress}
+                      aria-label="Undo last press"
+                      title="Undo last press"
+                      className="px-2.5 py-2 bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-200 text-xs font-bold rounded-xl active:bg-gray-300 dark:active:bg-gray-600 flex-shrink-0"
+                    >
+                      ↩
                     </button>
                   )}
                 </div>
