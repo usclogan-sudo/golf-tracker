@@ -189,25 +189,15 @@ export function Settings({ userId, email, onBack, onSignOut, isAdmin, onAdmin, i
     setDeleting(true)
     setDeleteError('')
     try {
-      // Delete all user data: round-linked data first, then standalone tables
-      const { data: roundRows } = await supabase.from('rounds').select('id').eq('user_id', userId)
-      const roundIds = (roundRows ?? []).map((r: any) => r.id)
-      if (roundIds.length > 0) {
-        const roundTables = ['hole_scores', 'round_players', 'buy_ins', 'bbb_points', 'settlements', 'side_bets', 'junk_records', 'round_participants', 'notifications']
-        for (const table of roundTables) {
-          try { await supabase.from(table).delete().in('round_id', roundIds) } catch {}
-        }
-        await supabase.from('rounds').delete().in('id', roundIds)
-      }
-      // Delete standalone user data
-      const userTables = ['notifications', 'pinned_friends', 'game_presets', 'event_participants', 'players', 'courses', 'user_profiles']
-      for (const table of userTables) {
-        try { await supabase.from(table).delete().eq('user_id', userId) } catch {}
-      }
+      // Server-side RPC deletes all the caller's data AND their auth account.
+      // (Apple Guideline 5.1.1(v) requires deleting the account itself, not just
+      // data — which client code can't do. See migration delete_own_account.)
+      const { error } = await supabase.rpc('delete_own_account')
+      if (error) throw error
       await supabase.auth.signOut()
       onSignOut()
     } catch {
-      setDeleteError('Failed to delete account data. Please try again.')
+      setDeleteError('Failed to delete account. Please try again or email support@gimme.gg.')
       setDeleting(false)
     }
   }
@@ -460,7 +450,8 @@ export function Settings({ userId, email, onBack, onSignOut, isAdmin, onAdmin, i
         {!adminOnly && <section className="bg-white dark:bg-gray-800 rounded-2xl shadow-sm p-4 space-y-3 border border-red-200">
           <p className="text-xs font-semibold text-red-500 uppercase tracking-wide">Danger Zone</p>
           <p className="text-sm text-gray-600">
-            This will permanently delete all your data (courses, players, rounds, scores).
+            This will permanently delete <strong>your account</strong> and all your data
+            (profile, courses, players, rounds, scores). This cannot be undone.
             Type <strong>DELETE</strong> to confirm.
           </p>
           <input
@@ -476,7 +467,7 @@ export function Settings({ userId, email, onBack, onSignOut, isAdmin, onAdmin, i
             disabled={deleteConfirm !== 'DELETE' || deleting}
             className="w-full h-12 bg-red-600 text-white font-semibold rounded-xl disabled:opacity-50 active:bg-red-700 transition-colors"
           >
-            {deleting ? 'Deleting...' : 'Delete All Data & Sign Out'}
+            {deleting ? 'Deleting...' : 'Delete My Account'}
           </button>
         </section>}
 
