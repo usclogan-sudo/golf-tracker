@@ -19,6 +19,8 @@ import {
   calculateStableford,
   calculateJunks,
   calculateSkinsPayouts,
+  calculateBBBPayouts,
+  calculateWolfPayouts,
   buildSettlements,
   buildUnifiedSettlements,
   calculateSideBetSettlements,
@@ -540,5 +542,52 @@ describe('fmtAmount (token/points mode)', () => {
     expect(fmtAmount(1234, 'standard')).not.toContain('$')
     expect(fmtAmount(1234, 'standard')).toBe('12 pts') // 1234 cents -> 12 pts (rounded)
     expect(fmtAmount(25, 'points')).not.toContain('$')
+  })
+})
+
+// ─── Settlement net-zero invariants ─────────────────────────────────────────
+// The core promise: a pot game distributes EXACTLY the collected pot (buyIn × N)
+// to winners, so that once losers are debited their buy-in, the round nets to
+// zero. These lock that invariant in for the launch pot games. (Presses are
+// gated off at launch — see featureFlags.SHOW_PRESSES — because they break it.)
+describe('settlement net-zero invariants', () => {
+  const POT = (buyInCents: number) => buyInCents * players.length
+
+  it('Skins (no presses): payouts sum to the full pot', () => {
+    const skinsResult = {
+      skinsWon: { p1: 3, p2: 1, p3: 0 },
+      holeResults: [
+        { holeNumber: 1, winnerId: 'p1', carry: 0, skinsInPlay: 1 },
+        { holeNumber: 2, winnerId: 'p1', carry: 0, skinsInPlay: 1 },
+        { holeNumber: 3, winnerId: 'p1', carry: 0, skinsInPlay: 1 },
+        { holeNumber: 4, winnerId: 'p2', carry: 0, skinsInPlay: 1 },
+      ],
+      totalSkins: 4,
+      pendingCarry: 0,
+    } as any
+    const game: Game = { id: 'g', type: 'skins', buyInCents: 1000, stakesMode: 'points', config: {} as any }
+    const sum = calculateSkinsPayouts(skinsResult, game, players.length).reduce((s, p) => s + p.amountCents, 0)
+    expect(sum).toBe(POT(1000))
+  })
+
+  it('BBB (points recorded): payouts sum to the full pot, remainder included', () => {
+    const result = { pointsWon: { p1: 4, p2: 2, p3: 3 }, totalPoints: 9 } as any
+    const game: Game = { id: 'g', type: 'bingo_bango_bongo', buyInCents: 1000, stakesMode: 'points', config: {} as any }
+    const sum = calculateBBBPayouts(result, game, players).reduce((s, p) => s + p.amountCents, 0)
+    expect(sum).toBe(POT(1000))
+  })
+
+  it('BBB (no points, refund): payouts still sum to the full pot', () => {
+    const result = { pointsWon: { p1: 0, p2: 0, p3: 0 }, totalPoints: 0 } as any
+    const game: Game = { id: 'g', type: 'bingo_bango_bongo', buyInCents: 900, stakesMode: 'points', config: {} as any }
+    const sum = calculateBBBPayouts(result, game, players).reduce((s, p) => s + p.amountCents, 0)
+    expect(sum).toBe(POT(900))
+  })
+
+  it('Wolf: payouts sum to the full pot (remainder distributed)', () => {
+    const result = { netUnits: { p1: 2, p2: 1, p3: -3 } } as any
+    const game: Game = { id: 'g', type: 'wolf', buyInCents: 1000, stakesMode: 'points', config: {} as any }
+    const sum = calculateWolfPayouts(result, game, players).reduce((s, p) => s + p.amountCents, 0)
+    expect(sum).toBe(POT(1000))
   })
 })
