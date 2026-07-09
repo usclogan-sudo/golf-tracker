@@ -17,6 +17,7 @@ import { ConfirmModal } from './components/ConfirmModal'
 import { UserAvatar } from './components/AvatarPicker'
 import { InstallBanner } from './components/InstallBanner'
 import { PendingInvites } from './components/PendingInvites'
+import { minimizeApp } from './lib/native'
 
 // Lazy-loaded screens (not needed for initial Home render)
 const JoinRound = lazy(() => import('./components/JoinRound/JoinRound').then(m => ({ default: m.JoinRound })))
@@ -707,6 +708,8 @@ export default function App() {
   const [screen, setScreen] = useState<Screen>('home')
   const [afterCourseSetup, setAfterCourseSetup] = useState<Screen>('home')
   const [activeRoundId, setActiveRoundId] = useState<string | null>(null)
+  // Beta operates in token/points mode — no monetary units surface in the UI.
+  // (The stakes selector is hidden behind SHOW_ALT_STAKES_MODES.)
   const [newRoundStakesMode, setNewRoundStakesMode] = useState<StakesMode>('points')
   const [editingCourse, setEditingCourse] = useState<Course | undefined>(undefined)
   const [homeKey, setHomeKey] = useState(0)
@@ -784,6 +787,37 @@ export default function App() {
       flushOfflineQueue()
     }
   }, [])
+
+  // Native deep links (Universal/App Links) bridged from Capacitor — routes an
+  // invite/spectate code opened from outside the app into the same flow the web
+  // uses for ?join= / ?spectate=. No-op on web (event never fires).
+  useEffect(() => {
+    const onDeepLink = (e: Event) => {
+      const { join, spectate } = (e as CustomEvent<{ join?: string | null; spectate?: string | null }>).detail || {}
+      if (spectate) setSpectateCode(spectate)
+      if (join) setPendingJoinCode(join)
+    }
+    window.addEventListener('gimme:deeplink', onDeepLink)
+    return () => window.removeEventListener('gimme:deeplink', onDeepLink)
+  }, [])
+
+  // Android hardware back button (bridged from native.ts): step back toward home
+  // rather than quitting; at the root, background the app instead of exiting.
+  // NOTE: must live ABOVE the early returns below so the hook always runs.
+  useEffect(() => {
+    const onBack = () => {
+      if (spectateCode) { setSpectateCode(null); return }
+      if (screen !== 'home' && screen !== 'admin') {
+        setHomeKey(k => k + 1)
+        setScreen(userProfile?.adminOnly ? 'admin' : 'home')
+        return
+      }
+      void minimizeApp()
+    }
+    window.addEventListener('gimme:back', onBack)
+    return () => window.removeEventListener('gimme:back', onBack)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [screen, spectateCode, userProfile?.adminOnly])
 
   useEffect(() => {
     // Set up auth listener FIRST so it catches events from code exchange

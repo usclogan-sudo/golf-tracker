@@ -1,5 +1,6 @@
 import { useRef, useState } from 'react'
 import { resizePhotoForUpload, extractScoresFromPhoto, type ExtractionResult } from '../../lib/photoImport'
+import { isNative } from '../../lib/native'
 import type { Player, CourseSnapshot } from '../../types'
 
 interface UsePhotoImportArgs {
@@ -35,19 +36,42 @@ export function usePhotoImport({ roundId, players, snapshot, onExtracted }: UseP
     if (fileRef.current) fileRef.current.value = ''
   }
 
-  const open = () => {
+  /** Show a captured photo (from either the file input or the native camera). */
+  const showPreview = (file: File) => {
+    if (previewUrl) URL.revokeObjectURL(previewUrl)
+    setPreviewUrl(URL.createObjectURL(file))
+    setPendingFile(file)
+    setError(null)
+    setStage('preview')
+  }
+
+  const open = async () => {
+    // Native: use the OS camera / photo-library picker for a first-class capture.
+    if (isNative()) {
+      try {
+        const { Camera, CameraResultType, CameraSource } = await import('@capacitor/camera')
+        const photo = await Camera.getPhoto({
+          resultType: CameraResultType.DataUrl,
+          source: CameraSource.Prompt, // "Take Photo" or "From Photos"
+          quality: 85,
+          correctOrientation: true,
+        })
+        if (!photo.dataUrl) return
+        const blob = await (await fetch(photo.dataUrl)).blob()
+        showPreview(new File([blob], `scorecard.${photo.format || 'jpg'}`, { type: blob.type }))
+      } catch {
+        /* user cancelled or picker unavailable — stay idle */
+      }
+      return
+    }
+    // Web: hidden file input (with capture hint on mobile browsers).
     fileRef.current?.click()
   }
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
     if (!file) return
-    if (previewUrl) URL.revokeObjectURL(previewUrl)
-    const url = URL.createObjectURL(file)
-    setPreviewUrl(url)
-    setPendingFile(file)
-    setError(null)
-    setStage('preview')
+    showPreview(file)
   }
 
   const submitPhoto = async () => {
