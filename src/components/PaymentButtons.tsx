@@ -5,7 +5,6 @@ import {
   zelleLink,
   cashAppLink,
   paypalLink,
-  fmtMoney,
 } from '../lib/gameLogic'
 import type { Player } from '../types'
 
@@ -28,7 +27,9 @@ export function PaymentButtons({ toPlayer, amountCents, note, compact }: { toPla
   const [copied, setCopied] = useState(false)
   const [showMore, setShowMore] = useState(false)
   const fullNote = `Gimme Golf — ${note}`
-  const copyText = `Pay ${toPlayer.name} ${fmtMoney(amountCents)} for ${fullNote}`
+  // amountCents is always real cents here (callers convert points→cents for the
+  // deep links); surface it as points (1 pt = $1) so no $ appears in-app.
+  const copyText = `Pay ${toPlayer.name} ${Math.round(amountCents / 100)} pts for ${fullNote}`
   const handleCopy = () => {
     navigator.clipboard.writeText(copyText).then(() => { setCopied(true); setTimeout(() => setCopied(false), 2000) })
   }

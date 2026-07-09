@@ -1,7 +1,9 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "rewrites": [
-    { "source": "/((?!assets/|.well-known/|_vercel/).*)", "destination": "/index.html" }
+    { "source": "/privacy", "destination": "/privacy.html" },
+    { "source": "/terms", "destination": "/terms.html" },
+    { "source": "/((?!assets/|.well-known/|_vercel/|privacy|terms).*)", "destination": "/index.html" }
   ],
   "headers": [
     {

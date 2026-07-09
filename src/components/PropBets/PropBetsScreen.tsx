@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { v4 as uuidv4 } from 'uuid'
 import { supabase, rowToPropBet, propBetToRow, rowToPropWager, propWagerToRow, rowToRound } from '../../lib/supabase'
-import { fmtMoney } from '../../lib/gameLogic'
+import { fmtAmount } from '../../lib/gameLogic'
 import { PropBetCard } from '../Scorecard/PropBetCard'
 import { PropPoolBar } from './PropPoolBar'
 import { CreateSkillPropForm } from './CreateSkillPropForm'
@@ -269,9 +269,9 @@ export function PropBetsScreen({ roundId, userId, onBack }: Props) {
       {myResolvedPnl && (
         <div className={`rounded-xl p-3 text-center ${myResolvedPnl.net >= 0 ? 'bg-green-50 dark:bg-green-900/30' : 'bg-red-50 dark:bg-red-900/30'}`}>
           <p className={`text-lg font-bold ${myResolvedPnl.net >= 0 ? 'text-green-700 dark:text-green-300' : 'text-red-700 dark:text-red-300'}`}>
-            {myResolvedPnl.net >= 0 ? '+' : ''}{fmtMoney(myResolvedPnl.net)}
+            {myResolvedPnl.net >= 0 ? '+' : ''}{fmtAmount(myResolvedPnl.net)}
           </p>
-          <p className="text-xs text-gray-500">Won {fmtMoney(myResolvedPnl.totalWon)} / Lost {fmtMoney(myResolvedPnl.totalLost)}</p>
+          <p className="text-xs text-gray-500">Won {fmtAmount(myResolvedPnl.totalWon)} / Lost {fmtAmount(myResolvedPnl.totalLost)}</p>
         </div>
       )}
 

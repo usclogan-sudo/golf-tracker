@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { v4 as uuidv4 } from 'uuid'
 import { supabase, rowToSharedCourse, sharedCourseToRow, rowToGamePreset, gamePresetToRow } from '../../lib/supabase'
-import { fmtMoney } from '../../lib/gameLogic'
+import { fmtAmount } from '../../lib/gameLogic'
 import { parseDollarsToCents } from '../../lib/money'
 import { venturaCourses } from '../../data/venturaCourses'
 import { ConfirmModal } from '../ConfirmModal'
@@ -562,7 +562,7 @@ function GamePresetsTab({ userId }: { userId: string }) {
             <div className="flex-1 min-w-0">
               <p className="font-semibold text-gray-800">{preset.name}</p>
               <p className="text-sm text-gray-500">
-                {GAME_TYPE_LABELS[preset.gameType]} · {fmtMoney(preset.buyInCents)}
+                {GAME_TYPE_LABELS[preset.gameType]} · {fmtAmount(preset.buyInCents, preset.stakesMode)}
                 {preset.stakesMode === 'high_roller' && ' · 💎'}
               </p>
               {preset.description && <p className="text-xs text-gray-400 mt-0.5">{preset.description}</p>}

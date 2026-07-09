@@ -1833,10 +1833,14 @@ export function fmtMoney(cents: number): string {
   )
 }
 
-/** Format amount as money or points depending on stakes mode */
-export function fmtAmount(cents: number, stakesMode?: string): string {
-  if (stakesMode === 'points') {
-    return `${cents} pts`
-  }
-  return fmtMoney(cents)
+/**
+ * Format an amount for display. Gimme surfaces POINTS only — no currency ever
+ * appears in the app (1 pt = $1). In points mode the stored value IS the point
+ * count; legacy money-mode values are stored in cents, so convert to points.
+ * Payment deep-links compute their own dollar amount separately (see SettleUp /
+ * BuyInBanner `toPayCents`), so this is display-only.
+ */
+export function fmtAmount(value: number, stakesMode?: string): string {
+  const points = stakesMode === 'points' ? value : Math.round(value / 100)
+  return `${points} pts`
 }

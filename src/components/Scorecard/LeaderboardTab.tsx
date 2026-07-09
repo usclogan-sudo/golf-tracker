@@ -3,7 +3,7 @@ import { Tooltip } from '../ui/Tooltip'
 import { ShareCard } from '../ShareCard'
 import type { ShareCardStanding } from '../ShareCard/ShareCard'
 import {
-  strokesOnHole, fmtMoney,
+  strokesOnHole, fmtAmount,
   calculateSkinsPayouts, calculateBestBallPayouts, calculateNassauPayouts,
   calculateWolfPayouts, calculateBBBPayouts, calculateVegasPayouts,
   calculateStablefordPayouts, calculateQuotaPayouts,
@@ -336,7 +336,7 @@ export function LeaderboardTab({
                 const net = hammerResult.netCents[p.id] ?? 0
                 return (
                   <span key={p.id} className={`text-xs font-semibold px-2 py-1 rounded-lg ${net > 0 ? 'bg-orange-50 text-orange-700' : net < 0 ? 'bg-red-50 text-red-600' : 'bg-gray-50 text-gray-500'}`}>
-                    {p.name}: {net > 0 ? '+' : ''}{fmtMoney(Math.abs(net))}
+                    {p.name}: {net > 0 ? '+' : ''}{fmtAmount(Math.abs(net), game?.stakesMode)}
                   </span>
                 )
               })}
@@ -399,7 +399,7 @@ export function LeaderboardTab({
                 const net = bankerResult.netCents[p.id] ?? 0
                 return (
                   <span key={p.id} className={`text-xs font-semibold px-2 py-1 rounded-lg ${net > 0 ? 'bg-emerald-50 text-emerald-700' : net < 0 ? 'bg-red-50 text-red-600' : 'bg-gray-50 text-gray-500'}`}>
-                    {p.name}: {net > 0 ? '+' : ''}{fmtMoney(Math.abs(net))}
+                    {p.name}: {net > 0 ? '+' : ''}{fmtAmount(Math.abs(net), game?.stakesMode)}
                   </span>
                 )
               })}
@@ -414,7 +414,7 @@ export function LeaderboardTab({
                 const net = bankerResultAlt.netCents[p.id] ?? 0
                 return (
                   <span key={p.id} className="text-xs text-gray-500 px-2 py-0.5 rounded bg-gray-50">
-                    {p.name}: {net > 0 ? '+' : ''}{fmtMoney(Math.abs(net))}
+                    {p.name}: {net > 0 ? '+' : ''}{fmtAmount(Math.abs(net), game?.stakesMode)}
                   </span>
                 )
               })}

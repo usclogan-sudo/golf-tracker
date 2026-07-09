@@ -174,7 +174,7 @@ Pick one based on the audience:
 
 - **For investors:** ~$X to fund 6 months of development + App Store launch + initial growth experiments. Target 10K active users by end of 2026.
 - **For partners:** Golf clubs / leagues willing to run their league night on Gimme — early adopters get free use forever and shape the product.
-- **For users:** Try it next round. `gimme.golf` → "Try it first" → done. Then tell us what sucks.
+- **For users:** Try it next round. `gimme.gg` → "Try it first" → done. Then tell us what sucks.
 
 ---
 
@@ -196,7 +196,7 @@ Pick one based on the audience:
 # **Gimme**
 ### Score your skins. Settle up. Skip the math.
 
-`gimme.golf`
+`gimme.gg`
 
 Built by golfers, for golfers.
 
