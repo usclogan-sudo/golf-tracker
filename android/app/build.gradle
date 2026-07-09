@@ -16,8 +16,30 @@ android {
             ignoreAssetsPattern = '!.svn:!.git:!.ds_store:!*.scc:.*:!CVS:!thumbs.db:!picasa.ini:!*~'
         }
     }
+    signingConfigs {
+        release {
+            // Release signing reads from a gitignored keystore.properties (see
+            // keystore.properties.example) or env vars — never hardcoded or committed.
+            // Losing this keystore means you can never update the app, so back it up.
+            def props = new Properties()
+            def propsFile = rootProject.file('keystore.properties')
+            if (propsFile.exists()) { props.load(new FileInputStream(propsFile)) }
+            def ksPath = props.getProperty('storeFile', System.getenv('GIMME_KEYSTORE'))
+            if (ksPath != null) {
+                storeFile file(ksPath)
+                storePassword props.getProperty('storePassword', System.getenv('GIMME_KEYSTORE_PASSWORD'))
+                keyAlias props.getProperty('keyAlias', System.getenv('GIMME_KEY_ALIAS'))
+                keyPassword props.getProperty('keyPassword', System.getenv('GIMME_KEY_PASSWORD'))
+            }
+        }
+    }
     buildTypes {
         release {
+            // Sign with the release config only when a keystore is configured;
+            // otherwise the project still builds (unsigned) without any secrets.
+            if (signingConfigs.release.storeFile != null) {
+                signingConfig signingConfigs.release
+            }
             minifyEnabled false
             proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
         }
