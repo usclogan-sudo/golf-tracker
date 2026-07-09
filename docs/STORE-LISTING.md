@@ -195,10 +195,12 @@ once we decide device frames.
 ---
 
 ## 8. Pre-submission checklist
-- [ ] `support@gimme.gg` deliverable (Porkbun forward or Google Workspace)
+- [x] `support@gimme.gg` deliverable — Porkbun email forwarding (done 2026-07-09)
 - [ ] Demo account created (or confirm guest mode is enough for review)
 - [ ] Screenshots captured + framed
 - [ ] App icon 1024² (Apple) / 512² (Google) exported from brand seal
-- [ ] Apple Team ID → finish `.well-known/apple-app-site-association`
+- [x] Apple Team ID `M35SV96877` → `apple-app-site-association` set (done 2026-07-09)
 - [ ] Android keystore SHA-256 → finish `.well-known/assetlinks.json`
 - [ ] Native branch merged up to `main` (account-deletion + points fix + privacy links)
+- [ ] Set Play **developer name** to a brand (currently "usclogan" → Gimme / PELORUS HX)
+- [ ] **Register package name `com.gimme.golf`** — Android Developer Verification (required by Sept 2026; deferred 2026-07-09)
