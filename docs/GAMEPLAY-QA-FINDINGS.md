@@ -115,4 +115,55 @@ sequencing (mirrors the existing SHOW_HOLE_BETS / SHOW_PROP_BETS flag pattern):
    (proper presses, lone-wolf 2×, Nassau segments), then re-enable presses.
 5. **Confirm Nassau stroke-sum vs match-play intent** and document.
 
-Then continue the sweep across Hammer, Stableford, Dots, Banker, Quota.
+---
+
+# Part 2 — More Games (Hammer, Stableford, Dots, Banker, Quota)
+
+## 🔴 High severity
+- **Hammer — treasurer-wins debt vanishes** ✅ — `buildUnifiedSettlements` skips the payout when the winner IS the treasurer (line 1477). In 2-player Hammer that's a coin-flip, so half the time the loser is never debited → round under-settles (gameLogic.ts:754, 1476).
+- **Dots — UNPLAYABLE at launch** ✅ — Dots is selectable in the picker with no gating, but the only dot-entry UI is behind `SHOW_HOLE_BETS = false` (Scorecard.tsx:2139). You can create a Dots round but can't award a single dot → always settles all-zero.
+- **Dots — buy-in-less, losers never debited** — same treasurer-model flaw as Hammer (buyInCents:0, so no pot funds the winner payouts) (gameLogic.ts:1022, 1476).
+- **Banker — asymmetric exposure collapsed to flat pot-share** ✅ — `calculateBankerPayouts` discards signed `netCents` and splits a flat pot among positive-net players only; losers aren't proportionally debited (gameLogic.ts:1110).
+- **Banker — in-round leaderboard and SettleUp use DIFFERENT settlement models** — LeaderboardTab settles from correct zero-sum `netCents`; SettleUp uses the flat pot. Standings mid-round ≠ debts at settle-up (LeaderboardTab.tsx:104 vs SettleUp.tsx:410).
+- **Quota — handicap double-applied** ✅ — quota = `36 − handicap` AND scoring runs net mode (strokes subtracted per hole), so handicap counts twice → unfair to higher handicaps (NewRound.tsx:1098 + gameLogic.ts:1156). Also uses raw index, not course handicap.
+
+## 🟡 Medium
+- **Refund-remainder leak (Stableford, Quota, + BBB, Best Ball from Part 1)** — every game's "no winner / all-tied" refund does `floor(pot/N)` with no remainder drip → cents vanish, group nets negative on uneven pots.
+- **Stableford** — zero-point players silently forfeit their whole buy-in with no line item; incomplete rounds pay out pot-share on partial points with no completion gate.
+- **Banker roster desync** — `bankerOrder` seeded once, not reconciled on roster edit (same as Wolf).
+- **Quota** — clamps quota to [0,36], distorting plus/scratch and high handicaps.
+
+## 🔵 Low
+- Dots: two disconnected value configs; Stableford: no net/gross toggle in UI (hardcoded net); Quota: no in-round quota/points display; tooltip point tables inconsistent.
+
+## ✅ Solid (Part 2)
+- **No `$` leaks in any of the 10 games** — zero-$ refactor fully holds.
+- Hammer core ledger, Banker head-to-head math, Dots dot math, Stableford points table + net handicap, Quota winner-branch payout — all internally correct & zero-sum at the `calculate*` level. The failures are almost entirely in the **settlement-translation layer**, not the scoring.
+
+---
+
+# ROOT CAUSE (all 10 games)
+
+There are effectively **two settlement engines**, and the wrong one is used at payout time:
+1. **Correct:** a signed zero-sum `netCents` ledger (used by `LeaderboardTab` for unit games, and by `calculateSideBetSettlements` via debtor→creditor pairing).
+2. **Flat treasurer-pot model** (`calculateXPayouts` winner-only + `buildUnifiedSettlements` treasurer→winner) — used by **SettleUp**, the money that actually gets recorded.
+
+The flat-pot model is correct ONLY for a simple equal-buy-in, winner-takes-pot game. It breaks for everything else:
+- **Doubling stakes** (Skins/Nassau presses, Hammer throws) → over-distributes; treasurer covers the shortfall.
+- **Buy-in-less games** (Hammer, Dots) → no pot funds the winners; losers never debited.
+- **Treasurer wins head-to-head** (Hammer) → debt vanishes.
+- **Asymmetric/variable exposure** (Banker, Wolf) → flattened & mis-attributed; `−7` pays the same as `−1`.
+- **In-round vs final** → LeaderboardTab (correct) diverges from SettleUp (flat) for unit games.
+
+**The real fix** is to settle unit/net-based games directly from their signed `netCents` (debtor→creditor, like side bets), reserving the pot model for true equal-buy-in pot games. That's an architectural change → post-launch.
+
+Plus two universal, cheap fixes: (a) add a **remainder drip** to every refund branch; (b) add a **net-zero invariant test suite** (currently 9 of 10 games have zero tests).
+
+---
+
+# Launch recommendation
+Ship a **smaller, correct lineup** rather than a big, broken one:
+1. **Launch the marketed 5 only** (Skins, Best Ball, Nassau, Wolf, BBB); **hide the "More Games"** (Hammer, Stableford, Dots, Banker, Quota) behind a flag until the settlement rework + per-game fixes land. (Dots is unplayable anyway; Hammer/Banker/Quota have real math bugs.)
+2. Make the 5 correct: **gate presses** behind a flag (fixes Skins+Nassau over-distribution), **default Best Ball to Match Play** (fixes the stroke-play display contradiction), **fix Wolf roster desync**, **fix BBB refund remainder**. Wolf magnitude-flattening → document as a known limitation or do the netCents fix.
+3. Add the **net-zero test suite**.
+4. **Post-launch:** the settlement-engine rework (netCents-based), then re-enable the extra games + presses.
