@@ -21,6 +21,7 @@ import {
   calculateSkinsPayouts,
   calculateBBBPayouts,
   calculateWolfPayouts,
+  buildDirectSettlements,
   buildSettlements,
   buildUnifiedSettlements,
   calculateSideBetSettlements,
@@ -606,5 +607,16 @@ describe('settlement net-zero invariants', () => {
     const game: Game = { id: 'g', type: 'wolf', buyInCents: 1000, stakesMode: 'points', config: {} as any }
     const sum = calculateWolfPayouts(result, game, players).reduce((s, p) => s + p.amountCents, 0)
     expect(sum).toBe(POT(1000))
+  })
+
+  it('buildDirectSettlements (points mode, no treasurer): losers pay the winner, nets to zero', () => {
+    // p2 (Bob) wins the whole 75-pt pot; p1 & p3 each lose their 25 buy-in.
+    const payouts = [{ playerId: 'p2', amountCents: 75, reason: '3 skins' }]
+    const out = buildDirectSettlements(payouts, players, 25, null)
+    expect(out.length).toBe(2)
+    expect(out.every(s => s.toId === 'p2')).toBe(true) // both losers pay the winner directly
+    expect(out.reduce((s, x) => s + x.amountCents, 0)).toBe(50) // = winner's net (75 − 25 buy-in)
+    // net-zero: each debtor's −25 exactly funds the winner's +50
+    expect(out.map(s => s.amountCents).sort()).toEqual([25, 25])
   })
 })

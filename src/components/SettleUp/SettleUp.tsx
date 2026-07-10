@@ -36,6 +36,7 @@ import {
   calculatePropSettlements,
   autoResolveProps,
   buildUnifiedSettlements,
+  buildDirectSettlements,
   JUNK_LABELS,
   fmtAmount,
 } from '../../lib/gameLogic'
@@ -418,7 +419,10 @@ export function SettleUp({ roundId, userId, eventId, onDone, onContinue }: Props
 
   // Persist settlements: compute + insert on first view, or load from DB
   const persistSettlements = useCallback(async () => {
-    if (!treasurerId || !userId || settlementsInitialized) return
+    // Points-mode rounds have no treasurer — they settle directly (below), so we
+    // must NOT bail on a missing treasurer, or debts never persist and the Ledger
+    // + pay row stay empty.
+    if (!userId || settlementsInitialized) return
     setSettlementsInitialized(true)
 
     // If DB already has settlements for this round, use those
@@ -440,7 +444,9 @@ export function SettleUp({ roundId, userId, eventId, onDone, onContinue }: Props
     }
 
     setCalculatingSettlements(true)
-    const unified = buildUnifiedSettlements(payouts, treasurerId, junkResult, sideBetSettlements, propSettlements)
+    const unified = treasurerId
+      ? buildUnifiedSettlements(payouts, treasurerId, junkResult, sideBetSettlements, propSettlements)
+      : buildDirectSettlements(payouts, players, game?.buyInCents ?? 0, junkResult, sideBetSettlements, propSettlements)
     if (unified.length === 0) { setCalculatingSettlements(false); return }
 
     const records: SettlementRecord[] = unified.map(s => ({
@@ -470,15 +476,15 @@ export function SettleUp({ roundId, userId, eventId, onDone, onContinue }: Props
 
     // Auto-notify all debtors
     const debtorNotifications: AppNotification[] = []
-    const treasurerName = players.find(p => p.id === treasurerId)?.name ?? 'the treasurer'
     for (const record of records) {
       const debtorUserId = participantMap.get(record.fromPlayerId)
       if (!debtorUserId || debtorUserId === userId) continue
+      const toName = players.find(p => p.id === record.toPlayerId)?.name ?? 'the winner'
       debtorNotifications.push({
         id: uuidv4(),
         userId: debtorUserId,
         type: 'unsettled_round',
-        title: `You owe ${fmtAmount(record.amountCents, game?.stakesMode)} to ${treasurerName}`,
+        title: `You owe ${fmtAmount(record.amountCents, game?.stakesMode)} to ${toName}`,
         body: 'Round complete — settle up!',
         roundId,
         read: false,
@@ -710,13 +716,15 @@ export function SettleUp({ roundId, userId, eventId, onDone, onContinue }: Props
     setPendingAction({ type: 'bulk_settlement', id: 'bulk', ids: owedIds, name: `${owedIds.length} settlement${owedIds.length !== 1 ? 's' : ''}`, timer, prevRecords })
   }
 
-  // Collection Checklist: aggregate settlements by counterparty from treasurer's perspective
+  // Collection Checklist: aggregate settlements by counterparty. With a treasurer
+  // it's the treasurer's perspective; in points mode it's the current user's.
   // (must be before early return to keep hook order stable)
   const collectionChecklist = useMemo(() => {
-    if (!treasurerId || settlementRecords.length === 0) return []
+    const settleHubId = treasurerId ?? myPlayerId
+    if (!settleHubId || settlementRecords.length === 0) return []
     const byPlayer = new Map<string, { collectCents: number; payCents: number; owedIds: string[]; totalIds: string[]; paidCount: number }>()
     for (const s of settlementRecords) {
-      const involvesT = s.fromPlayerId === treasurerId || s.toPlayerId === treasurerId
+      const involvesT = s.fromPlayerId === settleHubId || s.toPlayerId === settleHubId
       if (!involvesT) {
         const key = s.fromPlayerId + '→' + s.toPlayerId
         if (!byPlayer.has(key)) byPlayer.set(key, { collectCents: 0, payCents: 0, owedIds: [], totalIds: [], paidCount: 0 })
@@ -727,13 +735,13 @@ export function SettleUp({ roundId, userId, eventId, onDone, onContinue }: Props
         entry.collectCents += s.amountCents
         continue
       }
-      const counterpartyId = s.fromPlayerId === treasurerId ? s.toPlayerId : s.fromPlayerId
+      const counterpartyId = s.fromPlayerId === settleHubId ? s.toPlayerId : s.fromPlayerId
       if (!byPlayer.has(counterpartyId)) byPlayer.set(counterpartyId, { collectCents: 0, payCents: 0, owedIds: [], totalIds: [], paidCount: 0 })
       const entry = byPlayer.get(counterpartyId)!
       entry.totalIds.push(s.id)
       if (s.status === 'paid') { entry.paidCount++; continue }
       entry.owedIds.push(s.id)
-      if (s.toPlayerId === treasurerId) {
+      if (s.toPlayerId === settleHubId) {
         entry.collectCents += s.amountCents
       } else {
         entry.payCents += s.amountCents
@@ -772,7 +780,7 @@ export function SettleUp({ roundId, userId, eventId, onDone, onContinue }: Props
       }
     }
     return result.sort((a, b) => Math.abs(b.netCents) - Math.abs(a.netCents))
-  }, [settlementRecords, treasurerId, enrichedPlayers])
+  }, [settlementRecords, treasurerId, myPlayerId, enrichedPlayers])
 
   if (loadError) {
     return (
