@@ -1557,6 +1557,55 @@ export function buildUnifiedSettlements(
   return settlements
 }
 
+/**
+ * Direct (no-treasurer) settlements for points-mode rounds. Points mode never
+ * assigns a treasurer, so instead of routing every flow through one, compute each
+ * player's net (game winnings − their buy-in, plus junk/side-bet/prop nets) and
+ * greedily match debtors to creditors so losers pay winners directly. Nets to zero.
+ */
+export function buildDirectSettlements(
+  payouts: PlayerPayout[],
+  players: Player[],
+  buyInCents: number,
+  junkResult: JunkResult | null,
+  sideBetSettlements: SideBetSettlement[] = [],
+  propSettlements: PropSettlement[] = [],
+): UnifiedSettlement[] {
+  const net = new Map<string, number>()
+  // Everyone antes one buy-in; winners receive their payout.
+  players.forEach(p => net.set(p.id, -buyInCents))
+  for (const p of payouts) net.set(p.playerId, (net.get(p.playerId) ?? 0) + p.amountCents)
+  if (junkResult) {
+    for (const [id, c] of Object.entries(junkResult.netCents)) net.set(id, (net.get(id) ?? 0) + c)
+  }
+  for (const s of sideBetSettlements) {
+    net.set(s.fromId, (net.get(s.fromId) ?? 0) - s.amountCents)
+    net.set(s.toId, (net.get(s.toId) ?? 0) + s.amountCents)
+  }
+  for (const s of propSettlements) {
+    net.set(s.fromId, (net.get(s.fromId) ?? 0) - s.amountCents)
+    net.set(s.toId, (net.get(s.toId) ?? 0) + s.amountCents)
+  }
+
+  const creditors = [...net.entries()].filter(([, c]) => c > 0).map(([id, c]) => ({ id, amt: c })).sort((a, b) => b.amt - a.amt)
+  const debtors = [...net.entries()].filter(([, c]) => c < 0).map(([id, c]) => ({ id, amt: -c })).sort((a, b) => b.amt - a.amt)
+
+  const out: UnifiedSettlement[] = []
+  let ci = 0
+  let di = 0
+  while (ci < creditors.length && di < debtors.length) {
+    const pay = Math.min(creditors[ci].amt, debtors[di].amt)
+    if (pay > 0) {
+      out.push({ fromId: debtors[di].id, toId: creditors[ci].id, amountCents: pay, reason: 'Round settlement', source: 'game' })
+    }
+    creditors[ci].amt -= pay
+    debtors[di].amt -= pay
+    if (creditors[ci].amt === 0) ci++
+    if (debtors[di].amt === 0) di++
+  }
+  return out
+}
+
 // ─── Side Bet Settlements ────────────────────────────────────────────────────
 
 export interface SideBetSettlement {
