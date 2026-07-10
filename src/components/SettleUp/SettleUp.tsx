@@ -1149,7 +1149,6 @@ export function SettleUp({ roundId, userId, eventId, onDone, onContinue }: Props
         {/* ── Scoreboard ── */}
         {playableSnapshot && players.length > 0 && holeScores.length > 0 && (() => {
           const pSnap = playableSnapshot
-          const totalPar = pSnap.holes.reduce((s, h) => s + h.par, 0)
           const board = players.map(p => {
             const pScores = holeScores.filter(s => s.playerId === p.id)
             const gross = pScores.reduce((s, hs) => s + hs.grossScore, 0)
@@ -1159,7 +1158,13 @@ export function SettleUp({ roundId, userId, eventId, onDone, onContinue }: Props
               return s + (hole ? strokesOnHole(courseHcp, hole.strokeIndex) : 0)
             }, 0)
             const net = gross - netStrokes
-            const vsPar = gross - totalPar
+            // vs par over the holes actually played (not all 18) so partial rounds
+            // don't show e.g. −60 for a 4-hole gross of 12.
+            const scoredPar = pScores.reduce((s, hs) => {
+              const hole = pSnap.holes.find(h => h.number === hs.holeNumber)
+              return s + (hole?.par ?? 0)
+            }, 0)
+            const vsPar = gross - scoredPar
             return { player: p, gross, net, vsPar }
           })
           const bestGross = Math.min(...board.map(b => b.gross))
@@ -1646,10 +1651,22 @@ export function SettleUp({ roundId, userId, eventId, onDone, onContinue }: Props
         {(() => {
           const netByPlayer = new Map<string, number>()
           players.forEach(p => netByPlayer.set(p.id, 0))
-          settlementRecords.forEach(r => {
-            netByPlayer.set(r.fromPlayerId, (netByPlayer.get(r.fromPlayerId) ?? 0) - r.amountCents)
-            netByPlayer.set(r.toPlayerId, (netByPlayer.get(r.toPlayerId) ?? 0) + r.amountCents)
-          })
+          if (settlementRecords.length > 0) {
+            // Round already settled — use the persisted records.
+            settlementRecords.forEach(r => {
+              netByPlayer.set(r.fromPlayerId, (netByPlayer.get(r.fromPlayerId) ?? 0) - r.amountCents)
+              netByPlayer.set(r.toPlayerId, (netByPlayer.get(r.toPlayerId) ?? 0) + r.amountCents)
+            })
+          } else {
+            // Not yet marked paid — derive net from the live computed payouts
+            // (winnings − buy-in) so the share card matches the scoreboard instead
+            // of showing "all square".
+            const buyIn = game?.buyInCents ?? 0
+            players.forEach(p => {
+              const won = payouts.find(pay => pay.playerId === p.id)?.amountCents ?? 0
+              netByPlayer.set(p.id, won - buyIn)
+            })
+          }
           const shareStandings: ShareCardStanding[] = players
             .map(p => ({ name: p.name, netCents: netByPlayer.get(p.id) ?? 0 }))
             .sort((a, b) => b.netCents - a.netCents)
