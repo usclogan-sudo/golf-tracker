@@ -179,6 +179,23 @@ describe('calculateSkins', () => {
     expect(result.skinsWon['p1']).toBe(0)
   })
 
+  // P0 (live UX audit 2026-07-09): a partial round reportedly voided to "all
+  // holes tied, pot refunded" at Settle Up. Assert the CALC handles a partial
+  // round — if green, the bug is data persistence at settle time, not the calc.
+  it('P0: partial round (holes 1-3 scored, 4-18 unplayed) tallies real skins', () => {
+    const scores = [
+      hs('p1', 1, 3), hs('p2', 1, 5), hs('p3', 1, 4), // hole 1: p1 wins outright
+      hs('p1', 2, 4), hs('p2', 2, 4), hs('p3', 2, 5), // hole 2: p1/p2 tie → carry
+      hs('p1', 3, 5), hs('p2', 3, 3), hs('p3', 3, 6), // hole 3: p2 wins (+carry)
+      // holes 4-18: no scores (round ended early)
+    ]
+    const config: SkinsConfig = { mode: 'gross', carryovers: true }
+    const result = calculateSkins(players, scores, snapshot, config, courseHcps)
+    expect(result.totalSkins).toBeGreaterThan(0) // NOT all-tied / refunded
+    expect(result.skinsWon['p1']).toBe(1)
+    expect(result.skinsWon['p2']).toBe(2) // 1 + carried skin
+  })
+
   it('reports pendingCarry when all 18 holes tie with carryovers', () => {
     // All 18 holes tied
     const scores = snapshot.holes.flatMap(h => [
