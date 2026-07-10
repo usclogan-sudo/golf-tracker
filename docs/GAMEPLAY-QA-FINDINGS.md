@@ -9,7 +9,13 @@ net-zero settlement, legibility, flexible player counts, graceful edge cases).
 > **Verification key:** ✅ = confirmed in code by hand · 🔍 = agent-reported with
 > specific line refs (high confidence, not independently re-traced).
 >
-> **Not yet swept:** Hammer, Stableford, Dots, Banker, Quota (the "More Games").
+> **✅ STATUS (2026-07-09):** All 10 games swept. **Launch hardening SHIPPED to main**
+> (PR #10, `b822f4a`): extra games hidden (`SHOW_EXTRA_GAMES`), presses gated
+> (`SHOW_PRESSES`), Best Ball → Match Play only (`SHOW_BEST_BALL_STROKE_PLAY`), Wolf
+> roster-sync fixed, and a net-zero invariant test suite added (234 tests pass).
+> **Remaining = post-launch:** the deep settlement-engine rework (netCents-based),
+> then re-enable the extra games + presses. NOTE: the "refund drops remainder cents"
+> finding was a **false positive** — pot is always `buyIn × N`, so refund divides evenly.
 
 ---
 
