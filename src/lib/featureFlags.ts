@@ -26,3 +26,30 @@ export const SHOW_HOLE_BETS = false
  *   - Existing prop bets in past rounds still resolve and settle in SettleUp
  */
 export const SHOW_PROP_BETS = false
+
+/**
+ * "More Games" beyond the marketed launch 5 (Skins, Best Ball, Nassau, Wolf, BBB).
+ * Hammer, Stableford, Dots, Banker, Quota are hidden at launch pending a
+ * settlement-engine rework (see docs/GAMEPLAY-QA-FINDINGS.md) — their scoring is
+ * fine but the flat treasurer-pot settlement mis-handles their variable/asymmetric/
+ * buy-in-less stakes. When false, NewRound hides these game buttons. The engine +
+ * calc functions stay intact so existing rounds still settle.
+ */
+export const SHOW_EXTRA_GAMES = false
+
+/**
+ * Presses (Skins & Nassau — a new bet started when down, doubling stakes).
+ * When false, the in-round Press button is hidden. Presses currently over-
+ * distribute: the doubled winnings aren't funded by extra buy-ins, so the
+ * treasurer covers the shortfall (docs/GAMEPLAY-QA-FINDINGS.md). Hidden until the
+ * settlement rework funds presses as head-to-head bets. Calc logic preserved.
+ */
+export const SHOW_PRESSES = false
+
+/**
+ * Best Ball "Stroke Play" (total-strokes) scoring mode. When false, Best Ball is
+ * Match Play only. Stroke-Play's winner is decided by total strokes but every
+ * scoreboard shows only holes-won, so the display can contradict the payout.
+ * Hidden until the display is fixed. Match Play (the default) is unaffected.
+ */
+export const SHOW_BEST_BALL_STROKE_PLAY = false

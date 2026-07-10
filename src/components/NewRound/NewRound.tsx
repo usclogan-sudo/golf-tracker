@@ -3,7 +3,7 @@ import { v4 as uuidv4 } from 'uuid'
 import { supabase, courseToRow, playerToRow, roundToRow, roundPlayerToRow, buyInToRow, rowToCourse, rowToPlayer, rowToSharedCourse, rowToGamePreset, rowToUserProfile, generateInviteCode } from '../../lib/supabase'
 import { safeWrite } from '../../lib/safeWrite'
 import { reportSupabaseError } from '../../lib/sentry'
-import { SHOW_HOLE_BETS } from '../../lib/featureFlags'
+import { SHOW_HOLE_BETS, SHOW_EXTRA_GAMES, SHOW_BEST_BALL_STROKE_PLAY } from '../../lib/featureFlags'
 import { fmtMoney, fmtAmount, JUNK_LABELS } from '../../lib/gameLogic'
 import { parseDollarsToCents, parsePointsValue } from '../../lib/money'
 import { venturaCourses } from '../../data/venturaCourses'
@@ -917,6 +917,19 @@ function GameSetup({
   const [wolfOrder, setWolfOrder] = useState<string[]>(() =>
     initialGame?.type === 'wolf' ? (initialGame.config as any).wolfOrder : players.map(p => p.id)
   )
+  // Keep wolfOrder in sync when the roster changes after game selection: preserve
+  // existing order, drop removed players, append new ones. Prevents a stale/ghost
+  // wolf id that would silently void that hole for everyone.
+  const wolfPlayerKey = players.map(p => p.id).join(',')
+  useEffect(() => {
+    const ids = players.map(p => p.id)
+    setWolfOrder(prev => {
+      const kept = prev.filter(id => ids.includes(id))
+      const next = [...kept, ...ids.filter(id => !kept.includes(id))]
+      return next.length === prev.length && next.every((id, i) => id === prev[i]) ? prev : next
+    })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [wolfPlayerKey])
 
   // Hammer
   const [hammerBaseValueDollars, setHammerBaseValueDollars] = useState(
@@ -1242,18 +1255,23 @@ function GameSetup({
               <GameButton gameType="nassau" label="🏳️ Nassau" />
               <GameButton gameType="wolf" label="🐺 Wolf" disabled={!wolfAllowed} />
               <GameButton gameType="bingo_bango_bongo" label="⭐ BBB" />
-              <GameButton gameType="hammer" label="🔨 Hammer" disabled={!hammerAllowed} />
-              <GameButton gameType="stableford" label="📊 Stableford" />
-              <GameButton gameType="dots" label="🔴 Dots" />
-              <GameButton gameType="banker" label="🏦 Banker" disabled={!bankerAllowed} />
-              <GameButton gameType="quota" label="📋 Quota" />
+              {/* Extra games hidden at launch pending the settlement rework — see featureFlags. */}
+              {SHOW_EXTRA_GAMES && (
+                <>
+                  <GameButton gameType="hammer" label="🔨 Hammer" disabled={!hammerAllowed} />
+                  <GameButton gameType="stableford" label="📊 Stableford" />
+                  <GameButton gameType="dots" label="🔴 Dots" />
+                  <GameButton gameType="banker" label="🏦 Banker" disabled={!bankerAllowed} />
+                  <GameButton gameType="quota" label="📋 Quota" />
+                </>
+              )}
             </div>
           )}
           <button
             onClick={() => setShowAllGames(v => !v)}
             className="w-full text-sm font-semibold text-gray-500 py-2 rounded-xl bg-gray-50 active:bg-gray-100 transition-colors"
           >
-            {showAllGames ? 'Hide extra games' : 'More Games (9 more)'}
+            {showAllGames ? 'Hide extra games' : `More Games (${SHOW_EXTRA_GAMES ? 8 : 3} more)`}
           </button>
           {!bestBallAllowed && type === 'best_ball' && (
             <p className="text-sm text-gray-400">Best Ball requires an even number of players (2, 4, 6…).</p>
@@ -1414,19 +1432,23 @@ function GameSetup({
         {type === 'best_ball' && (
           <section className="bg-white dark:bg-gray-800 rounded-2xl shadow-sm p-4 space-y-4">
             <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Best Ball Options</p>
-            <div>
-              <p className="text-sm text-gray-600 mb-2">Format</p>
-              <div className="grid grid-cols-2 gap-2">
-                <button onClick={() => setBbScoring('match')}
-                  className={`h-12 rounded-xl font-semibold text-sm ${bbScoring === 'match' ? 'bg-gray-800 text-white' : 'bg-gray-100 text-gray-700'}`}>
-                  Match Play
-                </button>
-                <button onClick={() => setBbScoring('total')}
-                  className={`h-12 rounded-xl font-semibold text-sm ${bbScoring === 'total' ? 'bg-gray-800 text-white' : 'bg-gray-100 text-gray-700'}`}>
-                  Stroke Play
-                </button>
+            {/* Stroke-Play mode hidden at launch — its scoreboard can contradict the
+                payout (see featureFlags). Match Play is the default and unaffected. */}
+            {SHOW_BEST_BALL_STROKE_PLAY && (
+              <div>
+                <p className="text-sm text-gray-600 mb-2">Format</p>
+                <div className="grid grid-cols-2 gap-2">
+                  <button onClick={() => setBbScoring('match')}
+                    className={`h-12 rounded-xl font-semibold text-sm ${bbScoring === 'match' ? 'bg-gray-800 text-white' : 'bg-gray-100 text-gray-700'}`}>
+                    Match Play
+                  </button>
+                  <button onClick={() => setBbScoring('total')}
+                    className={`h-12 rounded-xl font-semibold text-sm ${bbScoring === 'total' ? 'bg-gray-800 text-white' : 'bg-gray-100 text-gray-700'}`}>
+                    Stroke Play
+                  </button>
+                </div>
               </div>
-            </div>
+            )}
             <div>
               <p className="text-sm text-gray-600 mb-2">Teams (tap to assign)</p>
               <div className="grid grid-cols-2 gap-2">

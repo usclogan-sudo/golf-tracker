@@ -69,7 +69,7 @@ import type {
 } from '../../types'
 import { useShareImage } from '../ShareCard'
 import { reportSupabaseError } from '../../lib/sentry'
-import { SHOW_HOLE_BETS, SHOW_PROP_BETS } from '../../lib/featureFlags'
+import { SHOW_HOLE_BETS, SHOW_PROP_BETS, SHOW_PRESSES } from '../../lib/featureFlags'
 
 interface Props {
   userId: string
@@ -1902,7 +1902,7 @@ export function Scorecard({ userId, roundId, onEndRound, onHome, readOnly: readO
                 <div className="flex-1">
                   <SkinsStatus carry={currentCarry} potCents={game.buyInCents * players.length * (1 + ((game.config as any).presses?.length ?? 0))} stakesMode={game.stakesMode} />
                 </div>
-                {!readOnly && (
+                {SHOW_PRESSES && !readOnly && (
                   <button
                     onClick={handlePress}
                     className="px-3 py-2 bg-orange-500 text-white text-xs font-bold rounded-xl active:bg-orange-600 flex-shrink-0"
@@ -1955,7 +1955,7 @@ export function Scorecard({ userId, roundId, onEndRound, onHome, readOnly: readO
                       )
                     })}
                   </div>
-                  {!readOnly && (
+                  {SHOW_PRESSES && !readOnly && (
                     <button
                       onClick={handlePress}
                       className="px-3 py-2 bg-orange-500 text-white text-xs font-bold rounded-xl active:bg-orange-600 flex-shrink-0"
