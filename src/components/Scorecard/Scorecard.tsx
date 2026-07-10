@@ -637,7 +637,7 @@ export function Scorecard({ userId, roundId, onEndRound, onHome, readOnly: readO
             ? { previousScore: prevScore, playerId, holeNumber }
             : undefined,
         )
-      } else if (existing) {
+      } else if (existing && !String(existing.id).startsWith('temp-')) {
         const prevScore = existing.grossScore
         setHoleScores(prev => prev.map(s => s.id === existing.id ? { ...s, grossScore } : s))
         const query = supabase.from('hole_scores').update({ gross_score: grossScore }).eq('id', existing.id)
@@ -663,15 +663,25 @@ export function Scorecard({ userId, roundId, onEndRound, onHome, readOnly: readO
             : undefined,
         )
       } else {
+        // New score: replace any optimistic `temp-` placeholder with the real
+        // (uuid) row, then INSERT. Previously the placeholder was mistaken for an
+        // existing DB row and UPDATE'd by an id that only exists client-side
+        // (0 rows matched) → scores never persisted → settle voided to all-square.
         const newScore: HoleScore = { id: uuidv4(), roundId, playerId, holeNumber, grossScore }
-        setHoleScores(prev => prev.find(s => s.playerId === playerId && s.holeNumber === holeNumber) ? prev : [...prev, newScore])
+        setHoleScores(prev => {
+          const idx = prev.findIndex(s => s.playerId === playerId && s.holeNumber === holeNumber)
+          return idx >= 0 ? prev.map((s, i) => (i === idx ? newScore : s)) : [...prev, newScore]
+        })
         const { error } = await supabase.from('hole_scores').insert(holeScoreToRow(newScore, userId))
         if (error) throw error
         showScoreToast("Saved. You're good.", 'success')
       }
     } catch (err) {
       if (!isOnline) {
-        const live = holeScores.find(s => s.playerId === playerId && s.holeNumber === holeNumber)
+        // Only treat a persisted (non-temp) row as an update target; an
+        // optimistic temp- placeholder must enqueue an INSERT, not an UPDATE by
+        // a client-only id (which would match 0 rows on sync).
+        const live = holeScores.find(s => s.playerId === playerId && s.holeNumber === holeNumber && !String(s.id).startsWith('temp-'))
         if (live) {
           enqueue({
             table: 'hole_scores',
